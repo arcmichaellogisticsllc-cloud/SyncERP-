@@ -30,10 +30,25 @@ Roles:
 
 - Admin: full access, operating dashboard, setup, audit exports
 - Foreman: assigned projects, dailies, photos, JSA, inspections, production
+- Operations: PO schedule, crew assignments, production status, equipment, blockers, closeout readiness
 - Billing: invoices, retainage, AR, billing readiness
 - Safety: incidents, near misses, corrective actions, compliance
 
-Current implementation: demo login endpoint and seeded users. Next step is password hashing and sessions.
+Current implementation: demo login endpoint, seeded users, role records, role-scoped navigation, and role-specific dashboard landing states. Next step is password hashing, sessions, and server-side route guards.
+
+Initial permission model:
+
+| Module | Admin | Foreman | Operations | Billing | Safety/Compliance |
+| --- | --- | --- | --- | --- | --- |
+| Dashboard | Full | Limited | Full | Billing | Safety |
+| Project & PO Hub | Full | Assigned | Full | View | View |
+| Field Dailies | Full | Own | Approve | View | View |
+| People/Compliance | Full | Hidden | View | Hidden | Full |
+| Equipment/Materials | Full | Assigned | Full | Hidden | Full |
+| Money/Invoicing | Full | Hidden | Hidden | Full | Hidden |
+| Safety/Risk | Full | Create own | View | Hidden | Full |
+| Reports/Exports | Full | Own | Operations | Billing | Safety |
+| Settings | Full | No | Limited | No | No |
 
 ## 3. Project and PO Hub
 

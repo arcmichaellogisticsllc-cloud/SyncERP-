@@ -194,6 +194,12 @@ button {
   border-color: #f3d08a;
 }
 
+.readonly {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .primary-btn,
 .secondary-btn,
 .icon-btn {

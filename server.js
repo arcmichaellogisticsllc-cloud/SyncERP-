@@ -22,6 +22,7 @@ const collections = new Set([
   "safety",
   "documents",
   "crews",
+  "roles",
   "costCodes",
   "unitPrices"
 ]);

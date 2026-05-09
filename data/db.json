@@ -24,10 +24,61 @@
     },
     {
       "id": "U-003",
+      "name": "Operations Coordinator",
+      "email": "ops@jacksontelcom.example",
+      "role": "Operations",
+      "defaultView": "projects"
+    },
+    {
+      "id": "U-004",
       "name": "Office Billing",
       "email": "billing@jacksontelcom.example",
       "role": "Billing",
       "defaultView": "money"
+    },
+    {
+      "id": "U-005",
+      "name": "Safety Compliance",
+      "email": "safety@jacksontelcom.example",
+      "role": "Safety/Compliance",
+      "defaultView": "risk"
+    }
+  ],
+  "roles": [
+    {
+      "id": "Admin",
+      "defaultView": "dashboard",
+      "views": ["dashboard", "projects", "field", "people", "equipment", "money", "risk"],
+      "create": ["projects", "dailies", "people", "equipment", "invoices", "safety"],
+      "purpose": "Full access across company operations, money, compliance, safety, reports, and settings."
+    },
+    {
+      "id": "Foreman",
+      "defaultView": "field",
+      "views": ["dashboard", "field", "projects", "equipment", "risk"],
+      "create": ["dailies", "safety"],
+      "purpose": "Assigned work only: field daily, JSA, inspections, photos, production, and hazards."
+    },
+    {
+      "id": "Operations",
+      "defaultView": "projects",
+      "views": ["dashboard", "projects", "field", "equipment", "people", "risk"],
+      "create": ["projects", "dailies", "equipment", "safety"],
+      "purpose": "PO schedule, crew assignment, production progress, blockers, and closeout readiness."
+    },
+    {
+      "id": "Billing",
+      "defaultView": "money",
+      "views": ["dashboard", "money", "projects", "field"],
+      "create": ["invoices"],
+      "purpose": "Billing readiness, invoice support packages, AR, retainage, disputes, and pay-when-paid tracking."
+    },
+    {
+      "id": "Safety/Compliance",
+      "defaultView": "risk",
+      "views": ["dashboard", "risk", "people", "equipment", "field", "projects"],
+      "create": ["safety", "people", "equipment"],
+      "purpose": "Certifications, inspections, incidents, corrective actions, SQUAN score, and audit exports."
     }
   ],
   "crews": [

@@ -206,7 +206,7 @@ const seedData = {
 };
 
 const navItems = [
-  { key: "dashboard", icon: "DX", label: "Executive View" },
+  { key: "dashboard", icon: "DX", label: "Dashboard" },
   { key: "projects", icon: "PO", label: "Project & PO Hub", countKey: "projects" },
   { key: "field", icon: "FD", label: "Field Operations", countKey: "dailies" },
   { key: "people", icon: "ID", label: "People & Compliance", countKey: "people" },
@@ -215,10 +215,50 @@ const navItems = [
   { key: "risk", icon: "!", label: "Safety & Risk", countKey: "safety" }
 ];
 
+const roleConfig = {
+  Admin: {
+    label: "Admin",
+    defaultView: "dashboard",
+    views: ["dashboard", "projects", "field", "people", "equipment", "money", "risk"],
+    create: ["projects", "dailies", "people", "equipment", "invoices", "safety"],
+    description: "Full access across profit, cash, compliance, safety, reporting, and setup."
+  },
+  Foreman: {
+    label: "Foreman",
+    defaultView: "field",
+    views: ["dashboard", "field", "projects", "equipment", "risk"],
+    create: ["dailies", "safety"],
+    crew: "Crew A",
+    person: "Marcus Hill",
+    description: "Assigned POs, field dailies, JSA, inspections, photos, hazards, and closeout."
+  },
+  Operations: {
+    label: "Operations",
+    defaultView: "projects",
+    views: ["dashboard", "projects", "field", "equipment", "people", "risk"],
+    create: ["projects", "dailies", "equipment", "safety"],
+    description: "PO schedule, crew assignments, production progress, blockers, and closeout readiness."
+  },
+  Billing: {
+    label: "Billing",
+    defaultView: "money",
+    views: ["dashboard", "money", "projects", "field"],
+    create: ["invoices"],
+    description: "Billing readiness, invoices, AR, retainage, pay-when-paid notes, and support packages."
+  },
+  "Safety/Compliance": {
+    label: "Safety/Compliance",
+    defaultView: "risk",
+    views: ["dashboard", "risk", "people", "equipment", "field", "projects"],
+    create: ["safety", "people", "equipment"],
+    description: "Certifications, background/MVR/drug-test status, inspections, incidents, and audit exports."
+  }
+};
+
 const state = {
   view: "dashboard",
   search: "",
-  role: "Ronald/Admin",
+  role: "Admin",
   selectedProjectId: "PO-SQ-24018",
   apiOnline: false,
   data: loadData()
@@ -300,6 +340,9 @@ function render() {
 }
 
 function appTemplate() {
+  ensureAllowedView();
+  const allowedNav = navItems.filter(item => canView(item.key));
+  const canCreateRecord = canCreate(collectionForView());
   return `
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
@@ -311,11 +354,11 @@ function appTemplate() {
           </div>
         </div>
         <nav class="nav">
-          ${navItems.map(item => `
+          ${allowedNav.map(item => `
             <button class="${state.view === item.key ? "active" : ""}" data-view="${item.key}">
               <span>${item.icon}</span>
               <span>${item.label}</span>
-              <span class="count">${item.countKey ? state.data[item.countKey].length : ""}</span>
+              <span class="count">${item.countKey ? scopedRows(item.countKey).length : ""}</span>
             </button>
           `).join("")}
         </nav>
@@ -329,12 +372,12 @@ function appTemplate() {
           </div>
           <div class="toolbar">
             <select class="role-select" id="roleSelect" title="Dashboard role">
-              ${["Ronald/Admin", "Foreman", "Office/Billing"].map(role => `<option value="${role}" ${state.role === role ? "selected" : ""}>${role}</option>`).join("")}
+              ${Object.keys(roleConfig).map(role => `<option value="${role}" ${state.role === role ? "selected" : ""}>${role}</option>`).join("")}
             </select>
             <span class="api-pill ${state.apiOnline ? "online" : "offline"}">${state.apiOnline ? "Server" : "Local"}</span>
             <input class="search" id="search" type="search" value="${state.search}" placeholder="Search ERP records">
             <button class="secondary-btn" id="resetData">Reset demo data</button>
-            <button class="primary-btn" id="newRecord">${newButtonLabel()}</button>
+            ${canCreateRecord ? `<button class="primary-btn" id="newRecord">${newButtonLabel()}</button>` : ""}
           </div>
         </header>
         <section class="content">${renderView()}</section>
@@ -343,6 +386,51 @@ function appTemplate() {
     <div class="drawer-backdrop" id="drawerBackdrop"></div>
     <aside class="drawer" id="drawer" aria-hidden="true"></aside>
   `;
+}
+
+function canView(view) {
+  return roleConfig[state.role].views.includes(view);
+}
+
+function canCreate(collectionKey) {
+  return roleConfig[state.role].create.includes(collectionKey);
+}
+
+function ensureAllowedView() {
+  if (!canView(state.view)) {
+    state.view = roleConfig[state.role].defaultView;
+    state.search = "";
+  }
+}
+
+function scopedRows(collectionKey) {
+  const rows = state.data[collectionKey] || [];
+  if (state.role === "Admin") return rows;
+  if (state.role === "Foreman") return scopeForeman(collectionKey, rows);
+  if (state.role === "Billing") return scopeBilling(collectionKey, rows);
+  if (state.role === "Safety/Compliance") return scopeSafety(collectionKey, rows);
+  return rows;
+}
+
+function scopeForeman(collectionKey, rows) {
+  const role = roleConfig.Foreman;
+  if (collectionKey === "projects") return rows.filter(row => row.crew === role.crew);
+  if (collectionKey === "dailies") return rows.filter(row => row.crew === role.crew || row.foreman === role.person);
+  if (collectionKey === "equipment") return rows.filter(row => row.assigned === role.crew || row.assigned === "PO-SQ-24018");
+  if (collectionKey === "safety") return rows.filter(row => row.project === "PO-SQ-24018");
+  return [];
+}
+
+function scopeBilling(collectionKey, rows) {
+  if (collectionKey === "projects") return rows;
+  if (collectionKey === "dailies") return rows;
+  if (collectionKey === "invoices") return rows;
+  return [];
+}
+
+function scopeSafety(collectionKey, rows) {
+  if (["projects", "dailies", "people", "equipment", "safety"].includes(collectionKey)) return rows;
+  return [];
 }
 
 function pageTitle() {
@@ -391,11 +479,15 @@ function renderView() {
 }
 
 function renderDashboard() {
-  const revenue = sum(state.data.projects, "estimatedRevenue");
-  const forecastCost = sum(state.data.projects, "forecastCost");
-  const retainage = sum(state.data.invoices, "retainage10");
-  const activeRisks = state.data.safety.filter(item => item.status !== "Closed").length;
-  const blockedDailies = state.data.dailies.filter(daily => daily.jsa === "Blocked").length;
+  const projects = scopedRows("projects");
+  const invoices = scopedRows("invoices");
+  const safety = scopedRows("safety");
+  const dailies = scopedRows("dailies");
+  const revenue = sum(projects, "estimatedRevenue");
+  const forecastCost = sum(projects, "forecastCost");
+  const retainage = sum(invoices, "retainage10");
+  const activeRisks = safety.filter(item => item.status !== "Closed").length;
+  const blockedDailies = dailies.filter(daily => daily.jsa === "Blocked").length;
   const squanScore = Math.max(0, 100 - activeRisks * 4 - blockedDailies * 3);
 
   return `
@@ -430,7 +522,17 @@ function renderDashboard() {
 
 function renderRoleLanding() {
   if (state.role === "Foreman") {
-    const daily = state.data.dailies[0];
+    const daily = scopedRows("dailies")[0];
+    if (!daily) return `
+      <section class="role-panel">
+        <div>
+          <span class="eyebrow">Foreman start screen</span>
+          <h2>No assigned dailies</h2>
+          <p>There are no field dailies assigned to this foreman role yet.</p>
+        </div>
+        <button class="primary-btn" data-view-shortcut="field">Open Field Daily</button>
+      </section>
+    `;
     const project = state.data.projects.find(item => item.id === daily.project);
     return `
       <section class="role-panel">
@@ -444,8 +546,8 @@ function renderRoleLanding() {
     `;
   }
 
-  if (state.role === "Office/Billing") {
-    const dueSoon = state.data.projects.filter(project => {
+  if (state.role === "Billing") {
+    const dueSoon = scopedRows("projects").filter(project => {
       const days = daysUntil(project.billBy);
       return days !== null && days <= 14;
     }).length;
@@ -457,6 +559,32 @@ function renderRoleLanding() {
           <p>Invoice packages are organized around dailies, SOT forms, as-builts, retainage, and pay-when-paid notes.</p>
         </div>
         <button class="primary-btn" data-view-shortcut="money">Open Money</button>
+      </section>
+    `;
+  }
+
+  if (state.role === "Operations") {
+    return `
+      <section class="role-panel">
+        <div>
+          <span class="eyebrow">Operations queue</span>
+          <h2>PO schedule, crews, production, and blockers</h2>
+          <p>${roleConfig.Operations.description}</p>
+        </div>
+        <button class="primary-btn" data-view-shortcut="projects">Open PO Hub</button>
+      </section>
+    `;
+  }
+
+  if (state.role === "Safety/Compliance") {
+    return `
+      <section class="role-panel">
+        <div>
+          <span class="eyebrow">Safety and compliance queue</span>
+          <h2>Certs, inspections, incidents, and audit readiness</h2>
+          <p>${roleConfig["Safety/Compliance"].description}</p>
+        </div>
+        <button class="primary-btn" data-view-shortcut="risk">Open Safety & Risk</button>
       </section>
     `;
   }
@@ -474,7 +602,7 @@ function renderRoleLanding() {
 }
 
 function renderProjectHub() {
-  const rows = state.data.projects.filter(matches);
+  const rows = scopedRows("projects").filter(matches);
   const selected = state.data.projects.find(project => project.id === state.selectedProjectId) || rows[0] || state.data.projects[0];
   if (selected && selected.id !== state.selectedProjectId) state.selectedProjectId = selected.id;
 
@@ -501,9 +629,9 @@ function renderProjectHub() {
 }
 
 function renderProjectDetail(project) {
-  const dailies = state.data.dailies.filter(daily => daily.project === project.id);
-  const invoices = state.data.invoices.filter(invoice => invoice.project === project.id);
-  const risk = state.data.safety.filter(item => item.project === project.id);
+  const dailies = scopedRows("dailies").filter(daily => daily.project === project.id);
+  const invoices = scopedRows("invoices").filter(invoice => invoice.project === project.id);
+  const risk = scopedRows("safety").filter(item => item.project === project.id);
   return `
     <div class="panel project-detail">
       <div class="panel-header">
@@ -542,7 +670,7 @@ function linkedCount(label, value) {
 }
 
 function renderProjectCards() {
-  const rows = state.data.projects.filter(matches);
+  const rows = scopedRows("projects").filter(matches);
   return `
     <div class="panel">
       <div class="panel-header">
@@ -592,7 +720,7 @@ function renderField() {
 }
 
 function renderMobileDailyWizard() {
-  const daily = state.data.dailies[0];
+  const daily = scopedRows("dailies")[0] || state.data.dailies[0];
   return `
     <div class="panel daily-wizard">
       <div class="panel-header">
@@ -640,7 +768,7 @@ function workflowStep(number, title, body) {
 }
 
 function renderMoney() {
-  const invoices = state.data.invoices.filter(matches);
+  const invoices = scopedRows("invoices").filter(matches);
   const gross = sum(invoices, "gross");
   const paid = sum(invoices, "paid90");
   const retainage = sum(invoices, "retainage10");
@@ -656,8 +784,8 @@ function renderMoney() {
 }
 
 function renderRisk() {
-  const hours = sum(state.data.dailies, "laborHours");
-  const open = state.data.safety.filter(item => item.status !== "Closed").length;
+  const hours = sum(scopedRows("dailies"), "laborHours");
+  const open = scopedRows("safety").filter(item => item.status !== "Closed").length;
   return `
     <section class="metrics">
       ${metric("TRIR input hours", hours, "Fed by field daily labor")}
@@ -774,7 +902,7 @@ function tableConfig() {
 }
 
 function renderTablePanel(config) {
-  const rows = state.data[config.key].filter(matches);
+  const rows = scopedRows(config.key).filter(matches);
   return `
     <div class="panel">
       <div class="panel-header">
@@ -790,7 +918,7 @@ function renderTablePanel(config) {
             ${rows.map(row => `
               <tr>
                 ${config.columns.map(column => `<td>${formatCell(row, column)}</td>`).join("")}
-                <td><button class="secondary-btn" data-edit="${config.key}" data-index="${state.data[config.key].indexOf(row)}">Edit</button></td>
+                <td>${canCreate(config.key) ? `<button class="secondary-btn" data-edit="${config.key}" data-index="${state.data[config.key].indexOf(row)}">Edit</button>` : `<span class="readonly">View only</span>`}</td>
               </tr>
             `).join("") || `<tr><td colspan="${config.columns.length + 1}" class="empty">No records match your search.</td></tr>`}
           </tbody>
@@ -810,7 +938,7 @@ function renderMobileRecord(row, config) {
     <article class="mobile-record-card">
       <div class="card-topline">
         <h3>${formatCell(row, titleColumn)}</h3>
-        <button class="secondary-btn" data-edit="${config.key}" data-index="${state.data[config.key].indexOf(row)}">Edit</button>
+        ${canCreate(config.key) ? `<button class="secondary-btn" data-edit="${config.key}" data-index="${state.data[config.key].indexOf(row)}">Edit</button>` : `<span class="readonly">View only</span>`}
       </div>
       <p>${formatCell(row, subtitleColumn)}</p>
       <dl>
@@ -952,6 +1080,7 @@ function bindEvents() {
 
   document.getElementById("roleSelect").addEventListener("change", event => {
     state.role = event.target.value;
+    state.view = roleConfig[state.role].defaultView;
     render();
   });
 
@@ -960,7 +1089,8 @@ function bindEvents() {
     render();
   });
 
-  document.getElementById("newRecord").addEventListener("click", () => openDrawer(collectionForView()));
+  const newRecord = document.getElementById("newRecord");
+  if (newRecord) newRecord.addEventListener("click", () => openDrawer(collectionForView()));
   document.getElementById("resetData").addEventListener("click", () => {
     state.data = structuredClone(seedData);
     state.apiOnline = false;
