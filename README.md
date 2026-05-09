@@ -14,6 +14,16 @@ npm start
 
 Then visit `http://127.0.0.1:8080`.
 
+## Demo Login Workspaces
+
+Use the login screen demo buttons, or sign in with one of these seeded emails and password `demo`:
+
+- `ronald@jacksontelcom.example` - Admin
+- `marcus@jacksontelcom.example` - Foreman
+- `ops@jacksontelcom.example` - Operations
+- `billing@jacksontelcom.example` - Billing
+- `safety@jacksontelcom.example` - Safety/Compliance
+
 Static fallback:
 
 ```bash
@@ -26,6 +36,7 @@ Then visit `http://127.0.0.1:8080`. In static mode, records are stored in browse
 
 - Role-based dashboard views for Admin, Foreman, Operations, Billing, and Safety/Compliance users
 - Role-scoped navigation for Admin, Foreman, Operations, Billing, and Safety/Compliance
+- Demo login screen with individual workspaces for each role
 - Responsive desktop and mobile layouts with table-to-card behavior on phones
 - Executive dashboard with PO profitability, retainage, SQUAN score estimate, and risk exposure
 - Project & PO Hub for SQUAN POs, scope, budget, required certs, document control, and margin

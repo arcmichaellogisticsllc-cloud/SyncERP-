@@ -259,10 +259,28 @@ const state = {
   view: "dashboard",
   search: "",
   role: "Admin",
+  user: loadSession(),
   selectedProjectId: "PO-SQ-24018",
   apiOnline: false,
   data: loadData()
 };
+
+function loadSession() {
+  const saved = localStorage.getItem("jackson-syncerp-session");
+  return saved ? JSON.parse(saved) : null;
+}
+
+function saveSession(user) {
+  state.user = user;
+  state.role = user.role;
+  state.view = roleConfig[user.role]?.defaultView || "dashboard";
+  localStorage.setItem("jackson-syncerp-session", JSON.stringify(user));
+}
+
+function clearSession() {
+  state.user = null;
+  localStorage.removeItem("jackson-syncerp-session");
+}
 
 function loadData() {
   const saved = localStorage.getItem("jackson-syncerp-data");
@@ -351,6 +369,10 @@ function render() {
 }
 
 function appTemplate() {
+  if (state.user && !roleConfig[state.user.role]) {
+    clearSession();
+  }
+  if (!state.user) return loginTemplate();
   ensureAllowedView();
   const allowedNav = navItems.filter(item => canView(item.key));
   const canCreateRecord = canCreate(collectionForView());
@@ -382,13 +404,15 @@ function appTemplate() {
             <p>${pageSubtitle()}</p>
           </div>
           <div class="toolbar">
-            <select class="role-select" id="roleSelect" title="Dashboard role">
-              ${Object.keys(roleConfig).map(role => `<option value="${role}" ${state.role === role ? "selected" : ""}>${role}</option>`).join("")}
-            </select>
             <span class="api-pill ${state.apiOnline ? "online" : "offline"}">${state.apiOnline ? "Server" : "Local"}</span>
+            <div class="user-chip">
+              <strong>${state.user.name}</strong>
+              <span>${state.user.role}</span>
+            </div>
             <input class="search" id="search" type="search" value="${state.search}" placeholder="Search ERP records">
             <button class="secondary-btn" id="resetData">Reset demo data</button>
             ${canCreateRecord ? `<button class="primary-btn" id="newRecord">${newButtonLabel()}</button>` : ""}
+            <button class="secondary-btn" id="signOut">Sign out</button>
           </div>
         </header>
         <section class="content">${renderView()}</section>
@@ -397,6 +421,59 @@ function appTemplate() {
     <div class="drawer-backdrop" id="drawerBackdrop"></div>
     <aside class="drawer" id="drawer" aria-hidden="true"></aside>
   `;
+}
+
+function loginTemplate() {
+  const users = state.data.users || [
+    { id: "U-001", name: "Ronald Jackson", email: "ronald@jacksontelcom.example", role: "Admin" },
+    { id: "U-002", name: "Marcus Hill", email: "marcus@jacksontelcom.example", role: "Foreman" },
+    { id: "U-003", name: "Operations Coordinator", email: "ops@jacksontelcom.example", role: "Operations" },
+    { id: "U-004", name: "Office Billing", email: "billing@jacksontelcom.example", role: "Billing" },
+    { id: "U-005", name: "Safety Compliance", email: "safety@jacksontelcom.example", role: "Safety/Compliance" }
+  ];
+  return `
+    <main class="login-screen">
+      <section class="login-panel">
+        <div class="login-copy">
+          <div class="brand-mark">JT</div>
+          <span class="eyebrow">Jackson Telcom ERP</span>
+          <h1>Sign in to your workspace</h1>
+          <p>Each role opens to the work that matters most: field dailies, PO blockers, billing readiness, compliance risk, or the owner dashboard.</p>
+        </div>
+        <form class="login-form" id="loginForm">
+          <div class="field">
+            <label for="loginEmail">Email</label>
+            <input id="loginEmail" type="email" value="${users[0]?.email || ""}">
+          </div>
+          <div class="field">
+            <label for="loginPassword">Password</label>
+            <input id="loginPassword" type="password" value="demo">
+          </div>
+          <button class="primary-btn" type="submit">Sign in</button>
+        </form>
+        <div class="demo-users">
+          <h2>Demo workspaces</h2>
+          ${users.map(user => `
+            <button class="demo-user" data-login-email="${user.email}">
+              <strong>${user.name}</strong>
+              <span>${user.role}</span>
+              <small>${workspaceSummary(user.role)}</small>
+            </button>
+          `).join("")}
+        </div>
+      </section>
+    </main>
+  `;
+}
+
+function workspaceSummary(role) {
+  return {
+    Admin: "Executive exceptions, profit, cash, compliance, and audit exports",
+    Foreman: "Today’s field daily, JSA, inspections, production, and submit",
+    Operations: "Active POs, crew assignment, production progress, and blockers",
+    Billing: "Billing readiness, missing support, AR, retainage, and disputes",
+    "Safety/Compliance": "Cert expirations, incidents, inspections, Form 12, and SQUAN score"
+  }[role] || "Role workspace";
 }
 
 function canView(view) {
@@ -1164,6 +1241,20 @@ function closeDrawer() {
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-login-email]").forEach(button => {
+    button.addEventListener("click", () => loginByEmail(button.dataset.loginEmail));
+  });
+
+  const loginForm = document.getElementById("loginForm");
+  if (loginForm) {
+    loginForm.addEventListener("submit", event => {
+      event.preventDefault();
+      loginByEmail(document.getElementById("loginEmail").value);
+    });
+  }
+
+  if (!state.user) return;
+
   document.querySelectorAll("[data-view]").forEach(button => {
     button.addEventListener("click", () => {
       state.view = button.dataset.view;
@@ -1191,12 +1282,6 @@ function bindEvents() {
     });
   });
 
-  document.getElementById("roleSelect").addEventListener("change", event => {
-    state.role = event.target.value;
-    state.view = roleConfig[state.role].defaultView;
-    render();
-  });
-
   document.getElementById("search").addEventListener("input", event => {
     state.search = event.target.value;
     render();
@@ -1206,6 +1291,10 @@ function bindEvents() {
   if (newRecord) newRecord.addEventListener("click", () => openDrawer(collectionForView()));
   const submitDaily = document.getElementById("submitDaily");
   if (submitDaily) submitDaily.addEventListener("click", handleDailySubmit);
+  document.getElementById("signOut").addEventListener("click", () => {
+    clearSession();
+    render();
+  });
   document.getElementById("resetData").addEventListener("click", () => {
     state.data = structuredClone(seedData);
     state.apiOnline = false;
@@ -1217,6 +1306,30 @@ function bindEvents() {
   document.getElementById("mobileMenu").addEventListener("click", () => {
     document.getElementById("sidebar").classList.toggle("open");
   });
+}
+
+async function loginByEmail(email) {
+  const localUser = (state.data.users || []).find(user => user.email === email) || (state.data.users || [])[0];
+  if (!localUser) return;
+  try {
+    if (state.apiOnline) {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: document.getElementById("loginPassword")?.value || "demo" })
+      });
+      if (response.ok) {
+        const payload = await response.json();
+        saveSession(payload.user);
+        render();
+        return;
+      }
+    }
+  } catch (error) {
+    state.apiOnline = false;
+  }
+  saveSession(localUser);
+  render();
 }
 
 async function handleDailySubmit() {
