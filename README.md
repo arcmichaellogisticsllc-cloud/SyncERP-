@@ -18,9 +18,13 @@ Then visit `http://localhost:8080`.
 
 ## Included Modules
 
+- Role-based dashboard views for Ronald/Admin, Foreman, and Office/Billing users
+- Responsive desktop and mobile layouts with table-to-card behavior on phones
 - Executive dashboard with PO profitability, retainage, SQUAN score estimate, and risk exposure
 - Project & PO Hub for SQUAN POs, scope, budget, required certs, document control, and margin
+- Desktop Project & PO drill-down with linked dailies, invoices, and risk events
 - Field Operations daily workflow for JSA, inspections, 811, production, SOT, payroll, and inventory outputs
+- Mobile-first Field Daily workflow with pre-job, work log, and closeout steps
 - People & Compliance ledger for certifications, background checks, drug tests, and workers' comp class
 - Equipment & Materials controls for inspections, availability, SQUAN-supplied materials, and cost allocation
 - Money module for invoice completeness, 30-day billing window, 90/10 retainage, AR, and pay-when-paid notes

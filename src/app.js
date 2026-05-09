@@ -218,6 +218,8 @@ const navItems = [
 const state = {
   view: "dashboard",
   search: "",
+  role: "Ronald/Admin",
+  selectedProjectId: "PO-SQ-24018",
   data: loadData()
 };
 
@@ -295,6 +297,9 @@ function appTemplate() {
             <p>${pageSubtitle()}</p>
           </div>
           <div class="toolbar">
+            <select class="role-select" id="roleSelect" title="Dashboard role">
+              ${["Ronald/Admin", "Foreman", "Office/Billing"].map(role => `<option value="${role}" ${state.role === role ? "selected" : ""}>${role}</option>`).join("")}
+            </select>
             <input class="search" id="search" type="search" value="${state.search}" placeholder="Search ERP records">
             <button class="secondary-btn" id="resetData">Reset demo data</button>
             <button class="primary-btn" id="newRecord">${newButtonLabel()}</button>
@@ -346,6 +351,7 @@ function newButtonLabel() {
 
 function renderView() {
   if (state.view === "dashboard") return renderDashboard();
+  if (state.view === "projects") return renderProjectHub();
   if (state.view === "field") return renderField();
   if (state.view === "money") return renderMoney();
   if (state.view === "risk") return renderRisk();
@@ -361,6 +367,7 @@ function renderDashboard() {
   const squanScore = Math.max(0, 100 - activeRisks * 4 - blockedDailies * 3);
 
   return `
+    ${renderRoleLanding()}
     <section class="metrics">
       ${metric("Forecast margin", `${Math.round(((revenue - forecastCost) / revenue) * 100)}%`, `${currency(revenue - forecastCost)} forecast gross profit`)}
       ${metric("Retainage outstanding", currency(retainage), "Tracked by 12-month release date")}
@@ -387,6 +394,119 @@ function renderDashboard() {
       </div>
     </section>
   `;
+}
+
+function renderRoleLanding() {
+  if (state.role === "Foreman") {
+    const daily = state.data.dailies[0];
+    const project = state.data.projects.find(item => item.id === daily.project);
+    return `
+      <section class="role-panel">
+        <div>
+          <span class="eyebrow">Foreman start screen</span>
+          <h2>${project.id} - ${project.scope}</h2>
+          <p>${daily.crew} has a clear JSA, current 811, ${daily.laborHours} labor hours logged, and closeout outputs ready for review.</p>
+        </div>
+        <button class="primary-btn" data-view-shortcut="field">Open Field Daily</button>
+      </section>
+    `;
+  }
+
+  if (state.role === "Office/Billing") {
+    const dueSoon = state.data.projects.filter(project => {
+      const days = daysUntil(project.billBy);
+      return days !== null && days <= 14;
+    }).length;
+    return `
+      <section class="role-panel">
+        <div>
+          <span class="eyebrow">Office billing queue</span>
+          <h2>${dueSoon} PO billing windows need attention</h2>
+          <p>Invoice packages are organized around dailies, SOT forms, as-builts, retainage, and pay-when-paid notes.</p>
+        </div>
+        <button class="primary-btn" data-view-shortcut="money">Open Money</button>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="role-panel">
+      <div>
+        <span class="eyebrow">Ronald command view</span>
+        <h2>Profit, cash, compliance, and SQUAN score in one pass</h2>
+        <p>Use this view for Sunday-night operating review across active POs, risk events, cert expirations, and retainage.</p>
+      </div>
+      <button class="primary-btn" data-view-shortcut="projects">Open PO Hub</button>
+    </section>
+  `;
+}
+
+function renderProjectHub() {
+  const rows = state.data.projects.filter(matches);
+  const selected = state.data.projects.find(project => project.id === state.selectedProjectId) || rows[0] || state.data.projects[0];
+  if (selected && selected.id !== state.selectedProjectId) state.selectedProjectId = selected.id;
+
+  return `
+    <section class="project-hub">
+      <div class="panel project-list-panel">
+        <div class="panel-header">
+          <h2>SQUAN POs</h2>
+          <span>${rows.length} shown</span>
+        </div>
+        <div class="project-list">
+          ${rows.map(project => `
+            <button class="project-row ${project.id === selected.id ? "active" : ""}" data-project-id="${project.id}">
+              <strong>${project.id}</strong>
+              <span>${project.scope}</span>
+              <small>${project.crew} - ${margin(project)}% margin - bill by ${project.billBy}</small>
+            </button>
+          `).join("") || `<div class="empty">No projects match your search.</div>`}
+        </div>
+      </div>
+      ${renderProjectDetail(selected)}
+    </section>
+  `;
+}
+
+function renderProjectDetail(project) {
+  const dailies = state.data.dailies.filter(daily => daily.project === project.id);
+  const invoices = state.data.invoices.filter(invoice => invoice.project === project.id);
+  const risk = state.data.safety.filter(item => item.project === project.id);
+  return `
+    <div class="panel project-detail">
+      <div class="panel-header">
+        <h2>${project.id}</h2>
+        <span class="status ${statusClass(project.status)}">${project.status}</span>
+      </div>
+      <div class="detail-body">
+        <div>
+          <span class="eyebrow">Scope</span>
+          <p>${project.scope}</p>
+        </div>
+        <div class="profit-grid">
+          <span>Revenue<strong>${currency(project.estimatedRevenue)}</strong></span>
+          <span>Actual cost<strong>${currency(project.actualCost)}</strong></span>
+          <span>Forecast<strong>${currency(project.forecastCost)}</strong></span>
+          <span>Margin<strong>${margin(project)}%</strong></span>
+        </div>
+        <div class="detail-grid">
+          <span>Crew<strong>${project.crew}</strong></span>
+          <span>Required certs<strong>${project.requiredCerts}</strong></span>
+          <span>Billing deadline<strong>${formatDateRisk(project.billBy)}</strong></span>
+          <span>Document control<strong>${project.docs}</strong></span>
+        </div>
+        <div class="linked-records">
+          ${linkedCount("Field dailies", dailies.length)}
+          ${linkedCount("Invoices", invoices.length)}
+          ${linkedCount("Risk events", risk.length)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function linkedCount(label, value) {
+  return `<div><strong>${value}</strong><span>${label}</span></div>`;
 }
 
 function renderProjectCards() {
@@ -421,8 +541,9 @@ function renderProjectCards() {
 
 function renderField() {
   return `
-    <section class="grid">
-      <div class="panel">
+    <section class="field-layout">
+      ${renderMobileDailyWizard()}
+      <div class="panel workflow-panel">
         <div class="panel-header">
           <h2>Foreman daily heartbeat</h2>
           <span>Pre-job, during work, closeout</span>
@@ -435,6 +556,42 @@ function renderField() {
       </div>
       ${renderTablePanel(tableConfig().field)}
     </section>
+  `;
+}
+
+function renderMobileDailyWizard() {
+  const daily = state.data.dailies[0];
+  return `
+    <div class="panel daily-wizard">
+      <div class="panel-header">
+        <h2>Today's Field Daily</h2>
+        <span>${daily.project}</span>
+      </div>
+      <div class="wizard-steps">
+        ${dailyGate("Pre-job", daily.jsa, ["JSA signed", "PPE Form 7", "811 current", "Crew certs checked"])}
+        ${dailyGate("Work log", "In progress", ["Add progress photo", "Log hazard", "Track material", "Capture GPS note"])}
+        ${dailyGate("Closeout", "Ready", ["Enter production", "Finalize hours", "Generate SOT", "Submit SQUAN daily"])}
+      </div>
+      <div class="mobile-actionbar">
+        <button class="secondary-btn">Save Draft</button>
+        <button class="secondary-btn">Add Photo</button>
+        <button class="primary-btn">Submit Daily</button>
+      </div>
+    </div>
+  `;
+}
+
+function dailyGate(title, status, items) {
+  return `
+    <article class="wizard-card">
+      <div class="card-topline">
+        <h3>${title}</h3>
+        <span class="status ${statusClass(status)}">${status}</span>
+      </div>
+      <div class="check-grid">
+        ${items.map(item => `<label><input type="checkbox" checked> ${item}</label>`).join("")}
+      </div>
+    </article>
   `;
 }
 
@@ -607,7 +764,32 @@ function renderTablePanel(config) {
           </tbody>
         </table>
       </div>
+      <div class="mobile-records">
+        ${rows.map(row => renderMobileRecord(row, config)).join("") || `<div class="empty">No records match your search.</div>`}
+      </div>
     </div>
+  `;
+}
+
+function renderMobileRecord(row, config) {
+  const titleColumn = config.columns[0];
+  const subtitleColumn = config.columns[1] || config.columns[0];
+  return `
+    <article class="mobile-record-card">
+      <div class="card-topline">
+        <h3>${formatCell(row, titleColumn)}</h3>
+        <button class="secondary-btn" data-edit="${config.key}" data-index="${state.data[config.key].indexOf(row)}">Edit</button>
+      </div>
+      <p>${formatCell(row, subtitleColumn)}</p>
+      <dl>
+        ${config.columns.slice(2, 7).map(column => `
+          <div>
+            <dt>${column.label}</dt>
+            <dd>${formatCell(row, column)}</dd>
+          </div>
+        `).join("")}
+      </dl>
+    </article>
   `;
 }
 
@@ -718,6 +900,26 @@ function bindEvents() {
 
   document.querySelectorAll("[data-edit]").forEach(button => {
     button.addEventListener("click", () => openDrawer(button.dataset.edit, Number(button.dataset.index)));
+  });
+
+  document.querySelectorAll("[data-project-id]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.selectedProjectId = button.dataset.projectId;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-view-shortcut]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.view = button.dataset.viewShortcut;
+      state.search = "";
+      render();
+    });
+  });
+
+  document.getElementById("roleSelect").addEventListener("change", event => {
+    state.role = event.target.value;
+    render();
   });
 
   document.getElementById("search").addEventListener("input", event => {
