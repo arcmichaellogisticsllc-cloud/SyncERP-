@@ -63,6 +63,12 @@ Required capabilities:
 
 Current implementation: projects collection, desktop PO drill-down, API CRUD.
 
+First operating slice:
+
+- Project unit-price lines are tracked in `projectUnits`.
+- Completed and billable quantities are recalculated from submitted daily production.
+- PO detail shows contract quantity, completed quantity, and billable dollars.
+
 ## 4. Field Daily Workflow
 
 Required capabilities:
@@ -74,6 +80,11 @@ Required capabilities:
 - Offline mode later
 
 Current implementation: mobile daily workflow UI and dailies API.
+
+First operating slice:
+
+- `POST /api/workflows/submit-daily` accepts one daily plus production, labor, equipment, and material lines.
+- The endpoint replaces existing line items for the daily ID, marks the daily submitted, and writes an audit event.
 
 ## 5. People and Compliance Ledger
 
@@ -114,6 +125,14 @@ Required capabilities:
 
 Current implementation: project actual cost, forecast cost, and profitability summary.
 
+First operating slice:
+
+- Daily labor lines calculate `hours * costRate`.
+- Daily equipment lines calculate `hours * rate`.
+- Jackson-owned material lines calculate `quantity * unitCost`.
+- SQUAN-owned material is tracked as consumption without adding material cost.
+- Project actual cost is recalculated from base actual cost plus submitted daily line costs.
+
 ## 8. Invoicing and Retainage
 
 Required capabilities:
@@ -127,6 +146,12 @@ Required capabilities:
 - AR aging
 
 Current implementation: invoices collection, retainage release dates, money dashboard, CSV export.
+
+First operating slice:
+
+- Billing readiness is recalculated after daily submission.
+- Readiness checks submitted daily, SOT, photos, as-builts, billable amount, and billing deadline.
+- Money screen includes a Billing Readiness queue.
 
 ## 9. Safety, Quality, and Risk
 

@@ -303,6 +303,17 @@ async function saveToApi(collectionKey, record, isNew) {
   }
 }
 
+async function submitDailyWorkflow(payload) {
+  if (!state.apiOnline) return;
+  const response = await fetch("/api/workflows/submit-daily", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error("Daily submit failed");
+  await syncFromApi();
+}
+
 function currency(value) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -323,8 +334,8 @@ function margin(project) {
 
 function statusClass(status) {
   const normal = String(status).toLowerCase();
-  if (["active", "clear", "complete", "current", "available", "allocated", "paid"].includes(normal)) return "ok";
-  if (["at risk", "expiring", "submitted", "open", "pay-when-paid logged"].includes(normal)) return "warn";
+  if (["active", "clear", "complete", "current", "available", "allocated", "paid", "ready to bill"].includes(normal)) return "ok";
+  if (["at risk", "expiring", "submitted", "open", "pay-when-paid logged", "not ready"].includes(normal)) return "warn";
   if (["blocked", "unavailable", "past due"].includes(normal)) return "bad";
   return "info";
 }
@@ -425,6 +436,8 @@ function scopeBilling(collectionKey, rows) {
   if (collectionKey === "projects") return rows;
   if (collectionKey === "dailies") return rows;
   if (collectionKey === "invoices") return rows;
+  if (collectionKey === "billingReadiness") return rows;
+  if (["projectUnits", "dailyProduction", "dailyLabor", "dailyEquipment", "dailyMaterials"].includes(collectionKey)) return rows;
   return [];
 }
 
@@ -603,7 +616,7 @@ function renderRoleLanding() {
 
 function renderProjectHub() {
   const rows = scopedRows("projects").filter(matches);
-  const selected = state.data.projects.find(project => project.id === state.selectedProjectId) || rows[0] || state.data.projects[0];
+  const selected = rows.find(project => project.id === state.selectedProjectId) || rows[0] || state.data.projects[0];
   if (selected && selected.id !== state.selectedProjectId) state.selectedProjectId = selected.id;
 
   return `
@@ -632,6 +645,8 @@ function renderProjectDetail(project) {
   const dailies = scopedRows("dailies").filter(daily => daily.project === project.id);
   const invoices = scopedRows("invoices").filter(invoice => invoice.project === project.id);
   const risk = scopedRows("safety").filter(item => item.project === project.id);
+  const units = scopedRows("projectUnits").filter(unit => unit.project === project.id);
+  const readiness = scopedRows("billingReadiness").find(item => item.project === project.id);
   return `
     <div class="panel project-detail">
       <div class="panel-header">
@@ -659,6 +674,22 @@ function renderProjectDetail(project) {
           ${linkedCount("Field dailies", dailies.length)}
           ${linkedCount("Invoices", invoices.length)}
           ${linkedCount("Risk events", risk.length)}
+        </div>
+        <div class="section-block">
+          <div class="section-heading">
+            <h3>Production and billing readiness</h3>
+            ${readiness ? `<span class="status ${statusClass(readiness.status)}">${readiness.status}</span>` : ""}
+          </div>
+          <div class="unit-list">
+            ${units.map(unit => `
+              <div class="unit-row">
+                <strong>${unit.description}</strong>
+                <span>${Number(unit.completedQuantity || 0).toLocaleString()} / ${Number(unit.contractQuantity || 0).toLocaleString()} ${unit.unitCode}</span>
+                <small>${currency(Number(unit.billableQuantity || 0) * Number(unit.unitPrice || 0))} billable</small>
+              </div>
+            `).join("") || `<div class="empty">No unit-price lines have been added.</div>`}
+          </div>
+          ${readiness ? `<p class="readiness-note">Missing: ${readiness.missingItems}. Deadline: ${readiness.billingDeadline}. Billable: ${currency(readiness.billableAmount)}.</p>` : ""}
         </div>
       </div>
     </div>
@@ -721,21 +752,74 @@ function renderField() {
 
 function renderMobileDailyWizard() {
   const daily = scopedRows("dailies")[0] || state.data.dailies[0];
+  const project = scopedRows("projects").find(item => item.id === daily.project) || scopedRows("projects")[0] || state.data.projects[0];
+  const unitOptions = scopedRows("projectUnits").filter(unit => unit.project === project.id);
+  const equipmentOptions = scopedRows("equipment");
+  const defaultUnit = unitOptions[0] || {};
+  const defaultEquipment = equipmentOptions[0] || {};
   return `
     <div class="panel daily-wizard">
       <div class="panel-header">
         <h2>Today's Field Daily</h2>
-        <span>${daily.project}</span>
+        <span>${project.id}</span>
       </div>
       <div class="wizard-steps">
         ${dailyGate("Pre-job", daily.jsa, ["JSA signed", "PPE Form 7", "811 current", "Crew certs checked"])}
         ${dailyGate("Work log", "In progress", ["Add progress photo", "Log hazard", "Track material", "Capture GPS note"])}
         ${dailyGate("Closeout", "Ready", ["Enter production", "Finalize hours", "Generate SOT", "Submit SQUAN daily"])}
       </div>
+      <div class="daily-submit-form">
+        <div class="field">
+          <label for="dailyId">Daily ID</label>
+          <input id="dailyId" value="DLY-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}">
+        </div>
+        <div class="field">
+          <label for="dailyProject">PO</label>
+          <select id="dailyProject">
+            ${scopedRows("projects").map(item => `<option value="${item.id}" ${item.id === project.id ? "selected" : ""}>${item.id}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label for="dailyUnit">Production unit</label>
+          <select id="dailyUnit">
+            ${unitOptions.map(unit => `<option value="${unit.unitCode}">${unit.description}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label for="dailyQuantity">Quantity complete</label>
+          <input id="dailyQuantity" type="number" value="100">
+        </div>
+        <div class="field">
+          <label for="dailyLaborHours">Labor hours</label>
+          <input id="dailyLaborHours" type="number" value="8" step="0.25">
+        </div>
+        <div class="field">
+          <label for="dailyLaborRate">Labor cost rate</label>
+          <input id="dailyLaborRate" type="number" value="38" step="0.01">
+        </div>
+        <div class="field">
+          <label for="dailyEquipment">Equipment</label>
+          <select id="dailyEquipment">
+            ${equipmentOptions.map(item => `<option value="${item.id}" data-rate="${item.costRate || 0}">${item.id} - ${item.asset}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label for="dailyEquipmentHours">Equipment hours</label>
+          <input id="dailyEquipmentHours" type="number" value="2" step="0.25">
+        </div>
+        <div class="field">
+          <label for="dailyMaterialQty">SQUAN material quantity</label>
+          <input id="dailyMaterialQty" type="number" value="100">
+        </div>
+        <div class="field">
+          <label for="dailyNotes">Notes</label>
+          <input id="dailyNotes" value="${defaultUnit.description || "Production entry"}">
+        </div>
+      </div>
       <div class="mobile-actionbar">
         <button class="secondary-btn">Save Draft</button>
         <button class="secondary-btn">Add Photo</button>
-        <button class="primary-btn">Submit Daily</button>
+        <button class="primary-btn" id="submitDaily">Submit Daily</button>
       </div>
     </div>
   `;
@@ -779,7 +863,36 @@ function renderMoney() {
       ${metric("10% retainage", currency(retainage), "Release dates tracked")}
       ${metric("13-week risk", currency(gross - paid), "Open AR and pay-when-paid exposure")}
     </section>
+    ${renderBillingReadinessQueue()}
     ${renderTablePanel(tableConfig().money)}
+  `;
+}
+
+function renderBillingReadinessQueue() {
+  const rows = scopedRows("billingReadiness").filter(matches);
+  return `
+    <div class="panel readiness-panel">
+      <div class="panel-header">
+        <h2>Billing readiness queue</h2>
+        <span>${rows.length} POs</span>
+      </div>
+      <div class="readiness-grid">
+        ${rows.map(item => `
+          <article class="readiness-card">
+            <div class="card-topline">
+              <h3>${item.project}</h3>
+              <span class="status ${statusClass(item.status)}">${item.status}</span>
+            </div>
+            <div class="profit-grid">
+              <span>Billable<strong>${currency(item.billableAmount)}</strong></span>
+              <span>Dailies<strong>${item.submittedDailies}</strong></span>
+              <span>Deadline<strong>${item.billingDeadline}</strong></span>
+              <span>Missing<strong>${item.missingItems}</strong></span>
+            </div>
+          </article>
+        `).join("") || `<div class="empty">No billing readiness records match your search.</div>`}
+      </div>
+    </div>
   `;
 }
 
@@ -1091,6 +1204,8 @@ function bindEvents() {
 
   const newRecord = document.getElementById("newRecord");
   if (newRecord) newRecord.addEventListener("click", () => openDrawer(collectionForView()));
+  const submitDaily = document.getElementById("submitDaily");
+  if (submitDaily) submitDaily.addEventListener("click", handleDailySubmit);
   document.getElementById("resetData").addEventListener("click", () => {
     state.data = structuredClone(seedData);
     state.apiOnline = false;
@@ -1102,6 +1217,72 @@ function bindEvents() {
   document.getElementById("mobileMenu").addEventListener("click", () => {
     document.getElementById("sidebar").classList.toggle("open");
   });
+}
+
+async function handleDailySubmit() {
+  const dailyId = document.getElementById("dailyId").value.trim();
+  const projectId = document.getElementById("dailyProject").value;
+  const unitCode = document.getElementById("dailyUnit").value;
+  const quantity = Number(document.getElementById("dailyQuantity").value || 0);
+  const laborHours = Number(document.getElementById("dailyLaborHours").value || 0);
+  const laborRate = Number(document.getElementById("dailyLaborRate").value || 0);
+  const equipmentSelect = document.getElementById("dailyEquipment");
+  const equipmentId = equipmentSelect.value;
+  const equipmentRate = Number(equipmentSelect.selectedOptions[0]?.dataset.rate || 0);
+  const equipmentHours = Number(document.getElementById("dailyEquipmentHours").value || 0);
+  const materialQty = Number(document.getElementById("dailyMaterialQty").value || 0);
+  const notes = document.getElementById("dailyNotes").value;
+  const project = state.data.projects.find(item => item.id === projectId);
+  const unit = (state.data.projectUnits || []).find(item => item.project === projectId && item.unitCode === unitCode);
+
+  const payload = {
+    daily: {
+      id: dailyId,
+      project: projectId,
+      date: new Date().toISOString().slice(0, 10),
+      foreman: roleConfig.Foreman.person,
+      crew: project?.crew || roleConfig.Foreman.crew,
+      jsa: "Complete",
+      inspections: "Forms 4, 7, 8 complete",
+      locate: "Current",
+      production: `${quantity.toLocaleString()} ${unit?.description || unitCode}`,
+      laborHours,
+      equipmentHours,
+      materials: `SQUAN material: ${materialQty.toLocaleString()}`,
+      output: "SQUAN daily, SOT, photos, payroll, inventory posted"
+    },
+    production: [{
+      unitCode,
+      description: unit?.description || unitCode,
+      quantity,
+      notes
+    }],
+    labor: [{
+      employee: roleConfig.Foreman.person,
+      hours: laborHours,
+      costRate: laborRate,
+      costCode: "LAB-FIBER"
+    }],
+    equipment: [{
+      equipmentId,
+      hours: equipmentHours,
+      rate: equipmentRate,
+      costCode: "EQ-BUCKET"
+    }],
+    materials: [{
+      materialId: "MAT-SQ-FIBER",
+      description: "SQUAN supplied material",
+      quantity: materialQty,
+      unitCost: 0,
+      owner: "SQUAN"
+    }]
+  };
+
+  try {
+    await submitDailyWorkflow(payload);
+  } catch (error) {
+    alert("Daily could not be submitted. Confirm the ERP server is running.");
+  }
 }
 
 render();

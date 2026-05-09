@@ -24,7 +24,13 @@ const collections = new Set([
   "crews",
   "roles",
   "costCodes",
-  "unitPrices"
+  "unitPrices",
+  "projectUnits",
+  "dailyProduction",
+  "dailyLabor",
+  "dailyEquipment",
+  "dailyMaterials",
+  "billingReadiness"
 ]);
 
 function readDb() {
@@ -81,6 +87,76 @@ function summarize(db) {
   };
 }
 
+function recomputeProject(db, projectId) {
+  const project = db.projects.find(item => item.id === projectId);
+  if (!project) return null;
+  if (project.baseActualCost === undefined) project.baseActualCost = Number(project.actualCost || 0);
+
+  db.projectUnits
+    .filter(unit => unit.project === projectId)
+    .forEach(unit => {
+      unit.completedQuantity = sum(
+        db.dailyProduction.filter(line => line.project === projectId && line.unitCode === unit.unitCode),
+        "quantity"
+      );
+      unit.billableQuantity = Math.max(0, Number(unit.completedQuantity || 0) - Number(unit.previouslyBilledQuantity || 0));
+    });
+
+  const laborCost = db.dailyLabor
+    .filter(line => line.project === projectId)
+    .reduce((total, line) => total + Number(line.hours || 0) * Number(line.costRate || 0), 0);
+  const equipmentCost = db.dailyEquipment
+    .filter(line => line.project === projectId)
+    .reduce((total, line) => total + Number(line.hours || 0) * Number(line.rate || 0), 0);
+  const materialCost = db.dailyMaterials
+    .filter(line => line.project === projectId && line.owner !== "SQUAN")
+    .reduce((total, line) => total + Number(line.quantity || 0) * Number(line.unitCost || 0), 0);
+
+  project.actualCost = Math.round(Number(project.baseActualCost || 0) + laborCost + equipmentCost + materialCost);
+  project.forecastCost = Math.max(Number(project.forecastCost || 0), project.actualCost);
+  recomputeBillingReadiness(db, projectId);
+  return project;
+}
+
+function recomputeBillingReadiness(db, projectId) {
+  const project = db.projects.find(item => item.id === projectId);
+  if (!project) return null;
+  const submittedDailies = db.dailies.filter(daily => daily.project === projectId && daily.status === "Submitted");
+  const projectUnits = db.projectUnits.filter(unit => unit.project === projectId);
+  const billableAmount = projectUnits.reduce((total, unit) => {
+    return total + Number(unit.billableQuantity || 0) * Number(unit.unitPrice || 0);
+  }, 0);
+  const docs = String(project.docs || "").toLowerCase();
+  const checks = {
+    daily: submittedDailies.length > 0,
+    sot: submittedDailies.some(daily => String(daily.output || "").toLowerCase().includes("sot")),
+    photos: docs.includes("photos") || submittedDailies.some(daily => String(daily.output || "").toLowerCase().includes("photos")),
+    asBuilts: docs.includes("as-built") || docs.includes("asbuilt")
+  };
+  const missingItems = Object.entries(checks)
+    .filter(([, ok]) => !ok)
+    .map(([key]) => ({ daily: "submitted daily", sot: "SOT", photos: "photos", asBuilts: "as-builts" }[key]));
+  const status = billableAmount <= 0
+    ? "Not Ready"
+    : missingItems.length
+      ? "Blocked"
+      : "Ready to Bill";
+  const next = {
+    id: `BR-${projectId}`,
+    project: projectId,
+    status,
+    billableAmount: Math.round(billableAmount),
+    missingItems: missingItems.join(", ") || "None",
+    billingDeadline: project.billBy,
+    submittedDailies: submittedDailies.length,
+    updatedAt: new Date().toISOString()
+  };
+  const index = db.billingReadiness.findIndex(item => item.project === projectId);
+  if (index === -1) db.billingReadiness.push(next);
+  else db.billingReadiness[index] = next;
+  return next;
+}
+
 function sum(rows, key) {
   return rows.reduce((total, row) => total + Number(row[key] || 0), 0);
 }
@@ -129,6 +205,37 @@ async function handleApi(req, res, url) {
     appendAudit(db, "auth.login", { user: user.email });
     writeDb(db);
     return send(res, 200, { user, token: `demo-${user.id}` });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/workflows/submit-daily") {
+    const body = await parseBody(req);
+    const daily = body.daily || {};
+    if (!daily.id || !daily.project) return send(res, 400, { error: "daily.id and daily.project are required" });
+
+    const existingDailyIndex = db.dailies.findIndex(item => item.id === daily.id);
+    const submittedDaily = {
+      ...daily,
+      status: "Submitted",
+      jsa: daily.jsa || "Complete",
+      output: daily.output || "SQUAN daily, SOT, photos, payroll, inventory posted"
+    };
+    if (existingDailyIndex === -1) db.dailies.push(submittedDaily);
+    else db.dailies[existingDailyIndex] = { ...db.dailies[existingDailyIndex], ...submittedDaily };
+
+    ["dailyProduction", "dailyLabor", "dailyEquipment", "dailyMaterials"].forEach(collection => {
+      db[collection] = db[collection].filter(line => line.dailyId !== daily.id);
+    });
+
+    (body.production || []).forEach(line => db.dailyProduction.push({ ...line, dailyId: daily.id, project: daily.project }));
+    (body.labor || []).forEach(line => db.dailyLabor.push({ ...line, dailyId: daily.id, project: daily.project }));
+    (body.equipment || []).forEach(line => db.dailyEquipment.push({ ...line, dailyId: daily.id, project: daily.project }));
+    (body.materials || []).forEach(line => db.dailyMaterials.push({ ...line, dailyId: daily.id, project: daily.project }));
+
+    const project = recomputeProject(db, daily.project);
+    const readiness = db.billingReadiness.find(item => item.project === daily.project);
+    appendAudit(db, "workflow.submitDaily", { dailyId: daily.id, project: daily.project });
+    writeDb(db);
+    return send(res, 200, { daily: submittedDaily, project, readiness });
   }
 
   if (req.method === "GET" && url.pathname === "/api/reports/executive") {

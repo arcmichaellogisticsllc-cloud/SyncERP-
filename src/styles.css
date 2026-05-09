@@ -569,6 +569,52 @@ tbody tr:hover {
   font-size: 15px;
 }
 
+.section-block {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.section-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.unit-list,
+.readiness-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.unit-row,
+.readiness-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f8fafc;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.unit-row span,
+.unit-row small,
+.readiness-note {
+  color: var(--muted);
+}
+
+.readiness-note {
+  margin: 0;
+  line-height: 1.45;
+}
+
 .project-hub {
   display: grid;
   grid-template-columns: minmax(300px, 0.7fr) minmax(420px, 1.3fr);
@@ -667,13 +713,24 @@ tbody tr:hover {
 }
 
 .daily-wizard {
-  display: none;
+  display: grid;
+}
+
+.field-layout > .panel:last-child {
+  grid-column: 1 / -1;
 }
 
 .wizard-steps {
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.daily-submit-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 14px 14px;
 }
 
 .wizard-card {
@@ -949,10 +1006,6 @@ tbody tr:hover {
     padding: 12px;
   }
 
-  .daily-wizard {
-    display: grid;
-  }
-
   .workflow-panel {
     display: none;
   }
@@ -962,7 +1015,8 @@ tbody tr:hover {
   .profit-grid,
   .detail-grid,
   .linked-records,
-  .check-grid {
+  .check-grid,
+  .daily-submit-form {
     grid-template-columns: 1fr;
   }
 

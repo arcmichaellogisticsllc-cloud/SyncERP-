@@ -33,7 +33,8 @@ Then visit `http://127.0.0.1:8080`. In static mode, records are stored in browse
 - Field Operations daily workflow for JSA, inspections, 811, production, SOT, payroll, and inventory outputs
 - Mobile-first Field Daily workflow with pre-job, work log, and closeout steps
 - Dependency-free Node API with JSON persistence
-- REST endpoints for projects, dailies, people, equipment, invoices, safety, documents, crews, cost codes, and unit prices
+- REST endpoints for projects, project units, dailies, daily line items, people, equipment, invoices, billing readiness, safety, documents, crews, cost codes, and unit prices
+- End-to-end daily submit workflow that updates production units, job cost, material usage, and billing readiness
 - Executive, audit package, and CSV export endpoints
 - People & Compliance ledger for certifications, background checks, drug tests, and workers' comp class
 - Equipment & Materials controls for inspections, availability, SQUAN-supplied materials, and cost allocation
@@ -43,5 +44,13 @@ Then visit `http://127.0.0.1:8080`. In static mode, records are stored in browse
 ## Data
 
 Full-stack records are stored in `data/db.json`. Static fallback records are stored in browser `localStorage`.
+
+## First End-to-End Slice
+
+The first implemented operating loop is:
+
+`PO -> Field Daily -> Cost Update -> Billing Readiness`
+
+Use the Field Operations screen to submit a daily with production quantity, labor hours, equipment hours, and SQUAN material usage. The server updates project unit progress, actual cost, and the Money module billing readiness queue.
 
 See [docs/BUILD_OUTLINE.md](docs/BUILD_OUTLINE.md) for the 1-10 ERP build path.

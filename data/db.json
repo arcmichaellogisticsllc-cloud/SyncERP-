@@ -48,36 +48,90 @@
     {
       "id": "Admin",
       "defaultView": "dashboard",
-      "views": ["dashboard", "projects", "field", "people", "equipment", "money", "risk"],
-      "create": ["projects", "dailies", "people", "equipment", "invoices", "safety"],
+      "views": [
+        "dashboard",
+        "projects",
+        "field",
+        "people",
+        "equipment",
+        "money",
+        "risk"
+      ],
+      "create": [
+        "projects",
+        "dailies",
+        "people",
+        "equipment",
+        "invoices",
+        "safety"
+      ],
       "purpose": "Full access across company operations, money, compliance, safety, reports, and settings."
     },
     {
       "id": "Foreman",
       "defaultView": "field",
-      "views": ["dashboard", "field", "projects", "equipment", "risk"],
-      "create": ["dailies", "safety"],
+      "views": [
+        "dashboard",
+        "field",
+        "projects",
+        "equipment",
+        "risk"
+      ],
+      "create": [
+        "dailies",
+        "safety"
+      ],
       "purpose": "Assigned work only: field daily, JSA, inspections, photos, production, and hazards."
     },
     {
       "id": "Operations",
       "defaultView": "projects",
-      "views": ["dashboard", "projects", "field", "equipment", "people", "risk"],
-      "create": ["projects", "dailies", "equipment", "safety"],
+      "views": [
+        "dashboard",
+        "projects",
+        "field",
+        "equipment",
+        "people",
+        "risk"
+      ],
+      "create": [
+        "projects",
+        "dailies",
+        "equipment",
+        "safety"
+      ],
       "purpose": "PO schedule, crew assignment, production progress, blockers, and closeout readiness."
     },
     {
       "id": "Billing",
       "defaultView": "money",
-      "views": ["dashboard", "money", "projects", "field"],
-      "create": ["invoices"],
+      "views": [
+        "dashboard",
+        "money",
+        "projects",
+        "field"
+      ],
+      "create": [
+        "invoices"
+      ],
       "purpose": "Billing readiness, invoice support packages, AR, retainage, disputes, and pay-when-paid tracking."
     },
     {
       "id": "Safety/Compliance",
       "defaultView": "risk",
-      "views": ["dashboard", "risk", "people", "equipment", "field", "projects"],
-      "create": ["safety", "people", "equipment"],
+      "views": [
+        "dashboard",
+        "risk",
+        "people",
+        "equipment",
+        "field",
+        "projects"
+      ],
+      "create": [
+        "safety",
+        "people",
+        "equipment"
+      ],
       "purpose": "Certifications, inspections, incidents, corrective actions, SQUAN score, and audit exports."
     }
   ],
@@ -85,13 +139,18 @@
     {
       "id": "Crew A",
       "foreman": "Marcus Hill",
-      "members": ["E-021"],
+      "members": [
+        "E-021"
+      ],
       "status": "Ready"
     },
     {
       "id": "Crew B",
       "foreman": "Denise Carter",
-      "members": ["E-014", "E-026"],
+      "members": [
+        "E-014",
+        "E-026"
+      ],
       "status": "Blocked"
     },
     {
@@ -138,6 +197,120 @@
       "price": 6.4
     }
   ],
+  "projectUnits": [
+    {
+      "id": "PU-24018-UG",
+      "project": "PO-SQ-24018",
+      "unitCode": "UP-FIBER-UG",
+      "description": "Underground fiber placement",
+      "contractQuantity": 12000,
+      "unitPrice": 8.75,
+      "completedQuantity": 1400,
+      "previouslyBilledQuantity": 0,
+      "billableQuantity": 1400
+    },
+    {
+      "id": "PU-24018-SPLICE",
+      "project": "PO-SQ-24018",
+      "unitCode": "UP-SPLICE",
+      "description": "Fiber splice",
+      "contractQuantity": 80,
+      "unitPrice": 185,
+      "completedQuantity": 6,
+      "previouslyBilledQuantity": 0,
+      "billableQuantity": 6
+    },
+    {
+      "id": "PU-24022-AERIAL",
+      "project": "PO-SQ-24022",
+      "unitCode": "UP-AERIAL",
+      "description": "Aerial strand and fiber overlash",
+      "contractQuantity": 15000,
+      "unitPrice": 6.4,
+      "completedQuantity": 0,
+      "previouslyBilledQuantity": 0,
+      "billableQuantity": 0
+    }
+  ],
+  "dailyProduction": [
+    {
+      "dailyId": "DLY-1007",
+      "project": "PO-SQ-24018",
+      "unitCode": "UP-FIBER-UG",
+      "description": "Underground fiber placement",
+      "quantity": 1400,
+      "notes": "North Jackson run"
+    },
+    {
+      "dailyId": "DLY-1007",
+      "project": "PO-SQ-24018",
+      "unitCode": "UP-SPLICE",
+      "description": "Fiber splice",
+      "quantity": 6,
+      "notes": "Handhole splice cases"
+    }
+  ],
+  "dailyLabor": [
+    {
+      "dailyId": "DLY-1007",
+      "project": "PO-SQ-24018",
+      "employee": "Marcus Hill",
+      "hours": 8.5,
+      "costRate": 42,
+      "costCode": "LAB-FIBER"
+    },
+    {
+      "dailyId": "DLY-1007",
+      "project": "PO-SQ-24018",
+      "employee": "Crew A labor",
+      "hours": 25.5,
+      "costRate": 34,
+      "costCode": "LAB-FIBER"
+    }
+  ],
+  "dailyEquipment": [
+    {
+      "dailyId": "DLY-1007",
+      "project": "PO-SQ-24018",
+      "equipmentId": "SPL-03",
+      "hours": 2,
+      "rate": 22,
+      "costCode": "EQ-BUCKET"
+    }
+  ],
+  "dailyMaterials": [
+    {
+      "dailyId": "DLY-1007",
+      "project": "PO-SQ-24018",
+      "materialId": "MAT-SQ-FIBER",
+      "description": "SQUAN supplied 144ct fiber",
+      "quantity": 1480,
+      "unitCost": 0,
+      "owner": "SQUAN"
+    }
+  ],
+  "billingReadiness": [
+    {
+      "id": "BR-PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "status": "Ready to Bill",
+      "billableAmount": 13360,
+      "missingItems": "None",
+      "billingDeadline": "2026-05-24",
+      "submittedDailies": 1,
+      "updatedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "BR-PO-SQ-24022",
+      "project": "PO-SQ-24022",
+      "status": "Not Ready",
+      "billableAmount": 0,
+      "missingItems": "submitted daily, SOT, photos, as-builts",
+      "billingDeadline": "2026-05-18",
+      "submittedDailies": 0,
+      "updatedAt": "2026-05-09T12:00:00.000Z"
+    }
+  ],
   "projects": [
     {
       "id": "PO-SQ-24018",
@@ -147,12 +320,13 @@
       "crew": "Crew A",
       "requiredCerts": "OSHA 10, First Aid/CPR, Trenching",
       "estimatedRevenue": 148000,
+      "baseActualCost": 92000,
       "actualCost": 93250,
       "forecastCost": 121800,
       "billed": 82500,
       "start": "2026-04-15",
       "billBy": "2026-05-24",
-      "docs": "811 ticket, permit JT-1182, customer authorization, site conditions"
+      "docs": "811 ticket, permit JT-1182, customer authorization, site conditions, photos, as-builts"
     },
     {
       "id": "PO-SQ-24022",
@@ -162,6 +336,7 @@
       "crew": "Crew B",
       "requiredCerts": "OSHA 10, Bucket Truck, Traffic Control",
       "estimatedRevenue": 96500,
+      "baseActualCost": 69200,
       "actualCost": 69200,
       "forecastCost": 91400,
       "billed": 48100,
@@ -177,6 +352,7 @@
       "crew": "Crew C",
       "requiredCerts": "Fiber Splicing, OTDR Calibration",
       "estimatedRevenue": 58200,
+      "baseActualCost": 18800,
       "actualCost": 18800,
       "forecastCost": 42150,
       "billed": 0,
@@ -199,7 +375,8 @@
       "laborHours": 34,
       "equipmentHours": 6.5,
       "materials": "SQUAN fiber: 1,480 ft; handholes: 2",
-      "output": "SQUAN daily, SOT, photos, payroll, inventory posted"
+      "output": "SQUAN daily, SOT, photos, payroll, inventory posted",
+      "status": "Submitted"
     },
     {
       "id": "DLY-1008",
