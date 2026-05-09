@@ -560,12 +560,254 @@ function newButtonLabel() {
 }
 
 function renderView() {
+  if (state.view === "dashboard" && state.role === "Admin") return renderAdminExceptions();
   if (state.view === "dashboard") return renderDashboard();
-  if (state.view === "projects") return renderProjectHub();
-  if (state.view === "field") return renderField();
-  if (state.view === "money") return renderMoney();
-  if (state.view === "risk") return renderRisk();
+  if (state.view === "projects") return state.role === "Operations" ? renderOperationsBoard() : renderProjectHub();
+  if (state.view === "field") return state.role === "Foreman" ? renderForemanToday() : renderField();
+  if (state.view === "money") return state.role === "Billing" ? renderBillingCashQueue() : renderMoney();
+  if (state.view === "risk") return state.role === "Safety/Compliance" ? renderSafetyRiskQueue() : renderRisk();
   return renderTablePanel(tableConfig()[state.view]);
+}
+
+function renderAdminExceptions() {
+  const projects = scopedRows("projects");
+  const invoices = scopedRows("invoices");
+  const safety = scopedRows("safety");
+  const people = scopedRows("people");
+  const equipment = scopedRows("equipment");
+  const readiness = scopedRows("billingReadiness");
+  const revenue = sum(projects, "estimatedRevenue");
+  const forecastCost = sum(projects, "forecastCost");
+  const squanScore = Math.max(0, 100 - safety.filter(item => item.status !== "Closed").length * 4);
+  const marginRisk = projects.filter(project => margin(project) < 12);
+  const billingDeadline = readiness.filter(item => daysUntil(item.billingDeadline) !== null && daysUntil(item.billingDeadline) <= 7);
+  const readyNotInvoiced = readiness.filter(item => item.status === "Ready to Bill");
+  const complianceRisk = [
+    ...people.filter(item => daysUntil(item.nextExpiration) !== null && daysUntil(item.nextExpiration) <= 30).map(item => ({
+      id: item.id,
+      title: item.name,
+      detail: `${item.role} cert expires ${item.nextExpiration}`,
+      status: item.compliance,
+      action: "Review Cert"
+    })),
+    ...equipment.filter(item => daysUntil(item.inspectionDue) !== null && daysUntil(item.inspectionDue) <= 30).map(item => ({
+      id: item.id,
+      title: item.asset,
+      detail: `${item.id} inspection due ${item.inspectionDue}`,
+      status: item.status,
+      action: "Schedule"
+    }))
+  ];
+  const form12 = safety.filter(item => item.status !== "Closed");
+
+  return `
+    <section class="metrics">
+      ${metric("Forecast margin", `${Math.round(((revenue - forecastCost) / revenue) * 100)}%`, `${currency(revenue - forecastCost)} forecast gross profit`)}
+      ${metric("Ready to bill", currency(sum(readyNotInvoiced, "billableAmount")), `${readyNotInvoiced.length} PO packages`)}
+      ${metric("SQUAN score", `${squanScore} pts`, "Estimate from open risk events")}
+      ${metric("Compliance exceptions", complianceRisk.length, "People and equipment")}
+    </section>
+    <section class="queue-grid">
+      ${queuePanel("Margin Below Target", marginRisk.map(project => ({
+        id: project.id,
+        title: project.scope,
+        detail: `${project.crew} - ${margin(project)}% forecast margin`,
+        status: project.status,
+        action: "Open PO"
+      })), "Review Profitability")}
+      ${queuePanel("Billing Deadline Inside 7 Days", billingDeadline.map(item => ({
+        id: item.project,
+        title: currency(item.billableAmount),
+        detail: `Deadline ${item.billingDeadline}; missing ${item.missingItems}`,
+        status: item.status,
+        action: "Open Billing"
+      })), "Open Cash Queue")}
+      ${queuePanel("Certs and Equipment Exceptions", complianceRisk, "Open Compliance")}
+      ${queuePanel("Open Form 12 Actions", form12.map(item => ({
+        id: item.id,
+        title: item.correctiveAction,
+        detail: `${item.project} - due ${item.due}`,
+        status: item.status,
+        action: "Review Risk"
+      })), "Open Safety")}
+    </section>
+  `;
+}
+
+function renderForemanToday() {
+  const daily = scopedRows("dailies")[0];
+  const project = daily ? state.data.projects.find(item => item.id === daily.project) : scopedRows("projects")[0];
+  const blocked = daily?.jsa === "Blocked" || project?.status === "Blocked";
+  return `
+    <section class="role-panel foreman-hero">
+      <div>
+        <span class="eyebrow">Today’s Work</span>
+        <h2>${project ? `${project.id} - ${project.scope}` : "No assigned PO"}</h2>
+        <p>${blocked ? "Work is blocked. Resolve the compliance issue before starting." : "Clear to start once the pre-job checklist is signed."}</p>
+      </div>
+      <span class="status ${blocked ? "bad" : "ok"}">${blocked ? "Blocked" : "Clear to Start"}</span>
+    </section>
+    ${renderMobileDailyWizard()}
+    <section class="queue-grid two-column">
+      ${queuePanel("Assigned Equipment", scopedRows("equipment").map(item => ({
+        id: item.id,
+        title: item.asset,
+        detail: `${item.location} - inspection due ${item.inspectionDue}`,
+        status: item.status,
+        action: "Inspect"
+      })), "Open Equipment")}
+      ${queuePanel("Recent Daily History", scopedRows("dailies").map(item => ({
+        id: item.id,
+        title: item.production,
+        detail: `${item.date} - ${item.laborHours} labor hours`,
+        status: item.status || item.jsa,
+        action: "View"
+      })), "Open Dailies")}
+    </section>
+  `;
+}
+
+function renderOperationsBoard() {
+  const projects = scopedRows("projects").filter(matches);
+  const buckets = [
+    { title: "Ready", rows: projects.filter(project => project.status === "Active") },
+    { title: "Blocked", rows: projects.filter(project => ["At Risk", "Blocked"].includes(project.status)) },
+    { title: "In Progress", rows: projects.filter(project => project.status === "Submitted") },
+    { title: "Needs Closeout", rows: projects.filter(project => (scopedRows("billingReadiness").find(item => item.project === project.id)?.status || "") === "Ready to Bill") }
+  ];
+  return `
+    <section class="ops-board">
+      ${buckets.map(bucket => `
+        <div class="panel board-lane">
+          <div class="panel-header">
+            <h2>${bucket.title}</h2>
+            <span>${bucket.rows.length} POs</span>
+          </div>
+          <div class="queue-list">
+            ${bucket.rows.map(project => operationCard(project)).join("") || `<div class="empty">No POs</div>`}
+          </div>
+        </div>
+      `).join("")}
+    </section>
+  `;
+}
+
+function operationCard(project) {
+  const readiness = scopedRows("billingReadiness").find(item => item.project === project.id);
+  const units = scopedRows("projectUnits").filter(item => item.project === project.id);
+  const complete = units.length
+    ? Math.round(sum(units, "completedQuantity") / Math.max(1, sum(units, "contractQuantity")) * 100)
+    : 0;
+  return `
+    <article class="queue-card">
+      <div class="card-topline">
+        <h3>${project.id}</h3>
+        <span class="status ${statusClass(project.status)}">${project.status}</span>
+      </div>
+      <p>${project.scope}</p>
+      <dl>
+        <div><dt>Crew</dt><dd>${project.crew}</dd></div>
+        <div><dt>Progress</dt><dd>${complete}%</dd></div>
+        <div><dt>Billing</dt><dd>${readiness?.status || "Not reviewed"}</dd></div>
+        <div><dt>Last daily</dt><dd>${lastDaily(project.id)?.date || "None"}</dd></div>
+      </dl>
+      <button class="secondary-btn" data-project-id="${project.id}">Resolve Blocker</button>
+    </article>
+  `;
+}
+
+function renderBillingCashQueue() {
+  const readiness = scopedRows("billingReadiness");
+  const invoices = scopedRows("invoices");
+  const ready = readiness.filter(item => item.status === "Ready to Bill");
+  const blocked = readiness.filter(item => item.status !== "Ready to Bill");
+  const awaiting = invoices.filter(item => item.status !== "Paid");
+  const retainage = invoices.filter(item => daysUntil(item.retainageRelease) !== null && daysUntil(item.retainageRelease) <= 60);
+  return `
+    <section class="metrics">
+      ${metric("Ready to bill", currency(sum(ready, "billableAmount")), `${ready.length} POs`)}
+      ${metric("Blocked support", blocked.length, "Missing docs or production")}
+      ${metric("Awaiting payment", currency(sum(awaiting, "gross") - sum(awaiting, "paid90")), `${awaiting.length} invoices`)}
+      ${metric("Retainage due soon", currency(sum(retainage, "retainage10")), "Next 60 days")}
+    </section>
+    <section class="queue-grid">
+      ${queuePanel("Ready to Bill", ready.map(item => ({
+        id: item.project,
+        title: currency(item.billableAmount),
+        detail: `Deadline ${item.billingDeadline}; ${item.submittedDailies} submitted dailies`,
+        status: item.status,
+        action: "Generate Draft"
+      })), "Generate Invoice Draft")}
+      ${queuePanel("Blocked: Missing Support", blocked.map(item => ({
+        id: item.project,
+        title: item.missingItems,
+        detail: `Deadline ${item.billingDeadline}; billable ${currency(item.billableAmount)}`,
+        status: item.status,
+        action: "Request Docs"
+      })), "Request Support")}
+      ${queuePanel("Submitted / Awaiting Payment", awaiting.map(item => ({
+        id: item.id,
+        title: item.project,
+        detail: `${currency(item.gross)} gross; ${currency(item.paid90)} paid`,
+        status: item.status,
+        action: "Record Payment"
+      })), "Record Payment")}
+      ${queuePanel("Retainage Release Upcoming", retainage.map(item => ({
+        id: item.id,
+        title: currency(item.retainage10),
+        detail: `${item.project} releases ${item.retainageRelease}`,
+        status: item.status,
+        action: "Track Release"
+      })), "Track Retainage")}
+    </section>
+  `;
+}
+
+function renderSafetyRiskQueue() {
+  const people = scopedRows("people");
+  const equipment = scopedRows("equipment");
+  const safety = scopedRows("safety");
+  const expiringPeople = people.filter(item => daysUntil(item.nextExpiration) !== null && daysUntil(item.nextExpiration) <= 30);
+  const dueEquipment = equipment.filter(item => daysUntil(item.inspectionDue) !== null && daysUntil(item.inspectionDue) <= 30);
+  const openIncidents = safety.filter(item => item.status !== "Closed");
+  return `
+    <section class="metrics">
+      ${metric("Expiring certs", expiringPeople.length, "Next 30 days")}
+      ${metric("Equipment due", dueEquipment.length, "Inspection or calibration")}
+      ${metric("Open Form 12", openIncidents.length, "Corrective actions")}
+      ${metric("SQUAN score risks", openIncidents.length + dueEquipment.length, "Known drivers")}
+    </section>
+    <section class="queue-grid">
+      ${queuePanel("Expiring People Certs", expiringPeople.map(item => ({
+        id: item.id,
+        title: item.name,
+        detail: `${item.certs}; expires ${item.nextExpiration}`,
+        status: item.compliance,
+        action: "Update Cert"
+      })), "Update Certification")}
+      ${queuePanel("Equipment Inspections Due", dueEquipment.map(item => ({
+        id: item.id,
+        title: item.asset,
+        detail: `${item.location}; due ${item.inspectionDue}`,
+        status: item.status,
+        action: "Mark Complete"
+      })), "Mark Inspection")}
+      ${queuePanel("Open Incidents / Near Misses", openIncidents.map(item => ({
+        id: item.id,
+        title: item.type,
+        detail: `${item.project} - ${item.rootCause}`,
+        status: item.status,
+        action: "Assign Action"
+      })), "Assign Corrective Action")}
+      ${queuePanel("SQUAN Score Risks", [...dueEquipment, ...openIncidents].map(item => ({
+        id: item.id,
+        title: item.asset || item.type,
+        detail: item.notes || item.correctiveAction,
+        status: item.status,
+        action: "Mitigate"
+      })), "Export Audit Package")}
+    </section>
+  `;
 }
 
 function renderDashboard() {
@@ -689,6 +931,36 @@ function renderRoleLanding() {
       <button class="primary-btn" data-view-shortcut="projects">Open PO Hub</button>
     </section>
   `;
+}
+
+function queuePanel(title, rows, actionLabel) {
+  return `
+    <div class="panel queue-panel">
+      <div class="panel-header">
+        <h2>${title}</h2>
+        <span>${rows.length} items</span>
+      </div>
+      <div class="queue-list">
+        ${rows.map(row => `
+          <article class="queue-card">
+            <div class="card-topline">
+              <h3>${row.id}</h3>
+              <span class="status ${statusClass(row.status)}">${row.status}</span>
+            </div>
+            <strong>${row.title}</strong>
+            <p>${row.detail}</p>
+            <button class="secondary-btn">${row.action || actionLabel}</button>
+          </article>
+        `).join("") || `<div class="empty">No exceptions</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function lastDaily(projectId) {
+  return scopedRows("dailies")
+    .filter(item => item.project === projectId)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
 }
 
 function renderProjectHub() {

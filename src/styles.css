@@ -387,6 +387,83 @@ button {
   align-items: start;
 }
 
+.queue-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.queue-grid.two-column {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.ops-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.board-lane {
+  min-height: 420px;
+}
+
+.queue-list {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.queue-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f8fafc;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.queue-card h3,
+.queue-card p {
+  margin: 0;
+}
+
+.queue-card h3 {
+  font-size: 15px;
+}
+
+.queue-card p {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.queue-card dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.queue-card dl div {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 8px;
+}
+
+.queue-card dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.queue-card dd {
+  margin: 0;
+}
+
+.foreman-hero {
+  margin-bottom: 18px;
+}
+
 .field-layout {
   display: grid;
   grid-template-columns: 0.85fr 1.15fr;
@@ -1073,8 +1150,11 @@ tbody tr:hover {
   .metrics,
   .records,
   .grid,
+  .queue-grid,
+  .queue-grid.two-column,
   .field-layout,
-  .project-hub {
+  .project-hub,
+  .ops-board {
     grid-template-columns: 1fr;
   }
 

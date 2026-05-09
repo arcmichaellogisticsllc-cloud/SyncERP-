@@ -37,6 +37,7 @@ Then visit `http://127.0.0.1:8080`. In static mode, records are stored in browse
 - Role-based dashboard views for Admin, Foreman, Operations, Billing, and Safety/Compliance users
 - Role-scoped navigation for Admin, Foreman, Operations, Billing, and Safety/Compliance
 - Demo login screen with individual workspaces for each role
+- Role workspaces refined around primary queues: Admin Exceptions, Foreman Today's Work, Operations PO Control Board, Billing Cash Queue, and Safety Compliance Risk Queue
 - Responsive desktop and mobile layouts with table-to-card behavior on phones
 - Executive dashboard with PO profitability, retainage, SQUAN score estimate, and risk exposure
 - Project & PO Hub for SQUAN POs, scope, budget, required certs, document control, and margin
