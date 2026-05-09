@@ -1,0 +1,10 @@
+{
+  "name": "jackson-telcom-erp",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Dependency-free Jackson Telcom ERP starter with API, JSON persistence, and responsive UI.",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check src/app.js"
+  }
+}

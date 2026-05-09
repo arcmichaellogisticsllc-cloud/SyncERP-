@@ -171,6 +171,29 @@ button {
   padding: 0 10px;
 }
 
+.api-pill {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid var(--line);
+}
+
+.api-pill.online {
+  background: #e6f6f1;
+  color: #0b6f5c;
+  border-color: #b8e4d8;
+}
+
+.api-pill.offline {
+  background: #fff1d8;
+  color: #955100;
+  border-color: #f3d08a;
+}
+
 .primary-btn,
 .secondary-btn,
 .icon-btn {
@@ -902,6 +925,7 @@ tbody tr:hover {
   }
 
   .role-select,
+  .api-pill,
   .search,
   .toolbar .secondary-btn,
   .toolbar .primary-btn {

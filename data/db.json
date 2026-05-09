@@ -1,0 +1,303 @@
+{
+  "company": {
+    "name": "Jackson Telcom",
+    "primaryCustomer": "SQUAN",
+    "retainagePercent": 10,
+    "invoiceWindowDays": 30,
+    "defaultBurdenPercent": 18,
+    "documentStandard": "Customer / PO / Dailies / SOT / Photos / As-builts / Invoices / Safety / Permits / 811"
+  },
+  "users": [
+    {
+      "id": "U-001",
+      "name": "Ronald Jackson",
+      "email": "ronald@jacksontelcom.example",
+      "role": "Admin",
+      "defaultView": "dashboard"
+    },
+    {
+      "id": "U-002",
+      "name": "Marcus Hill",
+      "email": "marcus@jacksontelcom.example",
+      "role": "Foreman",
+      "defaultView": "field"
+    },
+    {
+      "id": "U-003",
+      "name": "Office Billing",
+      "email": "billing@jacksontelcom.example",
+      "role": "Billing",
+      "defaultView": "money"
+    }
+  ],
+  "crews": [
+    {
+      "id": "Crew A",
+      "foreman": "Marcus Hill",
+      "members": ["E-021"],
+      "status": "Ready"
+    },
+    {
+      "id": "Crew B",
+      "foreman": "Denise Carter",
+      "members": ["E-014", "E-026"],
+      "status": "Blocked"
+    },
+    {
+      "id": "Crew C",
+      "foreman": "Tasha Green",
+      "members": [],
+      "status": "Scheduled"
+    }
+  ],
+  "costCodes": [
+    {
+      "id": "LAB-FIBER",
+      "name": "Fiber placement labor",
+      "category": "Labor"
+    },
+    {
+      "id": "EQ-BUCKET",
+      "name": "Bucket truck hours",
+      "category": "Equipment"
+    },
+    {
+      "id": "MAT-SQUAN",
+      "name": "SQUAN-supplied material",
+      "category": "Material"
+    }
+  ],
+  "unitPrices": [
+    {
+      "id": "UP-FIBER-UG",
+      "description": "Underground fiber placement",
+      "unit": "ft",
+      "price": 8.75
+    },
+    {
+      "id": "UP-SPLICE",
+      "description": "Fiber splice",
+      "unit": "each",
+      "price": 185
+    },
+    {
+      "id": "UP-AERIAL",
+      "description": "Aerial strand and fiber overlash",
+      "unit": "ft",
+      "price": 6.4
+    }
+  ],
+  "projects": [
+    {
+      "id": "PO-SQ-24018",
+      "customer": "SQUAN",
+      "scope": "Underground fiber placement - North Jackson",
+      "status": "Active",
+      "crew": "Crew A",
+      "requiredCerts": "OSHA 10, First Aid/CPR, Trenching",
+      "estimatedRevenue": 148000,
+      "actualCost": 93250,
+      "forecastCost": 121800,
+      "billed": 82500,
+      "start": "2026-04-15",
+      "billBy": "2026-05-24",
+      "docs": "811 ticket, permit JT-1182, customer authorization, site conditions"
+    },
+    {
+      "id": "PO-SQ-24022",
+      "customer": "SQUAN",
+      "scope": "Aerial strand and fiber overlash - West route",
+      "status": "At Risk",
+      "crew": "Crew B",
+      "requiredCerts": "OSHA 10, Bucket Truck, Traffic Control",
+      "estimatedRevenue": 96500,
+      "actualCost": 69200,
+      "forecastCost": 91400,
+      "billed": 48100,
+      "start": "2026-04-29",
+      "billBy": "2026-05-18",
+      "docs": "Pole attachment package, traffic plan, locate tickets"
+    },
+    {
+      "id": "PO-SQ-24031",
+      "customer": "SQUAN",
+      "scope": "Splicing, testing, and closeout package",
+      "status": "Submitted",
+      "crew": "Crew C",
+      "requiredCerts": "Fiber Splicing, OTDR Calibration",
+      "estimatedRevenue": 58200,
+      "actualCost": 18800,
+      "forecastCost": 42150,
+      "billed": 0,
+      "start": "2026-05-13",
+      "billBy": "2026-06-12",
+      "docs": "SOT template, test package requirements, as-built standard"
+    }
+  ],
+  "dailies": [
+    {
+      "id": "DLY-1007",
+      "project": "PO-SQ-24018",
+      "date": "2026-05-08",
+      "foreman": "Marcus Hill",
+      "crew": "Crew A",
+      "jsa": "Complete",
+      "inspections": "Forms 4, 7, 8 complete",
+      "locate": "Current",
+      "production": "1,400 ft fiber placed; 6 splices",
+      "laborHours": 34,
+      "equipmentHours": 6.5,
+      "materials": "SQUAN fiber: 1,480 ft; handholes: 2",
+      "output": "SQUAN daily, SOT, photos, payroll, inventory posted"
+    },
+    {
+      "id": "DLY-1008",
+      "project": "PO-SQ-24022",
+      "date": "2026-05-08",
+      "foreman": "Denise Carter",
+      "crew": "Crew B",
+      "jsa": "Blocked",
+      "inspections": "Bucket dielectric expired",
+      "locate": "Current",
+      "production": "No work start allowed",
+      "laborHours": 2,
+      "equipmentHours": 0,
+      "materials": "None",
+      "output": "Compliance alert sent to Ronald"
+    }
+  ],
+  "people": [
+    {
+      "id": "E-014",
+      "name": "John Miller",
+      "role": "Lineman",
+      "crew": "Crew B",
+      "certs": "OSHA 10, Traffic Control",
+      "nextExpiration": "2026-05-21",
+      "compliance": "Expiring",
+      "backgroundRefresh": "2027-01-18",
+      "drugTest": "Current",
+      "workersComp": "7600"
+    },
+    {
+      "id": "E-021",
+      "name": "Marcus Hill",
+      "role": "Foreman",
+      "crew": "Crew A",
+      "certs": "OSHA 30, First Aid/CPR, Trenching",
+      "nextExpiration": "2026-09-11",
+      "compliance": "Clear",
+      "backgroundRefresh": "2028-02-04",
+      "drugTest": "Current",
+      "workersComp": "7600"
+    },
+    {
+      "id": "E-026",
+      "name": "Ramon Fields",
+      "role": "Bucket Operator",
+      "crew": "Crew B",
+      "certs": "OSHA 10, Bucket Truck",
+      "nextExpiration": "2026-05-15",
+      "compliance": "Blocked",
+      "backgroundRefresh": "2026-12-02",
+      "drugTest": "Current",
+      "workersComp": "7600"
+    }
+  ],
+  "equipment": [
+    {
+      "id": "TRK-08",
+      "asset": "Bucket truck",
+      "assigned": "Crew B",
+      "owner": "Jackson Telcom",
+      "location": "West route",
+      "inspectionDue": "2026-05-07",
+      "status": "Unavailable",
+      "costRate": 68,
+      "notes": "Annual ANSI A92 dielectric expired"
+    },
+    {
+      "id": "SPL-03",
+      "asset": "Fusion splicer",
+      "assigned": "Crew C",
+      "owner": "Jackson Telcom",
+      "location": "Shop",
+      "inspectionDue": "2026-08-01",
+      "status": "Available",
+      "costRate": 22,
+      "notes": "Manufacturer calibration current"
+    },
+    {
+      "id": "MAT-SQ-FIBER",
+      "asset": "SQUAN supplied 144ct fiber",
+      "assigned": "PO-SQ-24018",
+      "owner": "SQUAN",
+      "location": "Yard",
+      "inspectionDue": "N/A",
+      "status": "Allocated",
+      "costRate": 0,
+      "notes": "12,000 ft received; 7,420 ft remaining"
+    }
+  ],
+  "invoices": [
+    {
+      "id": "INV-24018-02",
+      "project": "PO-SQ-24018",
+      "submitted": "2026-05-03",
+      "gross": 82500,
+      "paid90": 74250,
+      "retainage10": 8250,
+      "retainageRelease": "2027-05-03",
+      "status": "Open",
+      "support": "Dailies, SOT, photos, as-builts attached"
+    },
+    {
+      "id": "INV-24022-01",
+      "project": "PO-SQ-24022",
+      "submitted": "2026-05-06",
+      "gross": 48100,
+      "paid90": 0,
+      "retainage10": 4810,
+      "retainageRelease": "2027-05-06",
+      "status": "Pay-when-paid logged",
+      "support": "Dailies attached; as-builts pending"
+    }
+  ],
+  "safety": [
+    {
+      "id": "RISK-301",
+      "project": "PO-SQ-24018",
+      "type": "Near miss",
+      "date": "2026-05-08",
+      "severity": "Medium",
+      "rootCause": "Vehicle entered cone setup; traffic taper too short",
+      "correctiveAction": "Refresh traffic-control setup and verify Form 12 closure",
+      "owner": "Ronald Jackson",
+      "due": "2026-05-13",
+      "status": "Open"
+    },
+    {
+      "id": "RISK-302",
+      "project": "PO-SQ-24022",
+      "type": "Missed inspection",
+      "date": "2026-05-08",
+      "severity": "High",
+      "rootCause": "Annual dielectric date not checked before dispatch",
+      "correctiveAction": "Block TRK-08 and schedule ANSI A92 inspection",
+      "owner": "Ronald Jackson",
+      "due": "2026-05-10",
+      "status": "Open"
+    }
+  ],
+  "documents": [
+    {
+      "id": "DOC-811-24018",
+      "project": "PO-SQ-24018",
+      "type": "811",
+      "name": "811 ticket confirmation",
+      "status": "Current",
+      "path": "/documents/PO-SQ-24018/811"
+    }
+  ],
+  "auditLog": []
+}

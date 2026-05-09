@@ -1,0 +1,222 @@
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+
+const PORT = Number(process.env.PORT || 8080);
+const ROOT = __dirname;
+const DB_PATH = path.join(ROOT, "data", "db.json");
+const PUBLIC_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8"
+};
+
+const collections = new Set([
+  "projects",
+  "dailies",
+  "people",
+  "equipment",
+  "invoices",
+  "safety",
+  "documents",
+  "crews",
+  "costCodes",
+  "unitPrices"
+]);
+
+function readDb() {
+  return JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+}
+
+function writeDb(db) {
+  fs.writeFileSync(DB_PATH, `${JSON.stringify(db, null, 2)}\n`);
+}
+
+function send(res, status, body, type = "application/json; charset=utf-8") {
+  res.writeHead(status, {
+    "Content-Type": type,
+    "Cache-Control": "no-store"
+  });
+  res.end(type.startsWith("application/json") ? JSON.stringify(body) : body);
+}
+
+function parseBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", chunk => {
+      body += chunk;
+      if (body.length > 1_000_000) {
+        reject(new Error("Request body too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      if (!body) return resolve({});
+      try {
+        resolve(JSON.parse(body));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
+function summarize(db) {
+  const revenue = sum(db.projects, "estimatedRevenue");
+  const forecastCost = sum(db.projects, "forecastCost");
+  const retainage = sum(db.invoices, "retainage10");
+  const openRisks = db.safety.filter(item => item.status !== "Closed").length;
+  const blockedDailies = db.dailies.filter(daily => daily.jsa === "Blocked").length;
+  return {
+    forecastMarginPercent: Math.round(((revenue - forecastCost) / revenue) * 100),
+    forecastGrossProfit: revenue - forecastCost,
+    retainageOutstanding: retainage,
+    openRisks,
+    squanScoreEstimate: Math.max(0, 100 - openRisks * 4 - blockedDailies * 3),
+    activeProjects: db.projects.length,
+    billingWindows: db.projects.filter(project => daysUntil(project.billBy) <= 14).length
+  };
+}
+
+function sum(rows, key) {
+  return rows.reduce((total, row) => total + Number(row[key] || 0), 0);
+}
+
+function daysUntil(dateText) {
+  if (!dateText || dateText === "N/A") return 9999;
+  const today = new Date("2026-05-09T12:00:00");
+  const target = new Date(`${dateText}T12:00:00`);
+  return Math.ceil((target - today) / 86400000);
+}
+
+function appendAudit(db, action, detail) {
+  db.auditLog.push({
+    id: `AUD-${String(db.auditLog.length + 1).padStart(4, "0")}`,
+    at: new Date().toISOString(),
+    action,
+    detail
+  });
+}
+
+function csv(rows) {
+  if (!rows.length) return "";
+  const headers = Object.keys(rows[0]);
+  const escape = value => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  return [
+    headers.map(escape).join(","),
+    ...rows.map(row => headers.map(header => escape(row[header])).join(","))
+  ].join("\n");
+}
+
+async function handleApi(req, res, url) {
+  const db = readDb();
+  const parts = url.pathname.split("/").filter(Boolean);
+
+  if (req.method === "GET" && url.pathname === "/api/health") {
+    return send(res, 200, { ok: true, app: "Jackson Telcom ERP" });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/bootstrap") {
+    return send(res, 200, { ...db, summary: summarize(db) });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
+    const body = await parseBody(req);
+    const user = db.users.find(item => item.email === body.email) || db.users[0];
+    appendAudit(db, "auth.login", { user: user.email });
+    writeDb(db);
+    return send(res, 200, { user, token: `demo-${user.id}` });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/executive") {
+    return send(res, 200, summarize(db));
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/audit-package") {
+    return send(res, 200, {
+      company: db.company,
+      projects: db.projects,
+      dailies: db.dailies,
+      people: db.people,
+      equipment: db.equipment,
+      invoices: db.invoices,
+      safety: db.safety,
+      documents: db.documents
+    });
+  }
+
+  if (req.method === "GET" && parts[0] === "api" && parts[1] === "exports" && collections.has(parts[2])) {
+    return send(res, 200, csv(db[parts[2]]), "text/csv; charset=utf-8");
+  }
+
+  if (parts[0] === "api" && collections.has(parts[1])) {
+    const collection = parts[1];
+    const id = decodeURIComponent(parts[2] || "");
+
+    if (req.method === "GET") {
+      if (!id) return send(res, 200, db[collection]);
+      const record = db[collection].find(item => item.id === id);
+      return record ? send(res, 200, record) : send(res, 404, { error: "Record not found" });
+    }
+
+    if (req.method === "POST") {
+      const body = await parseBody(req);
+      if (!body.id) body.id = `${collection.toUpperCase()}-${Date.now()}`;
+      db[collection].push(body);
+      appendAudit(db, `${collection}.create`, { id: body.id });
+      writeDb(db);
+      return send(res, 201, body);
+    }
+
+    if (req.method === "PUT" && id) {
+      const body = await parseBody(req);
+      const index = db[collection].findIndex(item => item.id === id);
+      if (index === -1) return send(res, 404, { error: "Record not found" });
+      db[collection][index] = { ...body, id };
+      appendAudit(db, `${collection}.update`, { id });
+      writeDb(db);
+      return send(res, 200, db[collection][index]);
+    }
+
+    if (req.method === "DELETE" && id) {
+      const index = db[collection].findIndex(item => item.id === id);
+      if (index === -1) return send(res, 404, { error: "Record not found" });
+      const [deleted] = db[collection].splice(index, 1);
+      appendAudit(db, `${collection}.delete`, { id });
+      writeDb(db);
+      return send(res, 200, deleted);
+    }
+  }
+
+  return send(res, 404, { error: "API route not found" });
+}
+
+function serveFile(req, res, url) {
+  const requested = url.pathname === "/" ? "/index.html" : url.pathname;
+  const filePath = path.normalize(path.join(ROOT, requested));
+  if (!filePath.startsWith(ROOT)) return send(res, 403, "Forbidden", "text/plain; charset=utf-8");
+  fs.readFile(filePath, (error, content) => {
+    if (error) return send(res, 404, "Not found", "text/plain; charset=utf-8");
+    const type = PUBLIC_TYPES[path.extname(filePath)] || "application/octet-stream";
+    send(res, 200, content, type);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  try {
+    if (url.pathname.startsWith("/api/")) {
+      await handleApi(req, res, url);
+    } else {
+      serveFile(req, res, url);
+    }
+  } catch (error) {
+    send(res, 500, { error: error.message });
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`Jackson Telcom ERP running at http://127.0.0.1:${PORT}`);
+});

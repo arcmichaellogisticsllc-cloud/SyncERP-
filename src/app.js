@@ -220,6 +220,7 @@ const state = {
   search: "",
   role: "Ronald/Admin",
   selectedProjectId: "PO-SQ-24018",
+  apiOnline: false,
   data: loadData()
 };
 
@@ -230,6 +231,36 @@ function loadData() {
 
 function persist() {
   localStorage.setItem("jackson-syncerp-data", JSON.stringify(state.data));
+}
+
+async function syncFromApi() {
+  try {
+    const response = await fetch("/api/bootstrap", { cache: "no-store" });
+    if (!response.ok) throw new Error("API bootstrap failed");
+    const data = await response.json();
+    state.data = data;
+    state.apiOnline = true;
+    persist();
+    render();
+  } catch (error) {
+    state.apiOnline = false;
+  }
+}
+
+async function saveToApi(collectionKey, record, isNew) {
+  if (!state.apiOnline) return;
+  const url = isNew ? `/api/${collectionKey}` : `/api/${collectionKey}/${encodeURIComponent(record.id)}`;
+  const method = isNew ? "POST" : "PUT";
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(record)
+    });
+    if (!response.ok) throw new Error("API save failed");
+  } catch (error) {
+    state.apiOnline = false;
+  }
 }
 
 function currency(value) {
@@ -300,6 +331,7 @@ function appTemplate() {
             <select class="role-select" id="roleSelect" title="Dashboard role">
               ${["Ronald/Admin", "Foreman", "Office/Billing"].map(role => `<option value="${role}" ${state.role === role ? "selected" : ""}>${role}</option>`).join("")}
             </select>
+            <span class="api-pill ${state.apiOnline ? "online" : "offline"}">${state.apiOnline ? "Server" : "Local"}</span>
             <input class="search" id="search" type="search" value="${state.search}" placeholder="Search ERP records">
             <button class="secondary-btn" id="resetData">Reset demo data</button>
             <button class="primary-btn" id="newRecord">${newButtonLabel()}</button>
@@ -857,7 +889,7 @@ function openDrawer(collectionKey, index = null) {
   document.getElementById("saveRecord").addEventListener("click", () => saveRecord(collectionKey, index));
 }
 
-function saveRecord(collectionKey, index) {
+async function saveRecord(collectionKey, index) {
   const form = new FormData(document.getElementById("recordForm"));
   const numeric = ["estimatedRevenue", "actualCost", "forecastCost", "billed", "laborHours", "equipmentHours", "costRate", "gross", "paid90", "retainage10"];
   const nextRecord = {};
@@ -870,6 +902,7 @@ function saveRecord(collectionKey, index) {
     state.data[collectionKey][index] = nextRecord;
   }
   persist();
+  await saveToApi(collectionKey, nextRecord, index === null);
   closeDrawer();
   render();
 }
@@ -930,6 +963,7 @@ function bindEvents() {
   document.getElementById("newRecord").addEventListener("click", () => openDrawer(collectionForView()));
   document.getElementById("resetData").addEventListener("click", () => {
     state.data = structuredClone(seedData);
+    state.apiOnline = false;
     persist();
     render();
   });
@@ -941,3 +975,4 @@ function bindEvents() {
 }
 
 render();
+syncFromApi();
