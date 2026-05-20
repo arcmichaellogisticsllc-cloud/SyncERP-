@@ -4087,6 +4087,7 @@ async function submitDailyWorkflow(payload) {
   });
   if (!response.ok) throw new Error("Daily submit failed");
   await syncFromApi();
+  syncFieldDailyToProductionControl(payload.daily, payload);
 }
 
 function currency(value) {
@@ -11798,6 +11799,7 @@ function handleDailySupervisorReview(button) {
   if (action === "accept") {
     autoCloseReturnedDailyTasks(daily.id, `Auto-closed after ${daily.id} was accepted by ${daily.supervisorReview.by}.`);
   }
+  syncFieldDailyToProductionControl(daily, null, { status: action === "accept" ? "Approved" : "Submitted", now });
   if (project) recomputeBillingReadinessLocal(project.id);
   appendAuditLocal(`field.daily-supervisor-${action}`, {
     project: daily.project,
@@ -14141,9 +14143,17 @@ function latestSubmittedDaily(project) {
     .sort((a, b) => String(b.modifiedAt || b.date || "").localeCompare(String(a.modifiedAt || a.date || "")))[0] || null;
 }
 
+function latestProductionDaily(project) {
+  if (!project) return null;
+  return (state.data.productionDailies || [])
+    .filter(item => item.project === project.id && ["Submitted", "Approved", "Accepted"].includes(item.status || ""))
+    .sort((a, b) => String(b.modifiedAt || b.workedDate || "").localeCompare(String(a.modifiedAt || a.workedDate || "")))[0] || null;
+}
+
 function dailyAcceptanceStatus(daily) {
   if (!daily) return "Missing";
   if (daily.status === "Draft") return "Draft";
+  if (daily.sourceCollection === "productionDailies" && ["Approved", "Accepted"].includes(daily.status)) return daily.usedForBilling ? "Used for Billing" : "Accepted";
   const reviewStatus = daily.supervisorReview?.status;
   if (reviewStatus === "Accepted") return daily.usedForBilling ? "Used for Billing" : "Accepted";
   if (reviewStatus === "Returned") return "Returned";
@@ -14153,34 +14163,49 @@ function dailyAcceptanceStatus(daily) {
 }
 
 function isDailyAcceptedForBilling(daily) {
-  return daily?.status === "Submitted" && daily?.supervisorReview?.status === "Accepted";
+  return (daily?.status === "Submitted" && daily?.supervisorReview?.status === "Accepted")
+    || (daily?.sourceCollection === "productionDailies" && ["Approved", "Accepted"].includes(daily?.status));
 }
 
 function dailyBillingHandoffStatus(project) {
-  const daily = latestSubmittedDaily(project);
+  const submittedDaily = latestSubmittedDaily(project);
+  const productionDaily = submittedDaily ? null : latestProductionDaily(project);
+  const daily = submittedDaily || (productionDaily ? {
+    ...productionDaily,
+    id: productionDaily.externalDailyId || productionDaily.id,
+    productionDailyId: productionDaily.id,
+    date: productionDaily.workedDate,
+    foreman: productionDaily.tech || productionDaily.submittedBy,
+    production: productionDaily.notes,
+    sourceCollection: "productionDailies",
+    supervisorReview: productionDaily.status === "Submitted" ? { status: "Pending Review" } : { status: "Accepted", by: productionDaily.reviewedBy || productionDaily.submittedBy || "Operations", at: productionDaily.reviewedAt || productionDaily.modifiedAt }
+  } : null);
   const review = daily?.supervisorReview || {};
+  const productionDailyId = daily?.productionDailyId || "";
   const forms = (state.data.formSubmissions || []).filter(item => item.project === project?.id && item.dailyId === daily?.id);
-  const documents = (state.data.documents || []).filter(item => item.project === project?.id && item.dailyId === daily?.id);
-  const photos = (state.data.photoEvidence || []).filter(item => item.project === project?.id && item.linkedRecord === daily?.id);
+  const documents = (state.data.documents || []).filter(item => item.project === project?.id && (item.dailyId === daily?.id || item.productionDailyId === productionDailyId));
+  const photos = (state.data.photoEvidence || []).filter(item => item.project === project?.id && (item.linkedRecord === daily?.id || item.dailyId === daily?.id || item.productionDailyId === productionDailyId));
+  const fieldEvidence = (state.data.fieldEvidence || []).filter(item => item.project === project?.id && (item.productionDailyId === productionDailyId || item.dailyId === daily?.id));
   const status = !daily ? "Missing" : dailyAcceptanceStatus(daily);
   const blockers = [
     !daily ? "submitted daily" : "",
     daily && ["Submitted", "Corrected"].includes(status) ? "Operations acceptance" : "",
     status === "Returned" ? "returned daily correction" : "",
     daily && !["Accepted", "Used for Billing"].includes(status) ? "accepted Operations review" : "",
-    daily && !forms.length ? "generated daily forms" : "",
-    daily && !documents.length ? "daily support documents" : "",
-    daily && !photos.length ? "daily photo evidence" : ""
+    daily && daily.sourceCollection !== "productionDailies" && !forms.length ? "generated daily forms" : "",
+    daily && !documents.length && !fieldEvidence.length ? "daily support documents" : "",
+    daily && !photos.length && !fieldEvidence.length ? "daily photo evidence" : ""
   ].filter(Boolean);
   return {
     daily,
+    productionDaily,
     review,
     status,
     ready: ["Accepted", "Used for Billing"].includes(status) && blockers.length === 0,
     blockers,
     evidenceCounts: {
       forms: forms.length,
-      documents: documents.length,
+      documents: documents.length + fieldEvidence.length,
       photos: photos.length
     },
     acceptedAt: ["Accepted", "Used for Billing"].includes(status) ? review.at : "",
@@ -17237,6 +17262,13 @@ function productionToInvoiceLedger(project) {
   if (!project) return { lines: [], gross: 0, blockers: ["No Map selected"], ready: false };
   const lineReview = lineId => billingLineReview(project, lineId);
   const dailyById = new Map(scopedRows("dailies").filter(item => item.project === project.id).map(item => [item.id, item]));
+  scopedRows("productionDailies")
+    .filter(item => item.project === project.id)
+    .forEach(item => {
+      dailyById.set(item.id, { ...item, id: item.id, sourceCollection: "productionDailies" });
+      if (item.sourceDailyId) dailyById.set(item.sourceDailyId, { ...item, id: item.sourceDailyId, productionDailyId: item.id, sourceCollection: "productionDailies" });
+      if (item.externalDailyId) dailyById.set(item.externalDailyId, { ...item, id: item.externalDailyId, productionDailyId: item.id, sourceCollection: "productionDailies" });
+    });
   const dailyVersionKey = dailyId => {
     const daily = dailyById.get(dailyId);
     if (!daily) return `${dailyId}:missing`;
@@ -17263,6 +17295,7 @@ function productionToInvoiceLedger(project) {
   };
   const units = scopedRows("projectUnits").filter(item => item.project === project.id);
   const production = scopedRows("dailyProduction").filter(item => item.project === project.id);
+  const productionLines = scopedRows("productionLines").filter(item => item.project === project.id);
   const timeEntries = scopedRows("timeEntries").filter(item => item.project === project.id);
   const labor = scopedRows("dailyLabor").filter(item => item.project === project.id);
   const equipment = scopedRows("dailyEquipment").filter(item => item.project === project.id);
@@ -17359,21 +17392,47 @@ function productionToInvoiceLedger(project) {
       status: Number(item.hours || 0) > 0 ? "Ready" : "No Activity"
     }));
   const lines = [...unitLines, ...timeLines, ...laborSupportLines, ...equipmentLines].map(applyReview);
+  const productionControlLines = productionLines
+    .filter(item => ["Approved", "Submitted", "Needs Review", "Needs Proof"].includes(item.reviewStatus || item.status || ""))
+    .map(item => {
+      const status = item.reviewStatus === "Approved" ? "Ready" : item.reviewStatus || item.status || "Needs Review";
+      const rate = Number(item.unitRate || productionPriceForCode(item.code)?.subRate || productionPriceForCode(item.code)?.price || 0);
+      const amount = Number(item.submittedAmount || 0) || Math.round(Number(item.quantity || 0) * rate);
+      const dailyIds = uniqueList([item.sourceDailyId, item.dailyId].filter(Boolean));
+      return {
+        id: `PROD-${item.id}`,
+        sourceCollection: "productionLines",
+        sourceId: item.id,
+        type: item.sourceType || "Production daily",
+        source: "Production Control daily line",
+        unitCode: item.code,
+        description: productionPriceForCode(item.code)?.description || productionPriceForCode(item.code)?.unitName || item.notes || item.code,
+        quantity: Number(item.quantity || 0),
+        unit: item.uom || productionPriceForCode(item.code)?.uom || "Unit",
+        rate,
+        amount: status === "Rejected" ? 0 : amount,
+        dailyIds,
+        sourceVersionKey: lineVersionKey(dailyIds),
+        evidence: `${item.proofStatus || "Proof pending"} · ${item.submittedBy || "Submitter"}`,
+        status: status === "Approved" ? "Ready" : status
+      };
+    });
+  const allLines = [...lines, ...productionControlLines].map(applyReview);
   const blockers = [];
   if (!dailies.length) blockers.push("No daily submitted for this Map");
   if (dailies.length && !hasAcceptedDaily) blockers.push("No accepted daily is available for billing");
-  if (!production.length && !timeLines.length && !laborSupportLines.length && !equipmentLines.length) blockers.push("No production or hourly source lines");
-  if (lines.some(line => line.quantity > 0 && !line.rate)) blockers.push("One or more billable lines need a rate");
+  if (!production.length && !productionControlLines.length && !timeLines.length && !laborSupportLines.length && !equipmentLines.length) blockers.push("No production or hourly source lines");
+  if (allLines.some(line => line.quantity > 0 && !line.rate)) blockers.push("One or more billable lines need a rate");
   if (timeLines.some(line => line.status === "Needs Approval")) blockers.push("Hourly lines need crew/manager approval");
-  if (lines.some(line => line.status === "Returned")) blockers.push("One or more billing lines were returned to the Foreman");
-  if (lines.some(line => line.staleReview)) blockers.push("One or more billing line reviews are stale after the accepted daily changed");
-  const gross = sum(lines.filter(line => ["Ready", "Accepted", "Needs Approval"].includes(line.status)), "amount");
+  if (allLines.some(line => line.status === "Returned")) blockers.push("One or more billing lines were returned to the Foreman");
+  if (allLines.some(line => line.staleReview)) blockers.push("One or more billing line reviews are stale after the accepted daily changed");
+  const gross = sum(allLines.filter(line => ["Ready", "Accepted", "Needs Approval"].includes(line.status)), "amount");
   return {
-    lines,
+    lines: allLines,
     gross,
     blockers,
     ready: blockers.length === 0 && gross > 0,
-    dailyIds: uniqueList(lines.flatMap(line => line.dailyIds || []))
+    dailyIds: uniqueList(allLines.flatMap(line => line.dailyIds || []))
   };
 }
 
@@ -17397,6 +17456,7 @@ function squanPacketAcceptedPayload(project) {
   const handoff = dailyBillingHandoffStatus(project);
   const acceptedDaily = handoff.ready ? handoff.daily : null;
   const acceptedDailyId = acceptedDaily?.id || "";
+  const acceptedProductionDailyId = acceptedDaily?.productionDailyId || (acceptedDaily?.sourceCollection === "productionDailies" ? acceptedDaily.id : "");
   const ledger = productionToInvoiceLedger(project);
   const activeLines = ledger.lines.filter(line => Number(line.quantity || 0) > 0 || Number(line.amount || 0) > 0);
   const acceptedLines = activeLines.filter(line => line.status === "Accepted");
@@ -17411,11 +17471,15 @@ function squanPacketAcceptedPayload(project) {
     : [];
   const documents = (state.data.documents || [])
     .filter(item => item.project === project.id)
-    .filter(item => item.requiredForBilling === "Yes" || item.dailyId === acceptedDailyId)
+    .filter(item => item.requiredForBilling === "Yes" || item.dailyId === acceptedDailyId || item.productionDailyId === acceptedProductionDailyId)
     .filter(item => !item.dailyId || item.dailyId === acceptedDailyId)
+    .filter(item => !item.productionDailyId || item.productionDailyId === acceptedProductionDailyId)
     .filter(item => acceptedDailyFileStatuses.includes(item.status || "Submitted"));
   const photos = acceptedDailyId
     ? (state.data.photoEvidence || []).filter(item => item.project === project.id && (item.linkedRecord === acceptedDailyId || item.dailyId === acceptedDailyId || item.packageId === acceptedDaily.packageId) && !["Rejected", "Returned"].includes(item.status || ""))
+    : [];
+  const fieldEvidence = acceptedProductionDailyId
+    ? (state.data.fieldEvidence || []).filter(item => item.project === project.id && item.productionDailyId === acceptedProductionDailyId && !["Rejected", "Returned"].includes(item.status || ""))
     : [];
   const support = supportPackageManifest(project).filter(item => ["Ready", "Accepted", "Passed", "Approved Exception", "Accepted Exception"].includes(item.status));
   const blockers = [
@@ -17425,9 +17489,9 @@ function squanPacketAcceptedPayload(project) {
     staleLines.length ? `${staleLines.length} billing line review(s) are stale after the accepted daily changed` : "",
     returnedLines.length ? `${returnedLines.length} returned invoice source line(s) must be corrected and resubmitted` : "",
     ledger.blockers.length ? ledger.blockers.join(", ") : "",
-    acceptedDaily && !forms.length ? "Accepted daily has no generated forms attached" : "",
-    acceptedDaily && !documents.length ? "Accepted daily has no billing files attached" : "",
-    acceptedDaily && !photos.length ? "Accepted daily has no photo proof attached" : ""
+    acceptedDaily && acceptedDaily.sourceCollection !== "productionDailies" && !forms.length ? "Accepted daily has no generated forms attached" : "",
+    acceptedDaily && !documents.length && !fieldEvidence.length ? "Accepted daily has no billing files attached" : "",
+    acceptedDaily && !photos.length && !fieldEvidence.length ? "Accepted daily has no photo proof attached" : ""
   ].filter(Boolean);
   const gross = sum(acceptedLines, "amount");
   return {
@@ -17442,9 +17506,9 @@ function squanPacketAcceptedPayload(project) {
     excludedLines,
     staleLines,
     forms,
-    documents,
+    documents: [...documents, ...fieldEvidence],
     photos,
-    support,
+    support: [...support, ...fieldEvidence],
     gross,
     lineIds: acceptedLines.map(line => line.id),
     formIds: forms.map(item => item.id),
@@ -29858,16 +29922,16 @@ function renderProductionDailyForm(projects, codes) {
           </select>
         </label>
         <label>Work date
-          <input id="productionWorkedDate" type="date" value="2026-05-19">
+          <input id="productionWorkedDate" type="date" value="${isoDate(today)}">
         </label>
         <label>Daily ID
-          <input id="productionDailyExternalId" value="BSP-MIC-0197" placeholder="BSP-MIC-0197">
+          <input id="productionDailyExternalId" placeholder="SQUAN daily ID or Jackson daily ID">
         </label>
         <label>Node / CLLI
-          <input id="productionClli" value="PTASMIXI" placeholder="PTASMIXI">
+          <input id="productionClli" placeholder="Node / CLLI from SQUAN or ArcGIS">
         </label>
         <label>Street / feeder
-          <input id="productionFeeder" value="DTAP.001.02.02" placeholder="DTAP.001.02.02">
+          <input id="productionFeeder" placeholder="Street, feeder, or DTAP">
         </label>
         <label>Hours
           <input id="productionHours" type="number" step="0.25" min="0" value="0">
@@ -44521,6 +44585,144 @@ function validateDailySubmissionPayload(payload) {
   return blockers;
 }
 
+function syncFieldDailyToProductionControl(daily, payload = null, options = {}) {
+  if (!daily?.id || !daily.project) return null;
+  const now = options.now || new Date().toISOString();
+  const accepted = isDailyAcceptedForBilling(daily) || options.status === "Approved";
+  const submittedBy = daily.foreman || state.user?.name || "Foreman";
+  const productionRows = payload?.production?.length
+    ? payload.production
+    : (state.data.dailyProduction || []).filter(item => item.dailyId === daily.id && item.project === daily.project);
+  const evidenceRows = [
+    ...(state.data.documents || []).filter(item => item.dailyId === daily.id && item.project === daily.project),
+    ...(state.data.photoEvidence || []).filter(item => (item.dailyId === daily.id || item.linkedRecord === daily.id) && item.project === daily.project)
+  ];
+  const productionDailyId = `PD-FIELD-${daily.id}`.replace(/[^A-Z0-9-]/gi, "-").toUpperCase();
+  const productionDaily = {
+    id: productionDailyId,
+    externalDailyId: daily.id,
+    sourceDailyId: daily.id,
+    project: daily.project,
+    ntp: daily.project,
+    sourceType: "Field Operations Daily",
+    submittedBy,
+    tech: submittedBy,
+    workedDate: daily.date || isoDate(today),
+    clli: daily.dailyRequirements?.wireCenter || "",
+    feeder: daily.dailyRequirements?.workLocation || "",
+    hours: Number(daily.laborHours || 0),
+    vehicle: (payload?.equipment || (state.data.dailyEquipment || []).filter(item => item.dailyId === daily.id))[0]?.equipmentId || "",
+    crewAllocation: "100%",
+    status: accepted ? "Approved" : daily.status === "Draft" ? "Draft" : "Submitted",
+    reviewedBy: accepted ? daily.supervisorReview?.by || state.user?.name || "Operations" : "",
+    reviewedAt: accepted ? daily.supervisorReview?.at || now : "",
+    notes: daily.production || daily.output || "Field Operations daily synced to Production Control.",
+    activityLog: [
+      ...(state.data.productionDailies || []).find(item => item.id === productionDailyId)?.activityLog || [],
+      { at: now, by: state.user?.name || submittedBy, note: accepted ? "Field daily accepted and synced to Production Control." : "Field daily synced to Production Control." }
+    ],
+    createdAt: daily.createdAt || now,
+    modifiedAt: now
+  };
+  productionCollectionUpsert("productionDailies", productionDaily);
+
+  productionRows.forEach((row, index) => {
+    const code = row.unitCode || row.code || "";
+    if (!code) return;
+    const price = productionPriceForCode(code) || {};
+    const rate = Number(price.subRate || price.price || row.rate || row.unitRate || 0);
+    const quantity = Number(row.quantity || 0);
+    const lineId = `PL-FIELD-${daily.id}-${code}-${index + 1}`.replace(/[^A-Z0-9-]/gi, "-").toUpperCase();
+    const line = {
+      id: lineId,
+      dailyId: productionDailyId,
+      sourceDailyId: daily.id,
+      sourceType: "Field Operations Daily",
+      submittedBy,
+      project: daily.project,
+      ntp: daily.project,
+      workedDate: daily.date || isoDate(today),
+      code,
+      quantity,
+      uom: price.uom || row.unit || "Unit",
+      unitRate: rate,
+      submittedAmount: Math.round(quantity * rate * 100) / 100,
+      clli: daily.dailyRequirements?.wireCenter || "",
+      feeder: daily.dailyRequirements?.workLocation || "",
+      hours: Number(daily.laborHours || 0),
+      vehicle: productionDaily.vehicle,
+      objectId: row.objectId || "",
+      globalId: row.globalId || "",
+      pointX: row.pointX || "",
+      pointY: row.pointY || "",
+      arcgisNotes: row.notes || daily.dailyRequirements?.photoLocation || "",
+      reviewStatus: accepted ? "Approved" : "Submitted",
+      payableStatus: accepted ? "Job Cost" : "Pending Review",
+      billableStatus: accepted ? "Ready to Bill" : "Pending Review",
+      proofStatus: accepted ? "Accepted" : evidenceRows.length ? "Submitted" : "Missing",
+      notes: row.notes || daily.production || "Synced from Field Operations daily.",
+      activityLog: [
+        ...(state.data.productionLines || []).find(item => item.id === lineId)?.activityLog || [],
+        { at: now, by: state.user?.name || submittedBy, note: accepted ? "Production line approved from accepted Field daily." : "Production line synced from Field daily." }
+      ],
+      createdAt: now,
+      modifiedAt: now
+    };
+    productionCollectionUpsert("productionLines", line);
+    productionCollectionUpsert("fieldEvidence", {
+      id: `FE-${lineId}`,
+      project: daily.project,
+      dailyId: daily.id,
+      productionDailyId,
+      productionLineId: lineId,
+      source: "Field Operations Daily",
+      evidenceType: "Generated daily package",
+      status: accepted ? "Accepted" : evidenceRows.length ? "Submitted" : "Missing",
+      notes: evidenceRows.length ? `${evidenceRows.length} generated daily support item(s) linked.` : "Daily support package pending.",
+      activityLog: [{ at: now, by: state.user?.name || submittedBy, note: "Field daily evidence linked to Production Control." }],
+      createdAt: now,
+      modifiedAt: now
+    });
+    if (accepted) {
+      productionCollectionUpsert("billingLedger", {
+        id: `BILL-${lineId}`,
+        productionLineId: lineId,
+        project: daily.project,
+        workedDate: daily.date || isoDate(today),
+        code,
+        squanBillableAmount: line.submittedAmount,
+        contractorPayableAmount: 0,
+        inHouseCostAmount: line.submittedAmount,
+        proofStatus: "Accepted",
+        paymentStatus: "Open",
+        billingStatus: "Ready to Bill",
+        notes: "Accepted Field Operations daily available for SQUAN package and audit trail.",
+        activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Billing ledger row synced from accepted Field daily." }],
+        createdAt: now,
+        modifiedAt: now
+      });
+      productionCollectionUpsert("quantityReconciliation", {
+        id: `QTY-${lineId}`,
+        productionLineId: lineId,
+        project: daily.project,
+        workedDate: daily.date || isoDate(today),
+        code,
+        squanExportQuantity: 0,
+        jacksonSubmittedQuantity: quantity,
+        approvedQuantity: quantity,
+        billingQuantity: quantity,
+        varianceQuantity: quantity,
+        status: "Needs SQUAN Match",
+        notes: "Field daily quantity is approved; compare against next SQUAN export/import.",
+        activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Quantity reconciliation synced from accepted Field daily." }],
+        createdAt: now,
+        modifiedAt: now
+      });
+    }
+  });
+  return productionDaily;
+}
+
 function showDailySubmitGuard(title, blockers) {
   const guard = document.getElementById("dailySubmitGuard");
   if (!guard) {
@@ -44825,6 +45027,7 @@ function applyDailySubmitLocal(payload) {
       reason: `${daily.id} generated daily report, SOT, photo, material, crew time, as-built, and QC review evidence.`
     }];
   }
+  syncFieldDailyToProductionControl(daily, payload, { now: generatedAt });
   recomputeProjectLocal(daily.project);
   upsertDailyEvidencePackageSnapshot(project, daily, packageId, generatedAt);
   appendAuditLocal("workflow.submitDaily.local", { dailyId: daily.id, project: daily.project, qc: qc.id, by: state.user?.name || daily.foreman || "Foreman" });
