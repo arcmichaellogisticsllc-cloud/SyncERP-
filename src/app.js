@@ -26612,6 +26612,28 @@ function renderMapLifecycleBar(project) {
   `;
 }
 
+function lifecycleBlockerLabel(item) {
+  if (!item) return "";
+  if (typeof item === "string") return item;
+  return item.label || item.title || item.name || item.detail || item.status || "";
+}
+
+function isExternalPermitBlocker(item) {
+  return /(^|\s)(811|permit|permits|locate|locates)(\s|\/|$)/i.test(lifecycleBlockerLabel(item));
+}
+
+function lifecycleBlockerLabels(items = [], options = {}) {
+  return (items || [])
+    .filter(item => options.includeExternal || !isExternalPermitBlocker(item))
+    .map(lifecycleBlockerLabel)
+    .filter(Boolean);
+}
+
+function lifecycleBlockerText(items = [], fallback = "No blockers") {
+  const labels = lifecycleBlockerLabels(items, { includeExternal: true });
+  return labels.length ? labels.join(", ") : fallback;
+}
+
 function mapLifecycleWalkthroughRows(project, ctx = erpSpineContext(project)) {
   const release = ctx.release || releaseGateReview(project);
   const beginning = beginningPhaseReview(project);
@@ -26634,6 +26656,9 @@ function mapLifecycleWalkthroughRows(project, ctx = erpSpineContext(project)) {
   const openCollections = collections.filter(item => !["Closed", "Written Off"].includes(item.status));
   const paymentTracked = invoices.length > 0 && (receipts.length > 0 || invoices.some(invoice => Number(invoice.paid90 || 0) > 0 || ["Paid 90% / Retainage Held", "Paid"].includes(invoice.status)));
   const retainageTracked = retainage.length > 0;
+  const beginningBlockers = lifecycleBlockerLabels(beginning.blockers);
+  const releaseBlockers = lifecycleBlockerLabels(release.blockers);
+  const billingBlockers = lifecycleBlockerLabels(billingGate.blockers || [], { includeExternal: true });
   const row = (number, label, owner, status, detail, action, focus, blockers = []) => ({
     number,
     label,
@@ -26646,14 +26671,14 @@ function mapLifecycleWalkthroughRows(project, ctx = erpSpineContext(project)) {
   });
   return [
     row(1, "Map intake", "Operations", ctx.intake.status === "Field Ready" ? "Ready" : ctx.intake.status, `${project.id}; ${ctx.documents.length} file(s), ${ctx.surveys.length} survey record(s).`, "Project & Map Hub", "Map intake", ctx.intake.items.filter(item => item.status !== "Clear").map(item => item.label)),
-    row(2, "Pre-field setup", "Operations", beginning.ready ? "Ready" : "Needs Review", beginning.ready ? "Site survey, ArcGIS, 811/permits, obstacles, crew, and equipment are checked." : `Needs: ${beginning.blockers.join(", ") || "setup review"}.`, "Project & Map Hub", "Beginning phase", beginning.blockers),
-    row(3, "Ready for field review", "Operations", release.ready || release.released ? "Ready" : "Blocked", release.ready || release.released ? "Setup is ready for release review." : `${release.blockers.length} release blocker(s).`, "Project & Map Hub", "Release gate", release.blockers.map(item => item.label)),
-    row(4, "Release to field", "Admin", release.released ? "Released" : release.ready ? "Ready for Release" : "Blocked", release.released ? "Admin released this Map to field." : release.ready ? "Admin can release this Map." : "Admin release is blocked until setup is clear.", "Project & Map Hub", "Release gate", release.released ? [] : release.blockers.map(item => item.label)),
+    row(2, "Pre-field setup", "Operations", beginningBlockers.length ? "Needs Review" : "Ready", beginningBlockers.length ? `Needs: ${beginningBlockers.join(", ")}.` : "Jackson-owned pre-field blockers are clear; permits/811 are tracked as external support.", "Project & Map Hub", "Beginning phase", beginningBlockers),
+    row(3, "Ready for field review", "Operations", release.released || !releaseBlockers.length ? "Ready" : "Blocked", release.released || !releaseBlockers.length ? "Jackson-owned release checks are ready for review." : `${releaseBlockers.length} Jackson-owned release blocker(s).`, "Project & Map Hub", "Release gate", releaseBlockers),
+    row(4, "Release to field", "Admin", release.released ? "Released" : !releaseBlockers.length ? "Ready for Release" : "Blocked", release.released ? "Admin released this Map to field." : !releaseBlockers.length ? "Admin can review release once external support is confirmed." : "Admin release is blocked by Jackson-owned setup work.", "Project & Map Hub", "Release gate", release.released ? [] : releaseBlockers),
     row(5, "Daily field work", "Foreman", submittedDailies.length ? "Submitted" : release.released ? "Open" : "Pending", submittedDailies.length ? `${submittedDailies.length} submitted daily record(s).` : release.released ? "Foreman can start the daily workflow." : "Release must be clear before field production.", "Field Operations", "Daily start", submittedDailies.length ? [] : ["Submitted daily"]),
     row(6, "Daily review", "Operations", allDailyAccepted ? "Accepted" : returnedDailies.length ? "Returned" : submittedDailies.length ? "Needs Review" : "Pending", allDailyAccepted ? "Submitted dailies are accepted." : returnedDailies.length ? `${returnedDailies.length} returned daily item(s).` : submittedDailies.length ? "Operations must accept, return, or ask a question." : "No submitted daily to review yet.", "Field Operations", "Daily closeout", allDailyAccepted ? [] : returnedDailies.length ? ["Returned daily correction"] : submittedDailies.length ? ["Operations daily acceptance"] : ["Submitted daily"]),
     row(7, "Correction loop", "Correct owner", returnedDailies.length || fieldCorrections ? "Needs Review" : submittedDailies.length ? "Clear" : "Pending", returnedDailies.length || fieldCorrections ? `${returnedDailies.length + fieldCorrections} correction item(s) open.` : submittedDailies.length ? "No correction loop is open." : "Corrections start after a review returns an item.", "Tasks", "Evidence correction", returnedDailies.length || fieldCorrections ? ["Open returned/correction task"] : []),
     row(8, "Closeout proof package", "Foreman / Billing", supportGaps.length ? "Needs Review" : ctx.documents.length || ctx.photos.length ? "Ready" : "Missing", supportGaps.length ? `${supportGaps.length} proof gap(s): ${supportGaps.slice(0, 3).map(item => item.label).join(", ")}.` : `${ctx.documents.length} file(s), ${ctx.photos.length} photo item(s), ${ctx.qcCloseouts.length} QC record(s).`, "Documents", "Map evidence", supportGaps.map(item => item.label)),
-    row(9, "Billing package", "Admin / Billing", billingGate.ready || readiness?.status === "Ready to Bill" || invoices.length ? "Ready" : readiness?.status || "Not Ready", billingGate.ready || readiness?.status === "Ready to Bill" ? "Accepted evidence can build the SQUAN packet." : billingGate.blockers?.join(", ") || "Billing package still needs accepted evidence.", "Billing", "Invoice package", billingGate.blockers || []),
+    row(9, "Billing package", "Admin / Billing", billingGate.ready || readiness?.status === "Ready to Bill" || invoices.length ? "Ready" : readiness?.status || "Not Ready", billingGate.ready || readiness?.status === "Ready to Bill" ? "Accepted evidence can build the SQUAN packet." : billingBlockers.join(", ") || "Billing package still needs accepted evidence.", "Billing", "Invoice package", billingBlockers),
     row(10, "Submit to SQUAN", "Admin", submissions.length || invoices.some(item => item.status === "Submitted to SQUAN" || item.confirmationNumber) ? "Submitted" : invoices.length ? "Needs Receipt" : "Pending", submissions.length ? `${submissions.length} submission record(s) logged.` : invoices.length ? "Invoice exists; record SQUAN submission and receipt." : "Invoice packet has not been submitted.", "Billing", "SQUAN submission", submissions.length ? [] : invoices.length ? ["SQUAN submission receipt"] : ["Invoice packet"]),
     row(11, "Payment / collections", "Admin / Billing", paymentTracked && !openCollections.length ? "Tracked" : openCollections.length ? "Open" : invoices.length ? "Needs Review" : "Pending", paymentTracked ? `${receipts.length} receipt(s); ${openCollections.length} open collection item(s).` : "Track 90% payment, pay-when-paid notes, disputes, and follow-up.", "Billing", "Collections / Retainage", paymentTracked && !openCollections.length ? [] : ["Payment or collection follow-up"]),
     row(12, "Retainage + audit packet", "Admin", retainageTracked && auditReady ? "Ready" : retainageTracked ? "Tracked" : "Needs Review", retainageTracked ? `${retainage.length} 10% held-back row(s); audit ${auditReady ? "ready" : "needs final closeout"}.` : "Start the 10% held-back clock and export final proof packet.", "Reports", "Closeout", [
@@ -26665,15 +26690,19 @@ function mapLifecycleWalkthroughRows(project, ctx = erpSpineContext(project)) {
 
 function renderMapLifecycleWalkthrough(project, ctx) {
   const rows = mapLifecycleWalkthroughRows(project, ctx);
-  const clearStatuses = new Set(["Ready", "Released", "Submitted", "Accepted", "Clear", "Tracked"]);
+  const clearStatuses = new Set(["Ready", "Ready for Release", "Released", "Submitted", "Accepted", "Clear", "Tracked"]);
   const complete = rows.filter(row => clearStatuses.has(row.status)).length;
-  const next = rows.find(row => !clearStatuses.has(row.status)) || rows.at(-1);
+  const attentionRows = rows.filter(row => !clearStatuses.has(row.status));
+  const completedRows = rows.filter(row => clearStatuses.has(row.status));
+  const fieldRows = attentionRows.filter(row => row.number <= 7);
+  const billingRows = attentionRows.filter(row => row.number > 7);
+  const next = attentionRows[0] || rows.find(row => row.status === "Ready for Release") || rows.at(-1);
   return `
     <section class="map-lifecycle-walkthrough">
       <div class="section-heading">
         <div>
-          <h3>Map lifecycle walkthrough</h3>
-          <p>One path from Map intake to field work, accepted proof, SQUAN billing, payment, 10% held back, and audit packet.</p>
+          <h3>Workflow cleanup</h3>
+          <p>Focus on Jackson-owned blockers first. Permits and 811 stay visible in records, but they are not treated as our active blocker here.</p>
         </div>
         <span>${complete}/12 clear</span>
       </div>
@@ -26685,23 +26714,46 @@ function renderMapLifecycleWalkthrough(project, ctx) {
         </div>
         ${next ? mapWorkflowButton("Open", next.action, project.id, next.focus, true) : ""}
       </div>
-      <div class="lifecycle-walkthrough-grid">
-        ${rows.map(item => `
-          <article class="lifecycle-walkthrough-step ${statusClass(item.status)}">
-            <span>${item.number}</span>
-            <div>
-              <strong>${item.label}</strong>
-              <small>${item.detail}</small>
-              <small>Owner: ${item.owner}${item.blockers.length ? ` · Needs: ${item.blockers.slice(0, 3).join(", ")}` : ""}</small>
-            </div>
-            <div class="lifecycle-step-actions">
-              <em class="status ${statusClass(item.status)}">${plainStatus(item.status)}</em>
-              ${mapWorkflowButton("Open", item.action, project.id, item.focus)}
-            </div>
-          </article>
-        `).join("")}
+      ${renderLifecycleAttentionGroup("Blocking field work", fieldRows, project)}
+      ${renderLifecycleAttentionGroup("Blocking proof / billing", billingRows, project)}
+      <details class="lifecycle-completed-drawer">
+        <summary>Completed / tracked steps <span>${completedRows.length}</span></summary>
+        <div class="lifecycle-walkthrough-grid compact">
+          ${completedRows.map(item => renderLifecycleStepCard(item, project)).join("")}
+        </div>
+      </details>
+    </section>
+  `;
+}
+
+function renderLifecycleAttentionGroup(title, rows, project) {
+  return `
+    <section class="lifecycle-attention-group">
+      <div class="section-heading compact">
+        <h4>${title}</h4>
+        <span>${rows.length} item${rows.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="lifecycle-walkthrough-grid ${rows.length ? "" : "empty-grid"}">
+        ${rows.length ? rows.map(item => renderLifecycleStepCard(item, project)).join("") : `<p class="empty-state">No Jackson-owned blocker in this group.</p>`}
       </div>
     </section>
+  `;
+}
+
+function renderLifecycleStepCard(item, project) {
+  return `
+    <article class="lifecycle-walkthrough-step ${statusClass(item.status)}">
+      <span>${item.number}</span>
+      <div>
+        <strong>${item.label}</strong>
+        <small>${item.detail}</small>
+        <small>Owner: ${item.owner}${item.blockers.length ? ` · Needs: ${item.blockers.slice(0, 3).join(", ")}` : ""}</small>
+      </div>
+      <div class="lifecycle-step-actions">
+        <em class="status ${statusClass(item.status)}">${plainStatus(item.status)}</em>
+        ${mapWorkflowButton("Open", item.action, project.id, item.focus)}
+      </div>
+    </article>
   `;
 }
 
