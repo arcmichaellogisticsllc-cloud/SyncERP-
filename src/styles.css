@@ -3534,6 +3534,220 @@ button {
   margin-top: 12px;
 }
 
+.map-plan-workflow-panel,
+.arcgis-plan-display-panel,
+.workflow-settings-panel {
+  margin-bottom: 12px;
+}
+
+.map-plan-workflow-panel .panel-header p,
+.arcgis-plan-summary .section-heading p,
+.workflow-settings-panel .panel-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.map-plan-metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.map-plan-metrics span,
+.compact-fact-grid div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.map-plan-metrics strong,
+.compact-fact-grid dd {
+  display: block;
+  min-width: 0;
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.map-plan-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.map-plan-step {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: var(--ink);
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  align-items: start;
+}
+
+.map-plan-step span {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #eef4fb;
+  color: var(--primary-strong);
+  display: inline-grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 12px;
+  grid-row: span 3;
+}
+
+.map-plan-step strong,
+.map-plan-step small,
+.map-plan-step em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.map-plan-step small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.map-plan-step em {
+  color: var(--primary-strong);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.arcgis-plan-display {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.arcgis-map-frame {
+  min-height: 260px;
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.18) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.18) 1px, transparent 1px),
+    #f8fafc;
+  background-size: 32px 32px;
+}
+
+.arcgis-map-grid {
+  position: absolute;
+  inset: 18px;
+}
+
+.arcgis-layer-line {
+  position: absolute;
+  min-width: 92px;
+  border: 2px solid #2563eb;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1e3a8a;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.arcgis-layer-line.layer-1 { left: 8%; top: 20%; transform: rotate(-12deg); }
+.arcgis-layer-line.layer-2 { right: 8%; top: 34%; transform: rotate(8deg); border-color: #16a34a; color: #166534; }
+.arcgis-layer-line.layer-3 { left: 20%; bottom: 22%; transform: rotate(15deg); border-color: #d97706; color: #92400e; }
+.arcgis-layer-line.layer-4 { right: 20%; bottom: 14%; transform: rotate(-8deg); border-color: #7c3aed; color: #5b21b6; }
+.arcgis-layer-line.layer-5 { left: 38%; top: 48%; transform: rotate(3deg); border-color: #dc2626; color: #991b1b; }
+
+.arcgis-map-overlay {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  border-radius: var(--radius);
+  background: rgba(15, 23, 42, 0.88);
+  color: #ffffff;
+  padding: 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.arcgis-map-overlay span {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.arcgis-plan-summary {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.compact-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.compact-fact-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workflow-action-plan {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.workflow-action-plan article {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.workflow-action-plan span {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #eef4fb;
+  color: var(--primary-strong);
+  display: inline-grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workflow-action-plan strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  font-size: 13px;
+}
+
 .arcgis-readiness-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -12922,6 +13136,9 @@ tbody tr:hover {
   .safety-map-list,
   .safety-tool-grid,
   .proof-tool-grid,
+  .map-plan-metrics,
+  .map-plan-steps,
+  .workflow-action-plan,
   .production-proof-groups,
   .arcgis-readiness-grid,
   .squan-map-grid,
@@ -13152,6 +13369,7 @@ tbody tr:hover {
   .documents-layout,
   .project-hub,
   .map-preview-panel,
+  .arcgis-plan-display,
   .map-source-grid,
   .map-glance-grid,
   .compact-fact-grid,
@@ -13370,8 +13588,12 @@ tbody tr:hover {
   .safety-map-list,
   .safety-tool-grid,
   .proof-tool-grid,
+  .map-plan-metrics,
+  .map-plan-steps,
+  .workflow-action-plan,
   .production-proof-groups,
   .arcgis-readiness-grid,
+  .arcgis-plan-display,
   .squan-map-grid,
   .workflow-path-card-grid,
   .workflow-stepper {

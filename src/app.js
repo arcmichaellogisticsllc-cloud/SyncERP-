@@ -5748,14 +5748,24 @@ function scopeBilling(collectionKey, rows) {
   if (collectionKey === "invoiceSubmissions") return rows;
   if (collectionKey === "collectionSubmissions") return rows;
   if (collectionKey === "billingReadiness") return rows;
-  if (["documents", "photoEvidence", "siteSurveys", "obstacles", "qcCloseouts", "retainageLedger", "contractRules", "costBlockers", "squanScores", "formSubmissions", "cashReceipts", "cashDepositBatches"].includes(collectionKey)) return rows;
+  if ([
+    "documents", "photoEvidence", "siteSurveys", "obstacles", "qcCloseouts", "retainageLedger", "contractRules",
+    "costBlockers", "squanScores", "formSubmissions", "cashReceipts", "cashDepositBatches", "squanImports",
+    "squanProductionLines", "squanMapFeatures", "priceSheetItems", "productionDailies", "productionLines",
+    "contractorPayables", "techWorkEntries", "billingLedger", "quantityReconciliation", "fieldEvidence"
+  ].includes(collectionKey)) return rows;
   if (["projectUnits", "dailyProduction", "dailyLabor", "dailyEquipment", "dailyMaterials"].includes(collectionKey)) return rows;
   return [];
 }
 
 function scopeSafety(collectionKey, rows) {
   if (collectionKey === "tasks") return rows.filter(row => row.role === "Safety/Compliance" || String(row.workflowArea).includes("Safety") || String(row.workflowArea).includes("People"));
-  if (["projects", "dailies", "timeEntries", "people", "equipment", "safety", "documents", "photoEvidence", "siteSurveys", "obstacles", "qcCloseouts", "contractRules", "costBlockers", "squanScores", "formSubmissions"].includes(collectionKey)) return rows;
+  if ([
+    "projects", "dailies", "timeEntries", "people", "equipment", "safety", "documents", "photoEvidence",
+    "siteSurveys", "obstacles", "qcCloseouts", "contractRules", "costBlockers", "squanScores", "formSubmissions",
+    "squanProductionLines", "squanMapFeatures", "productionLines", "productionDailies", "fieldEvidence",
+    "billingLedger", "quantityReconciliation"
+  ].includes(collectionKey)) return rows;
   return [];
 }
 
@@ -6692,6 +6702,7 @@ function renderSimpleRoleHome(role = state.role) {
   const profile = roleHomeProfile(role);
   const projectId = profile.project?.id || state.selectedProjectId || "";
   return `
+    ${renderMapPlanWorkflowPanel(profile.project, "Home")}
     <section class="simple-home panel">
       <div class="simple-home-main">
         <div>
@@ -19504,6 +19515,7 @@ function renderSafetyWorkHome(project, audit) {
     ? fieldCaptureReviewRows(project).filter(item => !["Accepted", "Closed"].includes(item.status)).length
     : 0;
   return `
+    ${renderMapPlanWorkflowPanel(project, "Safety")}
     <section class="panel safety-simple-home">
       <div class="safety-simple-head">
         <div>
@@ -20376,6 +20388,7 @@ function renderRoleLanding() {
 
 function renderAdminSettings() {
   const company = state.data.company || {};
+  const selectedProject = selectedMapContext();
   const rules = scopedRows("contractRules");
   const users = scopedRows("users");
   const roles = scopedRows("roles");
@@ -20390,6 +20403,8 @@ function renderAdminSettings() {
       ${metric("Users / roles", `${users.length} / ${roles.length}`, "Access and module permissions")}
       ${metric("Audit events", audit.length, "Logins, workflow submits, record changes")}
     </section>
+    ${renderSettingsWorkflowAlignmentPanel()}
+    ${renderArcgisPhase4Readiness()}
     ${renderDataControlCenter()}
     ${renderCashControlsSettings(company)}
     ${renderCloseoutReadinessSlaSettings(company)}
@@ -21859,6 +21874,7 @@ function renderReports() {
       <a class="secondary-btn" href="/api/reports/packet-locks.csv?project=${encodeURIComponent(selectedProject?.id || "")}&scope=${encodeURIComponent(state.reportPrintScope || "")}" target="_blank" rel="noreferrer">Packet lock CSV</a>
     </section>
     ${renderReportMapSelector(projects, selectedProject)}
+    ${renderMapPlanWorkflowPanel(selectedProject, "Reports")}
     ${renderReportPacketCommandCenter(selectedProject)}
     ${renderReportPacketPriorityQueue(projects, selectedProject)}
     ${renderReportPacketWorkflowDrillIns(selectedProject)}
@@ -24999,6 +25015,180 @@ function renderMapContextStrip(project, current = "") {
   `;
 }
 
+function mapPlanFeatureRows(project) {
+  if (!project) return [];
+  return squanMapFeatureRows().filter(feature => [feature.project, feature.ntp].includes(project.id));
+}
+
+function mapPlanProductionLines(project) {
+  if (!project) return [];
+  const featureIds = new Set(mapPlanFeatureRows(project).map(feature => feature.id));
+  return scopedRows("productionLines").filter(line => line.project === project.id || featureIds.has(line.sourceFeatureId));
+}
+
+function mapPlanBillingRows(project) {
+  if (!project) return [];
+  const productionIds = new Set(mapPlanProductionLines(project).map(line => line.id));
+  return scopedRows("billingLedger").filter(row => row.project === project.id || productionIds.has(row.productionLineId));
+}
+
+function mapPlanEvidenceRows(project) {
+  if (!project) return [];
+  const featureIds = new Set(mapPlanFeatureRows(project).map(feature => feature.id));
+  const productionIds = new Set(mapPlanProductionLines(project).map(line => line.id));
+  return scopedRows("fieldEvidence").filter(row => row.project === project.id || featureIds.has(row.sourceFeatureId) || productionIds.has(row.productionLineId));
+}
+
+function mapPlanWorkflowStats(project) {
+  const features = mapPlanFeatureRows(project);
+  const production = mapPlanProductionLines(project);
+  const billing = mapPlanBillingRows(project);
+  const evidence = mapPlanEvidenceRows(project);
+  const reconciliation = squanFeatureReconciliationRows(features);
+  const approved = production.filter(line => line.reviewStatus === "Approved" || line.status === "Approved");
+  const variance = sum(reconciliation.map(row => ({ value: Math.abs(Number(row.variance || 0)) })), "value");
+  return {
+    features,
+    production,
+    billing,
+    evidence,
+    reconciliation,
+    engineeredQuantity: sum(features, "quantity"),
+    approvedQuantity: sum(approved, "quantity"),
+    billableAmount: sum(billing, "squanBillableAmount"),
+    payableAmount: sum(billing, "contractorPayableAmount"),
+    variance,
+    proofReady: evidence.filter(row => ["Accepted", "Approved", "Attached", "Submitted"].includes(row.status || row.reviewStatus)).length
+  };
+}
+
+function renderMapPlanWorkflowPanel(project = selectedMapContext(), current = "") {
+  if (!project) return "";
+  const stats = mapPlanWorkflowStats(project);
+  const readyFeatures = stats.features.filter(feature => ["Approved", "Assigned", "Imported", "Ready"].includes(feature.status || "Imported")).length;
+  const billingReady = stats.billing.filter(row => ["Ready to Bill", "Submitted", "Billed"].includes(row.billingStatus || row.status)).length;
+  const steps = [
+    ["1", "ArcGIS plan", stats.features.length ? "Ready" : "Later", `${stats.features.length} engineered feature(s) modeled for display.`],
+    ["2", "SQUAN export", scopedRows("squanProductionLines").filter(line => line.project === project.id || line.ntp === project.id).length ? "Imported" : "Missing", `${readyFeatures} feature(s) available from CSV/import rows.`],
+    ["3", "Daily entry", stats.production.length ? "Open" : "Pending", `${stats.production.length} contractor/tech line(s) tied to the Map.`],
+    ["4", "Proof review", stats.evidence.length ? "Needs Review" : "Missing", `${stats.proofReady}/${stats.evidence.length} proof item(s) accepted.`],
+    ["5", "Billing ledger", billingReady ? "Ready" : "Pending", `${billingReady}/${stats.billing.length} billable ledger row(s) ready.`]
+  ];
+  return `
+    <section class="panel map-plan-workflow-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">${current ? `${current} workflow` : "Workflow"}</span>
+          <h2>ArcGIS plan to SQUAN billing</h2>
+          <p>${project.map || project.id}: engineers maintain the working map plan in ArcGIS; Jackson controls imports, dailies, proof, approvals, payables, and billing audit.</p>
+        </div>
+        <span class="status ${statusClass(stats.variance ? "Needs Review" : stats.features.length ? "Ready" : "Later")}">${stats.variance ? "Variance" : stats.features.length ? "Map modeled" : "Awaiting map"}</span>
+      </div>
+      <div class="map-plan-metrics">
+        <span>Features<strong>${stats.features.length}</strong></span>
+        <span>Engineered qty<strong>${Number(stats.engineeredQuantity || 0).toLocaleString()}</strong></span>
+        <span>Approved qty<strong>${Number(stats.approvedQuantity || 0).toLocaleString()}</strong></span>
+        <span>Proof<strong>${stats.proofReady}/${stats.evidence.length}</strong></span>
+        <span>Billable<strong>${currency(stats.billableAmount || 0)}</strong></span>
+        <span>Payable<strong>${currency(stats.payableAmount || 0)}</strong></span>
+      </div>
+      <div class="map-plan-steps">
+        ${steps.map(step => `
+          <button class="map-plan-step ${statusClass(step[2])}" data-workflow-action="${step[1] === "Billing ledger" ? "Billing" : step[1] === "Proof review" ? "Documents" : "Project & Map Hub"}" data-workflow-id="${project.id}" data-workflow-focus="${step[1]}">
+            <span>${step[0]}</span>
+            <strong>${step[1]}</strong>
+            <small>${step[3]}</small>
+            <em>${plainStatus(step[2])}</em>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderArcgisPlanDisplayPanel(project = selectedMapContext()) {
+  if (!project) return "";
+  const config = arcgisConfig();
+  const stats = mapPlanWorkflowStats(project);
+  const layers = [...new Set(stats.features.map(feature => feature.layerName || "Production"))].sort();
+  const mapUrl = project.arcgis?.mapUrl || config.portalUrl;
+  return `
+    <section class="panel arcgis-plan-display-panel">
+      <div class="arcgis-plan-display">
+        <div class="arcgis-map-frame">
+          <div class="arcgis-map-grid">
+            ${layers.slice(0, 5).map((layer, index) => `<span class="arcgis-layer-line layer-${index + 1}">${escapeAttr(layer)}</span>`).join("")}
+          </div>
+          <div class="arcgis-map-overlay">
+            <strong>${escapeAttr(project.map || project.id)}</strong>
+            <span>${escapeAttr(config.portalDisplayName)} display plan</span>
+          </div>
+        </div>
+        <div class="arcgis-plan-summary">
+          <div class="section-heading">
+            <div>
+              <h3>ArcGIS working map plan</h3>
+              <p>Display the engineered SQUAN map plan here. CSV imports and Jackson dailies continue to drive ERP quantities until live FeatureLayer access is approved.</p>
+            </div>
+            <span class="status ${statusClass(config.webMapId ? "Ready" : "Later")}">${config.webMapId ? "Web map set" : "Display shell"}</span>
+          </div>
+          <div class="compact-fact-grid">
+            <div><dt>Portal</dt><dd>${escapeAttr(config.portalUrl)}</dd></div>
+            <div><dt>Web map</dt><dd>${escapeAttr(config.webMapId || "Add after ArcGIS access")}</dd></div>
+            <div><dt>Feature service</dt><dd>${escapeAttr(config.featureServiceUrl || "Phase 4")}</dd></div>
+            <div><dt>Layers</dt><dd>${layers.length ? layers.map(escapeAttr).join(", ") : "Pending import"}</dd></div>
+          </div>
+          <div class="map-preview-actions">
+            <a class="secondary-btn" href="${escapeAttr(mapUrl)}" target="_blank" rel="noreferrer">Open ArcGIS portal</a>
+            <button class="primary-btn" data-workflow-action="Production" data-workflow-id="${project.id}" data-workflow-focus="SQUAN Map Workbench">SQUAN Map Workbench</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderSettingsWorkflowAlignmentPanel() {
+  const config = arcgisConfig();
+  const actionPlan = [
+    "Confirm ArcGIS remains display-first for engineered SQUAN plans.",
+    "Keep Phase 1 CSV imports as the operating source until live access is approved.",
+    "Maintain price sheet codes, units, subcontractor rates, and work aspects.",
+    "Import SQUAN daily/pay export rows into production placeholders.",
+    "Link map features to contractor and tech production dailies.",
+    "Require proof before approval or billing package readiness.",
+    "Route quantity variance to review before payable or billable release.",
+    "Post approved contractor rows to payables.",
+    "Post in-house tech work to job cost.",
+    "Post accepted rows to the SQUAN billable ledger.",
+    "Use Safety for hazards, blocked field conditions, and proof review.",
+    "Use Billing for SQUAN package, unpaid 90%, retainage, disputes, and proof.",
+    "Use Reports for locked billing/audit packages.",
+    "Store ArcGIS portal, web map, layer, and field mappings without secrets.",
+    "Move to live FeatureLayer import only after workflow controls are stable."
+  ];
+  return `
+    <section class="panel workflow-settings-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Workflow settings</span>
+          <h2>Sync-ERP action plan 1-15</h2>
+          <p>These controls keep Home, Maps, Billing, Safety, Reports, and Settings aligned to the same operating workflow.</p>
+        </div>
+        <span>${escapeAttr(config.portalDisplayName)} ArcGIS display</span>
+      </div>
+      <div class="workflow-action-plan">
+        ${actionPlan.map((item, index) => `
+          <article>
+            <span>${index + 1}</span>
+            <strong>${item}</strong>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function workflowFocusPanel(project, current = "") {
   if (!project || !state.workflowFocus) return "";
   const focus = state.workflowFocus;
@@ -25230,6 +25420,8 @@ function renderProjectHub() {
         </div>
       </div>
       <div class="map-detail-shell">
+        ${renderMapPlanWorkflowPanel(selected, "Maps")}
+        ${renderArcgisPlanDisplayPanel(selected)}
         ${renderProjectDetail(selected)}
       </div>
     </section>
@@ -33262,6 +33454,7 @@ function renderMoney() {
   const paid = sum(invoices, "paid90");
   const retainage = sum(retainageLedger, "heldAmount") || sum(invoices, "retainage10");
   return `
+    ${selectedProject ? renderMapPlanWorkflowPanel(selectedProject, "Billing") : ""}
     <section class="metrics">
       ${metric("Gross invoiced", currency(gross), "Requires dailies and as-builts")}
       ${metric("90% received", currency(paid), "Cash applied against expected payment")}
@@ -33458,6 +33651,7 @@ function renderRisk() {
   const audit = safetyAuditSummary();
   const selectedProject = selectedMapContext();
   return `
+    ${renderMapPlanWorkflowPanel(selectedProject, "Safety")}
     <section class="metrics">
       ${metric("TRIR input hours", hours, "Fed by field daily labor")}
       ${metric("Open Form 12 items", open, "Corrective actions not closed")}
@@ -34125,6 +34319,9 @@ function workflowTarget(actionText, recordId) {
     daily: "field",
     "time tracking": "time",
     "crew time": "time",
+    production: "production",
+    "production control": "production",
+    "squan map workbench": "production",
     billing: "money",
     money: "money",
     "safety & risk": "risk",
