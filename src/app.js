@@ -3664,11 +3664,11 @@ const seedData = {
 
 const navItems = [
   { key: "dashboard", icon: "home", label: "Home" },
-  { key: "tasks", icon: "check", label: "Tasks" },
-  { key: "documents", icon: "file", label: "Files / Proof" },
+  { key: "tasks", icon: "check", label: "Review Queue" },
+  { key: "documents", icon: "file", label: "Proof" },
   { key: "projects", icon: "map", label: "Maps" },
-  { key: "field", icon: "clipboard", label: "Today’s Work" },
-  { key: "production", icon: "production", label: "Production" },
+  { key: "field", icon: "clipboard", label: "Field Daily" },
+  { key: "production", icon: "production", label: "Daily Capture" },
   { key: "time", icon: "clock", label: "Time" },
   { key: "people", icon: "users", label: "Crew" },
   { key: "equipment", icon: "truck", label: "Trucks / Tools" },
@@ -4259,6 +4259,7 @@ function appTemplate() {
           <button class="icon-btn mobile-menu" id="mobileMenu" title="Open navigation">☰</button>
           <div class="title-area">
             <h1>${pageTitle()}</h1>
+            <p>${pageSubtitle()}</p>
           </div>
           <div class="toolbar">
             <input class="search" id="search" type="search" value="${state.search}" placeholder="Search records">
@@ -4280,6 +4281,7 @@ function appTemplate() {
             <button class="secondary-btn" id="signOut">Sign out</button>
           </div>
         </header>
+        ${renderWorkflowContextBar()}
         <section class="content">${renderDataVersionNotice()}${renderRecordDetail()}${renderView()}</section>
       </main>
     </div>
@@ -4287,6 +4289,69 @@ function appTemplate() {
     <aside class="drawer" id="drawer" aria-hidden="true"></aside>
     ${renderAlertDrawer(alerts)}
     ${renderCommunicationsBar()}
+  `;
+}
+
+function workflowContextSteps() {
+  return [
+    {
+      key: "maps",
+      label: "Maps",
+      detail: "ArcGIS plan display",
+      views: ["projects"],
+      action: "Project & Map Hub",
+      focus: "ArcGIS plan"
+    },
+    {
+      key: "daily",
+      label: "Daily Capture",
+      detail: "Field / contractor entry",
+      views: ["field", "production"],
+      action: "Production",
+      focus: "Daily Detail View"
+    },
+    {
+      key: "review",
+      label: "Review",
+      detail: "Proof + quantity",
+      views: ["tasks", "documents"],
+      action: "Tasks",
+      focus: "Admin decision"
+    },
+    {
+      key: "billing",
+      label: "Billing",
+      detail: "Codes + totals",
+      views: ["money"],
+      action: "Billing",
+      focus: "Code breakdown"
+    },
+    {
+      key: "audit",
+      label: "Audit",
+      detail: "Reports + packets",
+      views: ["reports", "settings"],
+      action: "Reports",
+      focus: "Daily / Production Audit Trail"
+    }
+  ];
+}
+
+function renderWorkflowContextBar() {
+  const projectId = state.selectedProjectId || selectedMapContext()?.id || scopedRows("projects")[0]?.id || "";
+  return `
+    <section class="workflow-context-bar" aria-label="Workflow path">
+      ${workflowContextSteps().map((step, index) => {
+        const active = step.views.includes(state.view);
+        return `
+          <button class="${active ? "active" : ""}" data-workflow-action="${step.action}" data-workflow-id="${projectId}" data-workflow-focus="${step.focus}" ${step.action === "Reports" ? `data-report-scope="Executive Report"` : ""}>
+            <span>${index + 1}</span>
+            <strong>${step.label}</strong>
+            <small>${step.detail}</small>
+          </button>
+        `;
+      }).join("")}
+    </section>
   `;
 }
 
@@ -5793,11 +5858,11 @@ function scopeSafety(collectionKey, rows) {
 function pageTitle() {
   return {
     dashboard: "Home",
-    tasks: "Tasks",
-    documents: "Files / Proof",
+    tasks: "Review Queue",
+    documents: "Proof",
     projects: "Maps",
-    field: "Today’s Work",
-    production: "Production",
+    field: "Field Daily",
+    production: "Daily Capture",
     time: "Time",
     people: "Crew",
     equipment: "Trucks / Tools",
@@ -5810,19 +5875,19 @@ function pageTitle() {
 
 function pageSubtitle() {
   return {
-    dashboard: "See the most important work for today.",
-    tasks: "Work that someone needs to finish or approve.",
-    documents: "Upload and check photos, forms, permits, maps, and billing proof.",
-    projects: "Start here for each Map. This page shows the job, status, crew, files, safety, and billing.",
-    field: "Start the day, finish checks, add photos, enter work done, and submit the daily.",
-    production: "Import SQUAN work, capture contractor and tech production, review proof, and control payable and billable lines.",
+    dashboard: "Start with the next decision, then drill into field-to-billing only when a count needs attention.",
+    tasks: "Admin and Operations review items that block field movement, proof, billing, or audit.",
+    documents: "Photos, as-builts, SOT, forms, maps, and support proof tied to a Map and daily.",
+    projects: "ArcGIS stays display-first here: engineers own the working plan, Jackson tracks readiness, proof, billing, and audit.",
+    field: "Field crews capture the daily, crew, production, proof, safety notes, and submit for review.",
+    production: "SQUAN-style daily capture: header, crew, codes, ArcGIS reference, proof, review, payable, and billable status.",
     time: "Crew hours, approvals, payroll status, and job cost time.",
     people: "Crew members, roles, training cards, and items that stop a person from working.",
     equipment: "Trucks, bucket lifts, tools, inspections, and items that stop equipment from being used.",
-    money: "Admin-owned billing: use accepted crew dailies, proof, and quantities to build the SQUAN package, submit it, and track unpaid money.",
+    money: "Closed/billed status, code breakdown, submitted quantities, price-sheet totals, SQUAN submission, and payment tracking.",
     risk: "Fix safety problems, review hazards, close safety actions, and keep the score healthy.",
-    reports: "Print or export billing, safety, Map, and owner reports.",
-    settings: "Company setup, users, rules, prices, and history."
+    reports: "Audit trail from field daily to production line, Billing ledger, quantity reconciliation, and packet export.",
+    settings: "Workflow setup, users, price sheet rules, ArcGIS display settings, and operating controls."
   }[state.view];
 }
 
