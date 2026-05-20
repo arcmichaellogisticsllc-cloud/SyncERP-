@@ -3874,6 +3874,37 @@ button {
   font-size: 13px;
 }
 
+.admin-daily-sync-panel,
+.admin-daily-review-queue,
+.admin-map-daily-sync,
+.daily-production-audit-report {
+  margin-bottom: 12px;
+}
+
+.admin-map-daily-sync .packet-home-list {
+  padding-top: 0;
+}
+
+.workflow-sync-notice {
+  margin: 0 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f8fafc;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-sync-notice strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.workflow-sync-notice span {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .arcgis-readiness-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

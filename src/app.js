@@ -7055,6 +7055,206 @@ function renderAdminDecisionGroup(title, rows) {
   `;
 }
 
+function dailyProductionSyncRows(projects = scopedRows("projects")) {
+  const productionDailies = state.data.productionDailies || [];
+  const productionLines = state.data.productionLines || [];
+  const billingLedger = state.data.billingLedger || [];
+  const quantityRows = state.data.quantityReconciliation || [];
+  const fieldEvidence = state.data.fieldEvidence || [];
+  return projects.map(project => {
+    const fieldDailies = (state.data.dailies || []).filter(item => item.project === project.id);
+    const latestField = fieldDailies.slice().sort((a, b) => String(b.modifiedAt || b.date || "").localeCompare(String(a.modifiedAt || a.date || "")))[0] || null;
+    const linkedProduction = productionDailies.filter(item => item.project === project.id);
+    const latestProduction = linkedProduction.slice().sort((a, b) => String(b.modifiedAt || b.workedDate || "").localeCompare(String(a.modifiedAt || a.workedDate || "")))[0] || null;
+    const lines = productionLines.filter(item => item.project === project.id);
+    const ledger = billingLedger.filter(item => item.project === project.id);
+    const quantity = quantityRows.filter(item => item.project === project.id);
+    const evidence = fieldEvidence.filter(item => item.project === project.id);
+    const unsyncedFieldDailies = fieldDailies.filter(daily => !linkedProduction.some(item => item.sourceDailyId === daily.id || item.externalDailyId === daily.id));
+    const awaitingReview = lines.filter(line => ["Submitted", "Needs Review", "Needs Proof"].includes(line.reviewStatus || line.status || ""));
+    const acceptedReady = linkedProduction.filter(item => ["Approved", "Accepted"].includes(item.status || ""));
+    const approvedNotLedger = lines.filter(line => (line.reviewStatus === "Approved" || ["Approved", "Accepted"].includes(latestProduction?.status || "")) && !ledger.some(item => item.productionLineId === line.id));
+    const quantityMismatch = quantity.filter(item => Number(item.varianceQuantity || 0) !== 0 || !["Reconciled", "Accepted"].includes(item.status || ""));
+    const proofMissing = lines.filter(line => ["Missing", "Needs Review", "Needs Correction"].includes(productionProofState(line)));
+    const status = unsyncedFieldDailies.length || approvedNotLedger.length || quantityMismatch.length || proofMissing.length
+      ? "Needs Review"
+      : awaitingReview.length
+        ? "Pending"
+        : acceptedReady.length
+          ? "Ready"
+          : "No Activity";
+    return {
+      project,
+      latestField,
+      latestProduction,
+      fieldDailies,
+      productionDailies: linkedProduction,
+      lines,
+      ledger,
+      quantity,
+      evidence,
+      unsyncedFieldDailies,
+      awaitingReview,
+      acceptedReady,
+      approvedNotLedger,
+      quantityMismatch,
+      proofMissing,
+      status
+    };
+  });
+}
+
+function renderAdminDailyProductionSyncHome(projects = scopedRows("projects")) {
+  const rows = dailyProductionSyncRows(projects);
+  const unsynced = sum(rows.map(row => ({ count: row.unsyncedFieldDailies.length })), "count");
+  const awaiting = sum(rows.map(row => ({ count: row.awaitingReview.length })), "count");
+  const accepted = sum(rows.map(row => ({ count: row.acceptedReady.length })), "count");
+  const mismatches = sum(rows.map(row => ({ count: row.quantityMismatch.length })), "count");
+  return `
+    <section class="panel admin-daily-sync-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Daily / Production Sync</h2>
+          <p>Field dailies now create Production Control support for approval, payables, billing, and audit.</p>
+        </div>
+        <span class="status ${statusClass(unsynced || mismatches ? "Needs Review" : awaiting ? "Pending" : "Ready")}">${unsynced || mismatches ? "Needs Review" : awaiting ? "Pending" : "Ready"}</span>
+      </div>
+      <div class="packet-home-metrics">
+        ${metric("Submitted not synced", unsynced, "Field dailies missing production support")}
+        ${metric("Production review", awaiting, "Lines awaiting Jackson review")}
+        ${metric("Accepted for Billing", accepted, "Production dailies accepted/approved")}
+        ${metric("Quantity mismatches", mismatches, "Needs SQUAN import/reconciliation")}
+      </div>
+      <div class="packet-home-list">
+        ${rows.filter(row => row.status !== "No Activity").slice(0, 5).map(row => `
+          <article>
+            <span class="status ${statusClass(row.status)}">${row.status}</span>
+            <div>
+              <strong>${squanMapTitle(row.project)} · ${row.project.id}</strong>
+              <small>Field ${row.latestField?.id || "none"} · Production ${row.latestProduction?.externalDailyId || row.latestProduction?.id || "none"} · ${row.lines.length} line(s)</small>
+              <small>${row.unsyncedFieldDailies.length} unsynced · ${row.proofMissing.length} proof issue(s) · ${row.quantityMismatch.length} quantity issue(s)</small>
+            </div>
+            <div class="packet-home-actions">
+              <button class="secondary-btn" data-workflow-action="Project & Map Hub" data-workflow-id="${row.project.id}" data-workflow-focus="Daily to Billing Status">Map</button>
+              <button class="secondary-btn" data-workflow-action="Production" data-workflow-id="${row.project.id}" data-workflow-focus="Daily Detail View">Production</button>
+            </div>
+          </article>
+        `).join("") || `<p class="empty-state">No daily/production sync items need Admin review.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminDailyProductionReviewQueue(projects = scopedRows("projects")) {
+  const rows = dailyProductionSyncRows(projects);
+  const queue = [
+    ["Field daily submitted / not synced", rows.flatMap(row => row.unsyncedFieldDailies.map(daily => ({ row, title: daily.id, detail: "Field daily needs Production Control support.", status: "Needs Review" })))],
+    ["Production line needs proof", rows.flatMap(row => row.proofMissing.map(line => ({ row, title: `${line.code || "Code"} · ${line.id}`, detail: `${line.submittedBy || "Submitter"} · ${Number(line.quantity || 0).toLocaleString()} ${line.uom || ""}`, status: productionProofState(line) })))],
+    ["Approved daily missing billing ledger", rows.flatMap(row => row.approvedNotLedger.map(line => ({ row, title: `${line.code || "Code"} · ${line.id}`, detail: "Approved production line should be available to Billing ledger.", status: "Needs Review" })))],
+    ["SQUAN quantity variance", rows.flatMap(row => row.quantityMismatch.map(item => ({ row, title: `${item.code || "Code"} · ${item.productionLineId || item.id}`, detail: `Jackson ${Number(item.jacksonSubmittedQuantity || 0).toLocaleString()} · SQUAN ${Number(item.squanExportQuantity || 0).toLocaleString()} · variance ${Number(item.varianceQuantity || 0).toLocaleString()}`, status: item.status || "Variance" })))]
+  ].filter(([, items]) => items.length);
+  return `
+    <section class="panel admin-daily-review-queue">
+      <div class="panel-header">
+        <div>
+          <h2>Daily / Production Admin Review</h2>
+          <p>Clear the bridge from field daily to production approval, proof, quantity reconciliation, and Billing ledger.</p>
+        </div>
+        <span>${sum(queue.map(([, items]) => ({ count: items.length })), "count")} item(s)</span>
+      </div>
+      ${queue.map(([title, items]) => renderAdminDecisionGroup(title, items.slice(0, 6).map(item => ({
+        id: `${item.row.project.id}-${item.title}`,
+        title: item.title,
+        detail: `${squanMapTitle(item.row.project)} · ${item.detail}`,
+        status: item.status,
+        project: item.row.project.id,
+        action: "Production",
+        focus: "Daily Detail View",
+        label: "Review"
+      })))).join("") || `<p class="empty-state">No daily/production review items are blocking Admin.</p>`}
+    </section>
+  `;
+}
+
+function renderMapDailyProductionStatusPanel(project) {
+  const row = dailyProductionSyncRows([project])[0];
+  if (!row) return "";
+  const latestQuantity = row.quantity[0] || {};
+  const ledgerTotal = sum(row.ledger, "billableAmount");
+  const lineQuantity = sum(row.lines.map(line => ({ quantity: Number(line.quantity || 0) })), "quantity");
+  const proofAccepted = row.lines.filter(line => productionProofState(line) === "Accepted").length;
+  return `
+    <section class="panel admin-map-daily-sync">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Daily to Billing Status</span>
+          <h2>Field daily to SQUAN billing chain</h2>
+          <p>Admin can verify that the SQUAN/ArcGIS daily evidence is synced to Jackson production, proof, quantity reconciliation, and Billing.</p>
+        </div>
+        <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+      </div>
+      <div class="compact-fact-grid">
+        <span>Latest field daily<strong>${row.latestField?.id || "None"}</strong></span>
+        <span>Production daily<strong>${row.latestProduction?.externalDailyId || row.latestProduction?.id || "None"}</strong></span>
+        <span>Production lines<strong>${row.lines.length}</strong></span>
+        <span>Submitted qty<strong>${lineQuantity.toLocaleString()}</strong></span>
+        <span>Proof accepted<strong>${proofAccepted}/${row.lines.length}</strong></span>
+        <span>Billing ledger<strong>${row.ledger.length} row(s) · ${currency(ledgerTotal)}</strong></span>
+        <span>SQUAN qty<strong>${Number(latestQuantity.squanExportQuantity || 0).toLocaleString()}</strong></span>
+        <span>Variance<strong>${Number(latestQuantity.varianceQuantity || 0).toLocaleString()}</strong></span>
+      </div>
+      <div class="packet-home-list">
+        ${[
+          ["Field Daily", row.unsyncedFieldDailies.length ? "Needs Review" : row.latestField ? "Synced" : "Missing", row.unsyncedFieldDailies.length ? `${row.unsyncedFieldDailies.length} field daily record(s) need Production Control support.` : row.latestField ? `${row.latestField.id} is tied to production support.` : "No field daily has been captured for this Map."],
+          ["Production Review", row.awaitingReview.length ? "Pending" : row.lines.length ? "Ready" : "Missing", row.awaitingReview.length ? `${row.awaitingReview.length} production line(s) need Jackson review.` : `${row.lines.length} production line(s) available.`],
+          ["Proof", row.proofMissing.length ? "Needs Review" : row.lines.length ? "Accepted" : "Missing", row.proofMissing.length ? `${row.proofMissing.length} line(s) still need proof acceptance.` : "Proof is accepted or no lines are waiting."],
+          ["Billing Ledger", row.approvedNotLedger.length ? "Needs Review" : row.ledger.length ? "Ready" : "Pending", row.approvedNotLedger.length ? `${row.approvedNotLedger.length} approved line(s) are not in Billing yet.` : `${row.ledger.length} Billing ledger row(s) are available.`],
+          ["Quantity Reconciliation", row.quantityMismatch.length ? "Variance" : row.quantity.length ? "Reconciled" : "Pending", row.quantityMismatch.length ? "SQUAN export quantity differs from Jackson approved quantity." : "Quantity comparison is clear or awaiting SQUAN export."]
+        ].map(item => `
+          <article>
+            <span class="status ${statusClass(item[1])}">${plainStatus(item[1])}</span>
+            <div>
+              <strong>${item[0]}</strong>
+              <small>${item[2]}</small>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderDailyProductionAuditReport(projects = scopedRows("projects")) {
+  const rows = dailyProductionSyncRows(projects).filter(row => row.latestField || row.latestProduction || row.lines.length || row.ledger.length || row.quantity.length);
+  return `
+    <section class="panel daily-production-audit-report">
+      <div class="panel-header">
+        <div>
+          <h2>Daily / Production Audit Trail</h2>
+          <p>Tracks the chain from field daily ID to Production Control, production lines, Billing ledger, and quantity reconciliation.</p>
+        </div>
+        <span>${rows.length} Map(s)</span>
+      </div>
+      <div class="report-table">
+        ${rows.map(row => {
+          const variance = sum(row.quantity.map(item => ({ quantity: Number(item.varianceQuantity || 0) })), "quantity");
+          return `
+            <article>
+              <strong>${squanMapTitle(row.project)}<small>${row.project.id}</small></strong>
+              <span>Field daily<small>${row.latestField?.id || "Missing"}</small></span>
+              <span>Production daily<small>${row.latestProduction?.externalDailyId || row.latestProduction?.id || "Missing"}</small></span>
+              <span>Lines<small>${row.lines.map(line => line.id).slice(0, 3).join(", ") || "None"}${row.lines.length > 3 ? ` +${row.lines.length - 3}` : ""}</small></span>
+              <span>Billing ledger<small>${row.ledger.map(item => item.id).slice(0, 2).join(", ") || "Pending"}${row.ledger.length > 2 ? ` +${row.ledger.length - 2}` : ""}</small></span>
+              <span>Reconciliation<small>${row.quantity.length ? `${row.quantity.length} row(s), variance ${variance.toLocaleString()}` : "Pending SQUAN export"}</small></span>
+              <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+            </article>
+          `;
+        }).join("") || `<p class="empty-state">No daily/production audit records are available yet.</p>`}
+      </div>
+    </section>
+  `;
+}
+
 function renderAdminWorkflowDrillIns(projects) {
   const project = selectedMapContext();
   const cards = [
@@ -7220,6 +7420,7 @@ function renderAdminExceptions() {
     </section>
     ${renderOwnerCommandCenter(projects, readiness, alerts, cashSummary)}
     ${renderAdminOwnerDecisionQueue(decisions)}
+    ${renderAdminDailyProductionReviewQueue(projects)}
     ${renderOwnerOperatingSignals(projects, readiness, cashSummary)}
     ${renderDailyPackageSlaDashboard(projects)}
     ${state.role === "Admin" ? renderDailyPackageAlertHomeSummary(projects) : ""}
@@ -19620,6 +19821,7 @@ function renderDashboard() {
       ["Export audit evidence", "Print executive, billing, and safety packets when SQUAN or year-end audit support is needed.", "Open Reports", "Reports", "", "Ready"]
     ]) : ""}
     ${renderErpSpineHomeSummary(projects)}
+    ${state.role === "Admin" ? renderAdminDailyProductionSyncHome(projects) : ""}
     <section class="metrics">
       ${metric("Forecast margin", `${Math.round(((revenue - forecastCost) / revenue) * 100)}%`, `${currency(revenue - forecastCost)} forecast gross profit`)}
       ${metric("13-week cash", currency(cashSummary.next13Total), `${currency(cashSummary.atRisk)} at risk`)}
@@ -21273,6 +21475,7 @@ function renderReports() {
     ${renderReportMapSelector(projects, selectedProject)}
     ${renderMapPlanWorkflowPanel(selectedProject, "Reports")}
     ${renderReportPacketCommandCenter(selectedProject)}
+    ${renderDailyProductionAuditReport(projects)}
     ${renderReportPacketPriorityQueue(projects, selectedProject)}
     ${renderReportPacketWorkflowDrillIns(selectedProject)}
     ${renderReportFocusedDetail(selectedProject, projects, exceptionProjects) || renderReportSelectedPacketLane(selectedProject, projects)}
@@ -24552,12 +24755,12 @@ function renderSettingsWorkflowAlignmentPanel() {
     "Keep Phase 1 CSV imports as the operating source until live access is approved.",
     "Maintain price sheet codes, units, subcontractor rates, and work aspects.",
     "Import SQUAN daily/pay export rows into production placeholders.",
-    "Link map features to contractor and tech production dailies.",
+    "Sync Field Operations dailies into Production Control dailies and lines.",
+    "Link ArcGIS map features to contractor and tech production dailies.",
     "Require proof before approval or billing package readiness.",
     "Route quantity variance to review before payable or billable release.",
-    "Post approved contractor rows to payables.",
-    "Post in-house tech work to job cost.",
-    "Post accepted rows to the SQUAN billable ledger.",
+    "Post approved contractor rows to payables and in-house tech work to job cost.",
+    "Use the synced daily/production chain for approval, payable, billing, and audit.",
     "Use Safety for hazards, blocked field conditions, and proof review.",
     "Use Billing for SQUAN package, unpaid 90%, retainage, disputes, and proof.",
     "Use Reports for locked billing/audit packages.",
@@ -24581,6 +24784,10 @@ function renderSettingsWorkflowAlignmentPanel() {
             <strong>${item}</strong>
           </article>
         `).join("")}
+      </div>
+      <div class="workflow-sync-notice">
+        <strong>Field Daily + Production Daily are synced records</strong>
+        <span>Field daily capture creates the Production Control support Admin uses for proof review, quantity reconciliation, contractor payable, SQUAN billable, and audit reporting.</span>
       </div>
     </section>
   `;
@@ -25889,6 +26096,7 @@ function renderProjectDetail(project) {
         ${renderMapLifecycleBar(project)}
         ${renderMapLifecycleWalkthrough(project, sectionContext)}
         ${renderMapCommandPanels(project, sectionContext)}
+        ${state.role === "Admin" ? renderMapDailyProductionStatusPanel(project) : ""}
         ${renderRoleScreenNotice("projects", project)}
         ${workflowFocusPanel(project, "Map")}
         ${renderPacketLockNotice(project, "the Map source-of-truth record")}
