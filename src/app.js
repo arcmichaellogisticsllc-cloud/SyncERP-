@@ -24413,7 +24413,7 @@ function renderMapPlanWorkflowPanel(project = selectedMapContext(), current = ""
         <div>
           <span class="eyebrow">${current ? `${current} workflow` : "Workflow"}</span>
           <h2>ArcGIS plan to SQUAN billing</h2>
-          <p>${project.map || project.id}: engineers maintain the working map plan in ArcGIS; Jackson controls imports, dailies, proof, approvals, payables, and billing audit.</p>
+          <p>${squanMapTitle(project)} (${project.id}): engineers maintain the working map plan in ArcGIS; Jackson controls imports, dailies, proof, approvals, payables, and billing audit.</p>
         </div>
         <span class="status ${statusClass(stats.variance ? "Needs Review" : stats.features.length ? "Ready" : "Later")}">${stats.variance ? "Variance" : stats.features.length ? "Map modeled" : "Awaiting map"}</span>
       </div>
@@ -24453,7 +24453,7 @@ function renderArcgisPlanDisplayPanel(project = selectedMapContext()) {
             ${layers.slice(0, 5).map((layer, index) => `<span class="arcgis-layer-line layer-${index + 1}">${escapeAttr(layer)}</span>`).join("")}
           </div>
           <div class="arcgis-map-overlay">
-            <strong>${escapeAttr(project.map || project.id)}</strong>
+            <strong>${escapeAttr(squanMapTitle(project))}</strong>
             <span>${escapeAttr(config.portalDisplayName)} display plan</span>
           </div>
         </div>
@@ -24764,6 +24764,11 @@ function renderProjectHub() {
 
 function squanMapTitle(project) {
   return project?.squanMapName || project?.map || project?.id || "Unassigned Map";
+}
+
+function squanScopeTitle(project) {
+  const scope = project?.scope || project?.arcgis?.workArea || "";
+  return scope.replace(/^Map\s+\d+\s*[-:]\s*/i, "") || scope || "Selected map scope";
 }
 
 function squanConstructionTitle(project) {
@@ -25911,8 +25916,8 @@ function renderMapCommandHero(project, ctx) {
     <section class="map-command-hero">
       <div class="map-command-title">
         <span class="eyebrow">${project.id}</span>
-        <h2>${project.map || project.id}</h2>
-        <p>${project.scope}</p>
+        <h2>${squanMapTitle(project)}</h2>
+        <p>${squanScopeTitle(project)}</p>
       </div>
       <div class="map-command-status">
         <span class="status ${statusClass(project.status)}">${plainStatus(project.status)}</span>
@@ -25942,7 +25947,7 @@ function renderEliteMapVisual(project, ctx) {
   const primarySurvey = ctx.surveys[0];
   const gis = command.gis.gis || {};
   const fieldNote = primarySurvey
-    ? `${primarySurvey.route}: ${primarySurvey.specialConditions || primarySurvey.utilityConflicts || "Survey notes attached."}`
+    ? `${squanScopeTitle(project)}: ${primarySurvey.specialConditions || primarySurvey.utilityConflicts || "Survey notes attached."}`
     : project.docs || "Route map, survey, permits, and field proof belong here.";
   const visualStyle = primaryPhoto?.imageUrl ? ` style="background-image: linear-gradient(rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.18)), url('${primaryPhoto.imageUrl}')"` : "";
   return `
@@ -25959,7 +25964,7 @@ function renderEliteMapVisual(project, ctx) {
         <span class="map-pin pin-b">${ctx.openObstacles.length ? "OBS" : "OK"}</span>
         <span class="map-pin pin-c">${ctx.photos.length} PH</span>
         <div class="elite-map-overlay">
-          <strong>${gis.workArea || project.map || project.id}</strong>
+          <strong>${gis.workArea || squanMapTitle(project)}</strong>
           <span>${gis.layerName || "Map layer pending"}</span>
         </div>
       </div>
@@ -32851,7 +32856,7 @@ function renderDocumentPortfolioSummary(documents) {
 
 function projectLabel(projectId) {
   const project = (state.data.projects || []).find(item => item.id === projectId);
-  return project ? `${squanMapTitle(project)} - ${project.scope}` : projectId;
+  return project ? `${squanMapTitle(project)} - ${squanScopeTitle(project)}` : projectId;
 }
 
 function documentPurpose(document) {
