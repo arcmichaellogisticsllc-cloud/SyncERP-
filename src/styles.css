@@ -4073,8 +4073,83 @@ button {
   padding: 0 12px 12px;
 }
 
-.admin-map-daily-sync .packet-home-list {
-  padding-top: 0;
+.daily-handoff-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.daily-handoff-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 5px;
+  align-content: start;
+}
+
+.daily-handoff-card:hover {
+  border-color: #b8c7d8;
+  background: #f8fbff;
+}
+
+.daily-handoff-card.needs-review,
+.daily-handoff-card.missing,
+.daily-handoff-card.pending,
+.daily-handoff-card.variance {
+  background: #fffdf8;
+}
+
+.daily-handoff-card .status {
+  justify-self: start;
+}
+
+.daily-handoff-card strong,
+.daily-handoff-card em,
+.daily-handoff-card small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.daily-handoff-card strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.daily-handoff-card em {
+  color: var(--ink);
+  font-style: normal;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.daily-handoff-card small {
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.daily-handoff-actions {
+  border-top: 1px solid var(--line);
+  padding: 10px 12px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.daily-handoff-actions span {
+  margin-right: auto;
+  color: var(--muted);
+}
+
+.daily-handoff-actions strong {
+  color: var(--ink);
 }
 
 .workflow-sync-notice {
@@ -13685,6 +13760,7 @@ tbody tr:hover {
   .admin-simple-metrics,
   .admin-simple-steps,
   .admin-simple-lanes,
+  .daily-handoff-strip,
   .production-ledger-table article,
   .production-ledger-actions,
   .safety-status-strip,
@@ -14148,6 +14224,7 @@ tbody tr:hover {
   .admin-simple-metrics,
   .admin-simple-steps,
   .admin-simple-lanes,
+  .daily-handoff-strip,
   .safety-status-strip,
   .safety-step-grid,
   .safety-map-list,

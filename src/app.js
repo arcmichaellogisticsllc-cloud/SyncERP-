@@ -7248,42 +7248,62 @@ function renderMapDailyProductionStatusPanel(project) {
   const ledgerTotal = sum(row.ledger, "billableAmount");
   const lineQuantity = sum(row.lines.map(line => ({ quantity: Number(line.quantity || 0) })), "quantity");
   const proofAccepted = row.lines.filter(line => productionProofState(line) === "Accepted").length;
+  const statusCards = [
+    {
+      label: "Field Daily",
+      value: row.latestField?.id || "Missing",
+      status: row.unsyncedFieldDailies.length ? "Needs Review" : row.latestField ? "Synced" : "Missing",
+      detail: row.unsyncedFieldDailies.length ? `${row.unsyncedFieldDailies.length} needs sync` : "Daily source"
+    },
+    {
+      label: "Production",
+      value: `${row.lines.length} line${row.lines.length === 1 ? "" : "s"}`,
+      status: row.awaitingReview.length ? "Pending" : row.lines.length ? "Ready" : "Missing",
+      detail: `${lineQuantity.toLocaleString()} submitted qty`
+    },
+    {
+      label: "Proof",
+      value: `${proofAccepted}/${row.lines.length}`,
+      status: row.proofMissing.length ? "Needs Review" : row.lines.length ? "Accepted" : "Missing",
+      detail: row.proofMissing.length ? `${row.proofMissing.length} gap${row.proofMissing.length === 1 ? "" : "s"}` : "Accepted proof"
+    },
+    {
+      label: "Billing",
+      value: currency(ledgerTotal),
+      status: row.approvedNotLedger.length ? "Needs Review" : row.ledger.length ? "Ready" : "Pending",
+      detail: `${row.ledger.length} ledger row${row.ledger.length === 1 ? "" : "s"}`
+    },
+    {
+      label: "Quantity",
+      value: Number(latestQuantity.varianceQuantity || 0).toLocaleString(),
+      status: row.quantityMismatch.length ? "Variance" : row.quantity.length ? "Reconciled" : "Pending",
+      detail: `${Number(latestQuantity.squanExportQuantity || 0).toLocaleString()} SQUAN qty`
+    }
+  ];
   return `
     <section class="panel admin-map-daily-sync">
       <div class="panel-header">
         <div>
           <span class="eyebrow">Daily to Billing Status</span>
-          <h2>Field daily to SQUAN billing chain</h2>
-          <p>Admin can verify that the SQUAN/ArcGIS daily evidence is synced to Jackson production, proof, quantity reconciliation, and Billing.</p>
+          <h2>Daily capture handoff</h2>
+          <p>Compact check of the path from SQUAN/ArcGIS daily evidence to Jackson production, proof, billing, and quantity reconciliation.</p>
         </div>
         <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
       </div>
-      <div class="compact-fact-grid">
-        <span>Latest field daily<strong>${row.latestField?.id || "None"}</strong></span>
-        <span>Production daily<strong>${row.latestProduction?.externalDailyId || row.latestProduction?.id || "None"}</strong></span>
-        <span>Production lines<strong>${row.lines.length}</strong></span>
-        <span>Submitted qty<strong>${lineQuantity.toLocaleString()}</strong></span>
-        <span>Proof accepted<strong>${proofAccepted}/${row.lines.length}</strong></span>
-        <span>Billing ledger<strong>${row.ledger.length} row(s) · ${currency(ledgerTotal)}</strong></span>
-        <span>SQUAN qty<strong>${Number(latestQuantity.squanExportQuantity || 0).toLocaleString()}</strong></span>
-        <span>Variance<strong>${Number(latestQuantity.varianceQuantity || 0).toLocaleString()}</strong></span>
-      </div>
-      <div class="packet-home-list">
-        ${[
-          ["Field Daily", row.unsyncedFieldDailies.length ? "Needs Review" : row.latestField ? "Synced" : "Missing", row.unsyncedFieldDailies.length ? `${row.unsyncedFieldDailies.length} field daily record(s) need Production Control support.` : row.latestField ? `${row.latestField.id} is tied to production support.` : "No field daily has been captured for this Map."],
-          ["Production Review", row.awaitingReview.length ? "Pending" : row.lines.length ? "Ready" : "Missing", row.awaitingReview.length ? `${row.awaitingReview.length} production line(s) need Jackson review.` : `${row.lines.length} production line(s) available.`],
-          ["Proof", row.proofMissing.length ? "Needs Review" : row.lines.length ? "Accepted" : "Missing", row.proofMissing.length ? `${row.proofMissing.length} line(s) still need proof acceptance.` : "Proof is accepted or no lines are waiting."],
-          ["Billing Ledger", row.approvedNotLedger.length ? "Needs Review" : row.ledger.length ? "Ready" : "Pending", row.approvedNotLedger.length ? `${row.approvedNotLedger.length} approved line(s) are not in Billing yet.` : `${row.ledger.length} Billing ledger row(s) are available.`],
-          ["Quantity Reconciliation", row.quantityMismatch.length ? "Variance" : row.quantity.length ? "Reconciled" : "Pending", row.quantityMismatch.length ? "SQUAN export quantity differs from Jackson approved quantity." : "Quantity comparison is clear or awaiting SQUAN export."]
-        ].map(item => `
-          <article>
-            <span class="status ${statusClass(item[1])}">${plainStatus(item[1])}</span>
-            <div>
-              <strong>${item[0]}</strong>
-              <small>${item[2]}</small>
-            </div>
-          </article>
+      <div class="daily-handoff-strip">
+        ${statusCards.map(card => `
+          <button class="daily-handoff-card ${statusClass(card.status)}" data-workflow-action="${card.label === "Billing" ? "Billing" : card.label === "Quantity" ? "Reports" : "Production"}" data-workflow-id="${project.id}" data-workflow-focus="${card.label === "Billing" ? "Code breakdown" : card.label === "Quantity" ? "Daily / Production Audit Trail" : "Daily Detail View"}" ${card.label === "Quantity" ? `data-report-scope="Executive Report"` : ""}>
+            <span class="status ${statusClass(card.status)}">${plainStatus(card.status)}</span>
+            <strong>${card.label}</strong>
+            <em>${card.value}</em>
+            <small>${card.detail}</small>
+          </button>
         `).join("")}
+      </div>
+      <div class="daily-handoff-actions">
+        <span>Production daily: <strong>${row.latestProduction?.externalDailyId || row.latestProduction?.id || "Not created"}</strong></span>
+        <button class="secondary-btn" data-workflow-action="Production" data-workflow-id="${project.id}" data-workflow-focus="Daily Detail View">Open daily capture</button>
+        <button class="secondary-btn" data-workflow-action="Billing" data-workflow-id="${project.id}" data-workflow-focus="Code breakdown">Open billing codes</button>
       </div>
     </section>
   `;
