@@ -26369,20 +26369,20 @@ function renderProjectDetail(project) {
       <div class="detail-body">
         ${renderMapCommandHero(project, sectionContext)}
         ${renderEliteMapVisual(project, sectionContext)}
-        ${renderMapLifecycleBar(project)}
-        ${renderMapLifecycleWalkthrough(project, sectionContext)}
-        ${renderMapCommandPanels(project, sectionContext)}
         ${state.role === "Admin" ? renderMapDailyProductionStatusPanel(project) : ""}
-        ${renderRoleScreenNotice("projects", project)}
-        ${workflowFocusPanel(project, "Map")}
-        ${renderPacketLockNotice(project, "the Map source-of-truth record")}
-        ${renderFinancialCloseoutLockVisibility(project)}
         <details class="map-detail-drawer">
           <summary>
             <span>More Map details</span>
-            <small>Files, gates, assignments, closeout, billing, time, and audit records</small>
+            <small>Lifecycle, release gates, financial closeout, files, assignments, billing, time, and audit records</small>
           </summary>
           <div class="map-detail-drawer-body">
+            ${renderMapLifecycleBar(project)}
+            ${renderMapLifecycleWalkthrough(project, sectionContext)}
+            ${renderMapCommandPanels(project, sectionContext)}
+            ${renderRoleScreenNotice("projects", project)}
+            ${workflowFocusPanel(project, "Map")}
+            ${renderPacketLockNotice(project, "the Map source-of-truth record")}
+            ${renderFinancialCloseoutLockVisibility(project)}
             ${renderMapContextStrip(project, "Map")}
             ${renderRoleOrderedMapSections(project, sectionContext)}
           </div>

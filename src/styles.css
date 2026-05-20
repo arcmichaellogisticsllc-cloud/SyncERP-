@@ -11316,11 +11316,29 @@ tbody tr:hover {
   cursor: pointer;
   padding: 14px;
   display: grid;
-  gap: 3px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 12px;
+  align-items: center;
   font-weight: 900;
 }
 
+.map-detail-drawer summary::after {
+  content: "Open";
+  border: 1px solid #cddceb;
+  border-radius: 999px;
+  color: var(--blue-700);
+  background: #eef6ff;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 5px 10px;
+}
+
+.map-detail-drawer[open] summary::after {
+  content: "Hide";
+}
+
 .map-detail-drawer summary small {
+  grid-column: 1 / 2;
   color: var(--muted);
   font-weight: 600;
 }
