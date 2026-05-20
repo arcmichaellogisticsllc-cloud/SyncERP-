@@ -3646,6 +3646,102 @@ button {
   margin-top: 12px;
 }
 
+.production-tools-drawer {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.production-tools-drawer summary {
+  cursor: pointer;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  font-weight: 900;
+}
+
+.production-tools-drawer summary::after {
+  content: "Open";
+  border: 1px solid #cddceb;
+  border-radius: 999px;
+  color: var(--blue-700);
+  background: #eef6ff;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 5px 10px;
+}
+
+.production-tools-drawer[open] summary::after {
+  content: "Hide";
+}
+
+.production-tools-drawer summary small {
+  grid-column: 1 / 2;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.production-tools-drawer-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.daily-state-strip,
+.daily-quantity-strip {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.daily-state-strip {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.daily-quantity-strip {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.daily-state-strip article,
+.daily-quantity-strip article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.daily-state-strip article.done,
+.daily-quantity-strip article.done {
+  border-color: #b7e4d5;
+}
+
+.daily-state-strip article.needs-work,
+.daily-quantity-strip article.needs-work {
+  border-color: #f8c98b;
+}
+
+.daily-state-strip span,
+.daily-quantity-strip span,
+.daily-quantity-strip small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.daily-state-strip strong,
+.daily-quantity-strip strong {
+  color: var(--ink);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
 .daily-detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
@@ -14168,6 +14264,8 @@ tbody tr:hover {
   .daily-detail-layout,
   .daily-detail-grid,
   .daily-arcgis-attributes,
+  .daily-state-strip,
+  .daily-quantity-strip,
   .arcgis-readiness-grid,
   .squan-map-grid,
   .workflow-path-card-grid,
@@ -15412,6 +15510,8 @@ tbody tr:hover {
   .linked-records,
   .check-grid,
   .daily-submit-form,
+  .daily-state-strip,
+  .daily-quantity-strip,
   .daily-evidence-grid article,
   .obstacle-card dl div,
   .photo-card {

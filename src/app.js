@@ -30336,13 +30336,19 @@ function renderProductionControl() {
           ${metricCard("Ready to bill", currency(summary.billable), "Accepted SQUAN support")}
         </div>
       </div>
-      <div class="production-grid">
-        ${renderProductionImportCenter()}
-        ${renderProductionDailyForm(projects, codes)}
-      </div>
+      ${renderProductionDailyForm(projects, codes)}
       ${renderProductionDailyDetailView(rows)}
-      ${renderArcgisPhase4Readiness()}
-      ${renderSquanMapWorkbench()}
+      <details class="production-tools-drawer">
+        <summary>
+          <span>Import and map workbench tools</span>
+          <small>SQUAN CSV import, price sheet import, ArcGIS readiness, and map feature workbench</small>
+        </summary>
+        <div class="production-tools-drawer-body">
+          ${renderProductionImportCenter()}
+          ${renderArcgisPhase4Readiness()}
+          ${renderSquanMapWorkbench()}
+        </div>
+      </details>
       ${renderProductionReviewQueue(rows)}
       ${renderProductionProofChecklist(rows)}
       ${renderProductionLedger(rows)}
@@ -30427,7 +30433,7 @@ function renderProductionDailyForm(projects, codes) {
           </label>
         </div>
         <div class="production-form-section">
-          <div class="section-heading compact"><h3>Production Codes</h3><span>Quantity</span></div>
+          <div class="section-heading compact"><h3>Production Codes + Proof</h3><span>Billing input</span></div>
           <label>Code
             <select id="productionCode" required>
               ${codes.map(code => `<option>${escapeAttr(code)}</option>`).join("")}
@@ -30436,6 +30442,9 @@ function renderProductionDailyForm(projects, codes) {
           </label>
           <label>Quantity
             <input id="productionQuantity" type="number" step="0.01" min="0" value="1" required>
+          </label>
+          <label class="wide">Proof note
+            <input id="productionProofNote" placeholder="Photo, as-built, video, pole tag, or SQUAN evidence reference">
           </label>
         </div>
         <div class="production-form-section">
@@ -30460,12 +30469,6 @@ function renderProductionDailyForm(projects, codes) {
           </label>
           <label class="wide">ArcGIS notes
             <input id="productionArcgisNotes" placeholder="Feature notes, obstruction, or engineering comment">
-          </label>
-        </div>
-        <div class="production-form-section">
-          <div class="section-heading compact"><h3>As-Builts / Photos</h3><span>Required for submit</span></div>
-          <label class="wide">Proof note
-            <input id="productionProofNote" placeholder="Photo, as-built, video, pole tag, or SQUAN evidence reference">
           </label>
         </div>
         <div class="production-form-actions">
@@ -30508,6 +30511,44 @@ function productionDailyDetailRows(rows = productionLedgerRows()) {
     .sort((a, b) => String(b.daily.workedDate || "").localeCompare(String(a.daily.workedDate || "")));
 }
 
+function productionDailyWorkflowState(selected) {
+  const { daily, lines, evidence, totalQuantity, squanQuantity } = selected;
+  const statuses = uniqueList([daily.status, ...lines.map(line => line.status || line.reviewStatus)]).filter(Boolean);
+  const hasCorrection = statuses.some(status => ["Needs Correction", "Rejected", "Returned"].includes(status));
+  const submitted = statuses.some(status => ["Submitted", "Needs Review", "Needs Proof", "Approved"].includes(status));
+  const approvedLines = lines.filter(line => (line.status || line.reviewStatus) === "Approved");
+  const billableLines = lines.filter(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus));
+  const proofAccepted = evidence.filter(item => ["Accepted", "Accepted Exception"].includes(item.status)).length;
+  const variance = Number(totalQuantity || 0) - Number(squanQuantity || 0);
+  const current = hasCorrection
+    ? "Needs correction"
+    : billableLines.length && billableLines.length === lines.length
+      ? "Billed"
+      : approvedLines.length && approvedLines.length === lines.length
+        ? "Approved"
+        : submitted
+          ? "Submitted"
+          : "Draft";
+  return {
+    current,
+    variance,
+    steps: [
+      { label: "Draft", value: daily.createdAt ? "Created" : "Not started", status: daily.createdAt ? "done" : "pending" },
+      { label: "Submitted", value: submitted ? "Sent to review" : "Not submitted", status: submitted ? "done" : "pending" },
+      { label: "Correction", value: hasCorrection ? "Needs correction" : "Clear", status: hasCorrection ? "needs-work" : "done" },
+      { label: "Approved", value: `${approvedLines.length}/${lines.length || 0} line(s)`, status: approvedLines.length && approvedLines.length === lines.length ? "done" : "pending" },
+      { label: "Billed", value: `${billableLines.length}/${lines.length || 0} line(s)`, status: billableLines.length && billableLines.length === lines.length ? "done" : "pending" }
+    ],
+    quantities: [
+      { label: "ArcGIS / SQUAN qty", value: Number(squanQuantity || 0).toLocaleString(), detail: "Imported comparison" },
+      { label: "Jackson submitted qty", value: Number(totalQuantity || 0).toLocaleString(), detail: "Daily production" },
+      { label: "Approved qty", value: Number(sum(approvedLines, "quantity") || 0).toLocaleString(), detail: "Review accepted" },
+      { label: "Billing variance", value: Number(variance || 0).toLocaleString(), detail: variance ? "Needs reconciliation" : "Balanced or awaiting import" },
+      { label: "Accepted proof", value: `${proofAccepted}/${evidence.length || 0}`, detail: "As-builts / photos" }
+    ]
+  };
+}
+
 function renderProductionDailyDetailView(rows = productionLedgerRows()) {
   const detailRows = productionDailyDetailRows(rows);
   const selected = detailRows.find(row => row.daily.id === state.selectedProductionDailyId) || detailRows[0];
@@ -30529,8 +30570,16 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
   const firstFeature = featureRows[0] || {};
   const codeRows = lines.map(line => {
     const squan = squanMatched.filter(item => squanLineKey(item) === productionLineKey(line));
-    return { line, squanQuantity: sum(squan, "quantity"), squanAmount: sum(squan, "squanAmount") };
+    const evidenceRows = productionEvidenceForLine(line.id);
+    return {
+      line,
+      squanQuantity: sum(squan, "quantity"),
+      squanAmount: sum(squan, "squanAmount"),
+      evidenceRows,
+      proofState: productionProofState(line)
+    };
   });
+  const workflow = productionDailyWorkflowState(selected);
   const history = [
     ...(daily.activityLog || []),
     ...lines.flatMap(line => line.activityLog || []),
@@ -30544,9 +30593,27 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
           <h2>${escapeAttr(daily.externalDailyId || daily.id)}</h2>
           <p>${escapeAttr(daily.sourceType || "Production Daily")} · ${escapeAttr(daily.submittedBy || "Submitter")} · ${formatDate(daily.workedDate)}</p>
         </div>
+        <span class="status ${statusClass(workflow.current)}">${escapeAttr(workflow.current)}</span>
         <select data-production-daily-select aria-label="Select production daily">
           ${detailRows.map(row => `<option value="${escapeAttr(row.daily.id)}" ${row.daily.id === daily.id ? "selected" : ""}>${escapeAttr(row.daily.externalDailyId || row.daily.id)} · ${escapeAttr(row.daily.project || "")}</option>`).join("")}
         </select>
+      </div>
+      <div class="daily-state-strip">
+        ${workflow.steps.map(step => `
+          <article class="${workflowStatusClass(step.status)}">
+            <span>${escapeAttr(step.label)}</span>
+            <strong>${escapeAttr(step.value)}</strong>
+          </article>
+        `).join("")}
+      </div>
+      <div class="daily-quantity-strip">
+        ${workflow.quantities.map(item => `
+          <article class="${item.label === "Billing variance" && workflow.variance ? "needs-work" : ""}">
+            <span>${escapeAttr(item.label)}</span>
+            <strong>${escapeAttr(item.value)}</strong>
+            <small>${escapeAttr(item.detail)}</small>
+          </article>
+        `).join("")}
       </div>
       <div class="daily-detail-layout">
         <div class="daily-detail-main">
@@ -30585,17 +30652,18 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
             </div>
             <div class="table-wrap production-table compact">
               <table>
-                <thead><tr><th>Code</th><th>Jackson qty</th><th>SQUAN qty</th><th>Rate</th><th>Status</th></tr></thead>
+                <thead><tr><th>Code</th><th>Jackson qty</th><th>SQUAN qty</th><th>Proof</th><th>Rate</th><th>Status</th></tr></thead>
                 <tbody>
                   ${codeRows.map(row => `
                     <tr>
                       <td><strong>${escapeAttr(row.line.code || "")}</strong><br><small>${escapeAttr(row.line.unitName || row.line.uom || "")}</small></td>
                       <td>${Number(row.line.quantity || 0).toLocaleString()} ${escapeAttr(row.line.uom || "")}</td>
                       <td>${Number(row.squanQuantity || 0).toLocaleString()}<br><small>${currency(row.squanAmount || 0)}</small></td>
+                      <td><span class="status ${statusClass(row.proofState)}">${escapeAttr(row.proofState)}</span><br><small>${row.evidenceRows.length ? `${row.evidenceRows.length} item(s)` : escapeAttr(row.line.proofNote || "No proof linked")}</small></td>
                       <td>${currency(row.line.unitRate || 0)}</td>
                       <td><span class="status ${statusClass(row.line.status || row.line.reviewStatus)}">${escapeAttr(row.line.status || row.line.reviewStatus || "Submitted")}</span></td>
                     </tr>
-                  `).join("") || `<tr><td colspan="5">No production lines linked.</td></tr>`}
+                  `).join("") || `<tr><td colspan="6">No production lines linked.</td></tr>`}
                 </tbody>
               </table>
             </div>
