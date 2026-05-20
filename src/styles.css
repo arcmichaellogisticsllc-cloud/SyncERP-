@@ -3682,6 +3682,19 @@ button {
   padding: 0 12px 12px;
 }
 
+.squan-reconciliation-table {
+  padding: 0 12px 12px;
+}
+
+.squan-map-actions select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: var(--ink);
+  padding: 0 8px;
+}
+
 .proof-tool-card {
   border: 1px solid var(--line);
   border-radius: var(--radius);

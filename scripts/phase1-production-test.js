@@ -359,6 +359,26 @@ function squanMapRollups(db) {
   return [...grouped.values()];
 }
 
+function featureReconciliationRows(db) {
+  return squanMapFeatureRows(db).map(feature => {
+    const lines = (db.productionLines || []).filter(line => line.sourceFeatureId === feature.id);
+    const approved = lines.filter(line => line.reviewStatus === "Approved");
+    const billing = (db.billingLedger || []).filter(row => lines.some(line => line.id === row.productionLineId) && row.billingStatus === "Ready to Bill");
+    const submittedQuantity = lines.reduce((total, line) => total + Number(line.quantity || 0), 0);
+    const approvedQuantity = approved.reduce((total, line) => total + Number(line.quantity || 0), 0);
+    const billingQuantity = lines.filter(line => billing.some(row => row.productionLineId === line.id)).reduce((total, line) => total + Number(line.quantity || 0), 0);
+    const variance = Number(feature.quantity || 0) - approvedQuantity;
+    return {
+      feature,
+      submittedQuantity,
+      approvedQuantity,
+      billingQuantity,
+      variance,
+      status: !lines.length ? "Not Started" : approvedQuantity >= Number(feature.quantity || 0) && Number(feature.quantity || 0) > 0 ? "Reconciled" : approved.length ? "Variance" : "Pending Review"
+    };
+  });
+}
+
 function createDailyFromFeature(db, featureId) {
   const feature = squanMapFeatureRows(db).find(item => item.id === featureId);
   assert(feature, `Missing feature ${featureId}`);
@@ -398,6 +418,10 @@ function updateFeatureStatus(db, featureId, status) {
   const feature = squanMapFeatureRows(db).find(item => item.id === featureId);
   assert(feature, `Missing feature ${featureId}`);
   return saveManualFeature(db, { ...feature, status });
+}
+
+function updateFeatureStatuses(db, featureIds, status) {
+  featureIds.forEach(id => updateFeatureStatus(db, id, status));
 }
 
 function createDailyFromFeatures(db, featureIds) {
@@ -511,9 +535,14 @@ function run() {
   });
   updateFeatureStatus(db, "FEATURE-MANUAL-1", "Assigned");
   assert.strictEqual(squanMapFeatureRows(db).find(item => item.id === "FEATURE-MANUAL-1").status, "Assigned");
+  updateFeatureStatuses(db, ["FEATURE-SPL-TEST-1", "FEATURE-MANUAL-1"], "Approved");
+  assert.strictEqual(squanMapFeatureRows(db).find(item => item.id === "FEATURE-MANUAL-1").status, "Approved");
   const batchLines = createDailyFromFeatures(db, ["FEATURE-SPL-TEST-1", "FEATURE-MANUAL-1"]);
   assert.strictEqual(batchLines.length, 2);
   assert.strictEqual(batchLines[1].sourceFeatureId, "FEATURE-MANUAL-1");
+  const featureReconBeforeApproval = featureReconciliationRows(db).find(row => row.feature.id === "FEATURE-MANUAL-1");
+  assert.strictEqual(featureReconBeforeApproval.submittedQuantity, 25);
+  assert.strictEqual(featureReconBeforeApproval.status, "Pending Review");
 
   submitProductionDaily(db, {
     dailyId: "PD-CON-1",
@@ -586,6 +615,7 @@ function run() {
   assert.strictEqual(db.quantityReconciliation.find(item => item.productionLineId === "PL-CON-2").status, "Needs Proof");
   assert.strictEqual(db.quantityReconciliation.find(item => item.productionLineId === "PL-CON-3").status, "Rejected");
   assert.strictEqual(billingPackageRows(db).length, 2);
+  assert(featureReconciliationRows(db).some(row => row.feature.id === "FEATURE-SPL-TEST-1" && row.submittedQuantity >= 100));
 
   console.log("Phase 1 and Phase 2 production workflow test passed.");
   console.log(`Checked ${db.productionLines.length} submitted lines, ${db.contractorPayables.length} payable, ${db.billingLedger.length} billable/job-cost ledger rows.`);

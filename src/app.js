@@ -2738,6 +2738,8 @@ const state = {
   selectedProjectId: "PO-SQ-24018",
   selectedSquanFeatureId: "",
   selectedSquanFeatureIds: [],
+  squanFeatureStatusFilter: "All",
+  squanFeatureLayerFilter: "All",
   selectedRecord: null,
   alertsOpen: false,
   commsOpen: false,
@@ -29615,14 +29617,52 @@ function squanMapRollups(features = squanMapFeatureRows()) {
   return [...grouped.values()].sort((a, b) => `${a.project}${a.layerName}${a.featureCode}`.localeCompare(`${b.project}${b.layerName}${b.featureCode}`));
 }
 
+function squanFeatureReconciliationRows(features = squanMapFeatureRows()) {
+  const production = state.data.productionLines || [];
+  const billing = state.data.billingLedger || [];
+  return features.map(feature => {
+    const lines = production.filter(line => line.sourceFeatureId === feature.id);
+    const approved = lines.filter(line => line.reviewStatus === "Approved");
+    const billed = billing.filter(row => lines.some(line => line.id === row.productionLineId) && row.billingStatus === "Ready to Bill");
+    const submittedQuantity = sum(lines, "quantity");
+    const approvedQuantity = sum(approved, "quantity");
+    const billingQuantity = sum(lines.filter(line => billed.some(row => row.productionLineId === line.id)), "quantity");
+    const variance = Number(feature.quantity || 0) - approvedQuantity;
+    const status = !lines.length
+      ? "Not Started"
+      : approvedQuantity >= Number(feature.quantity || 0) && Number(feature.quantity || 0) > 0
+        ? "Reconciled"
+        : approved.length
+          ? "Variance"
+          : "Pending Review";
+    return {
+      feature,
+      submittedQuantity,
+      approvedQuantity,
+      billingQuantity,
+      variance,
+      status,
+      lineCount: lines.length,
+      approvedCount: approved.length
+    };
+  });
+}
+
 function renderSquanMapWorkbench() {
-  const features = squanMapFeatureRows().filter(feature => !state.search || matches(feature));
+  const allFeatures = squanMapFeatureRows();
+  const availableLayers = [...new Set(allFeatures.map(feature => feature.layerName || "Production"))].sort();
+  const availableStatuses = [...new Set(allFeatures.map(feature => feature.status || "Imported"))].sort();
+  const features = allFeatures
+    .filter(feature => state.squanFeatureStatusFilter === "All" || (feature.status || "Imported") === state.squanFeatureStatusFilter)
+    .filter(feature => state.squanFeatureLayerFilter === "All" || (feature.layerName || "Production") === state.squanFeatureLayerFilter)
+    .filter(feature => !state.search || matches(feature));
   if (!state.selectedSquanFeatureId && features.length) state.selectedSquanFeatureId = features[0].id;
   state.selectedSquanFeatureIds = (state.selectedSquanFeatureIds || []).filter(id => features.some(feature => feature.id === id));
   const selected = features.find(item => item.id === state.selectedSquanFeatureId) || features[0] || null;
   const cards = [...new Map(features.map(feature => [feature.project || feature.ntp || "Unassigned", feature])).values()];
   const layers = [...new Set(features.map(feature => feature.layerName || "Production"))].sort();
   const rollups = squanMapRollups(features);
+  const reconciliation = squanFeatureReconciliationRows(features);
   return `
     <section class="panel production-panel squan-map-workbench">
       <div class="panel-header">
@@ -29632,7 +29672,17 @@ function renderSquanMapWorkbench() {
         </div>
         <div class="squan-map-actions">
           <span>${features.length} feature(s)</span>
+          <select data-squan-feature-layer-filter aria-label="Layer filter">
+            <option>All</option>
+            ${availableLayers.map(layer => `<option ${state.squanFeatureLayerFilter === layer ? "selected" : ""}>${escapeAttr(layer)}</option>`).join("")}
+          </select>
+          <select data-squan-feature-status-filter aria-label="Status filter">
+            <option>All</option>
+            ${availableStatuses.map(status => `<option ${state.squanFeatureStatusFilter === status ? "selected" : ""}>${escapeAttr(status)}</option>`).join("")}
+          </select>
           <button class="secondary-btn" data-map-feature-new="true">New feature</button>
+          <button class="secondary-btn" data-map-feature-bulk-status="Assigned" ${state.selectedSquanFeatureIds.length ? "" : "disabled"}>Assign selected</button>
+          <button class="secondary-btn" data-map-feature-bulk-status="Approved" ${state.selectedSquanFeatureIds.length ? "" : "disabled"}>Approve selected</button>
           <button class="primary-btn" data-map-feature-batch-daily="true" ${state.selectedSquanFeatureIds.length ? "" : "disabled"}>Create daily from selected</button>
         </div>
       </div>
@@ -29717,6 +29767,36 @@ function renderSquanMapWorkbench() {
                 <td>${escapeAttr(row.description || "")}</td>
               </tr>
             `).join("") || `<tr><td colspan="6">No feature rollups yet.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="squan-reconciliation-table table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Map / NTP</th>
+              <th>Feature qty</th>
+              <th>Submitted</th>
+              <th>Approved</th>
+              <th>Billing</th>
+              <th>Variance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${reconciliation.map(row => `
+              <tr>
+                <td><strong>${escapeAttr(row.feature.featureCode || row.feature.id)}</strong><br><small>${escapeAttr(row.feature.layerName || "Production")}</small></td>
+                <td>${escapeAttr(row.feature.project || row.feature.ntp || "")}</td>
+                <td>${Number(row.feature.quantity || 0).toLocaleString()} ${escapeAttr(row.feature.uom || "")}</td>
+                <td>${Number(row.submittedQuantity || 0).toLocaleString()}</td>
+                <td>${Number(row.approvedQuantity || 0).toLocaleString()}</td>
+                <td>${Number(row.billingQuantity || 0).toLocaleString()}</td>
+                <td class="${row.variance ? "danger-text" : ""}">${Number(row.variance || 0).toLocaleString()}</td>
+                <td><span class="status ${statusClass(row.status)}">${escapeAttr(row.status)}</span></td>
+              </tr>
+            `).join("") || `<tr><td colspan="8">No feature reconciliation rows.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -30105,6 +30185,14 @@ function updateSquanMapFeatureStatus(featureId, status, shouldRender = true) {
     persist("SQUAN map feature status updated");
     render();
   }
+}
+
+function updateSelectedSquanFeatureStatuses(status) {
+  const ids = state.selectedSquanFeatureIds || [];
+  ids.forEach(id => updateSquanMapFeatureStatus(id, status, false));
+  appendAuditLocal("production.map-feature-bulk-status", { features: ids, status, by: state.user?.name || "Operations" });
+  persist("Selected SQUAN map feature statuses updated");
+  render();
 }
 
 function handleProductionReview(button) {
@@ -42242,6 +42330,28 @@ function bindEvents() {
   document.querySelectorAll("[data-map-feature-status]").forEach(button => {
     button.addEventListener("click", () => {
       if (guardAction("production")) updateSquanMapFeatureStatus(button.dataset.squanFeatureId, button.dataset.mapFeatureStatus);
+    });
+  });
+
+  document.querySelectorAll("[data-map-feature-bulk-status]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (guardAction("production")) updateSelectedSquanFeatureStatuses(button.dataset.mapFeatureBulkStatus);
+    });
+  });
+
+  document.querySelectorAll("[data-squan-feature-layer-filter]").forEach(select => {
+    select.addEventListener("change", () => {
+      state.squanFeatureLayerFilter = select.value;
+      state.selectedSquanFeatureIds = [];
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-squan-feature-status-filter]").forEach(select => {
+    select.addEventListener("change", () => {
+      state.squanFeatureStatusFilter = select.value;
+      state.selectedSquanFeatureIds = [];
+      render();
     });
   });
 
