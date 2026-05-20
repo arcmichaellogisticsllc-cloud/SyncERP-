@@ -5,6 +5,8 @@
   "description": "Dependency-free Jackson Telcom ERP starter with API, JSON persistence, and responsive UI.",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check src/app.js"
+    "check": "node --check server.js && node --check src/app.js && node scripts/smoke-test.js && node scripts/phase1-production-test.js",
+    "smoke": "node scripts/smoke-test.js",
+    "test:phase1": "node scripts/phase1-production-test.js"
   }
 }

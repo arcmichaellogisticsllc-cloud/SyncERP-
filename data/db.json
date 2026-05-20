@@ -5,43 +5,208 @@
     "retainagePercent": 10,
     "invoiceWindowDays": 30,
     "defaultBurdenPercent": 18,
-    "documentStandard": "Customer / PO / Dailies / SOT / Photos / As-builts / Invoices / Safety / Permits / 811"
+    "cashOnHand": 50000,
+    "weeklyOverhead": 8500,
+    "minimumCashThreshold": 15000,
+    "cashScenarioDelays": {
+      "baseline": 0,
+      "delay15": 15,
+      "delay30": 30,
+      "delay45": 45
+    },
+    "closeoutReadinessSla": {
+      "warningDays": 2,
+      "escalationDays": 3,
+      "handoffAgingDays": 2,
+      "ownerMismatchEscalates": "Yes"
+    },
+    "dailyPackageSla": {
+      "agingDays": 1,
+      "escalationDays": 2,
+      "returnedOwner": "Foreman",
+      "readyOwner": "Billing"
+    },
+    "closeoutReadinessSlaHistory": [],
+    "dailyPackageSlaHistory": [],
+    "cashControlHistory": [
+      {
+        "at": "2026-05-09T12:00:00.000Z",
+        "by": "System",
+        "cashOnHand": 50000,
+        "weeklyOverhead": 8500,
+        "minimumCashThreshold": 15000,
+        "cashScenarioDelays": {
+          "baseline": 0,
+          "delay15": 15,
+          "delay30": 30,
+          "delay45": 45
+        },
+        "notes": "Initial cash control assumptions seeded for demo forecast."
+      }
+    ],
+    "cashDecisionLog": [
+      {
+        "action": "request-retainage-status",
+        "task": "TASK-CASH-REQUEST-RETAINAGE-STATUS-PO-SQ-24018",
+        "project": "PO-SQ-24018",
+        "by": "Ronald Jackson",
+        "at": "2026-05-09T12:00:00.000Z",
+        "scenario": "Baseline",
+        "endingCash": -4120,
+        "notes": "Confirm retainage release clock, SQUAN acceptance date, and next release follow-up. Future retainage exposure is $21,580."
+      }
+    ],
+    "documentStandard": "Customer / PO / Dailies / SOT / Photos / As-builts / Invoices / Safety / Permits / 811",
+    "operatingScenario": "Two completed and billed maps; one beginning-phase map",
+    "arcgis": {
+      "portalUrl": "https://jactelops.maps.arcgis.com",
+      "portalDisplayName": "jactelops",
+      "authMode": "Not connected - configure OAuth or read-only API key later",
+      "webMapId": "",
+      "featureServiceUrl": "",
+      "layerName": "",
+      "layerId": "",
+      "objectIdField": "OBJECTID",
+      "globalIdField": "globalid",
+      "mapNtpField": "ntp",
+      "workCodeField": "work_code",
+      "quantityField": "quantity",
+      "statusField": "status",
+      "geometryStatus": "Not imported",
+      "notes": "Portal setup captured from ArcGIS Location Platform signup. Secrets are not stored in Jackson ERP."
+    }
   },
+  "contractRules": [
+    {
+      "id": "RULE-SQUAN-2025",
+      "customer": "SQUAN",
+      "dailyDueHours": 24,
+      "invoiceWindowDays": 30,
+      "retainagePercent": 10,
+      "retainageReleaseMonths": 12,
+      "safetyScoreMinimum": 90,
+      "payWhenPaid": "Yes",
+      "coiPaymentHold": "Yes",
+      "requiredInvoiceDocs": "dailies, SOT, photos, as-builts, QC closeout",
+      "backgroundScopeYears": 7,
+      "backgroundRefreshYears": 3,
+      "notes": "contractRules record RULE-SQUAN-2025",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    }
+  ],
   "users": [
     {
       "id": "U-001",
       "name": "Ronald Jackson",
       "email": "ronald@jacksontelcom.example",
       "role": "Admin",
-      "defaultView": "dashboard"
+      "defaultView": "dashboard",
+      "notes": "users record U-001",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "U-002",
       "name": "Marcus Hill",
       "email": "marcus@jacksontelcom.example",
       "role": "Foreman",
-      "defaultView": "field"
+      "defaultView": "field",
+      "notes": "users record U-002",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "U-003",
       "name": "Operations Coordinator",
       "email": "ops@jacksontelcom.example",
       "role": "Operations",
-      "defaultView": "projects"
+      "defaultView": "projects",
+      "notes": "users record U-003",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "U-004",
       "name": "Office Billing",
       "email": "billing@jacksontelcom.example",
       "role": "Billing",
-      "defaultView": "money"
+      "defaultView": "dashboard",
+      "notes": "users record U-004",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "U-005",
       "name": "Safety Compliance",
       "email": "safety@jacksontelcom.example",
       "role": "Safety/Compliance",
-      "defaultView": "risk"
+      "defaultView": "risk",
+      "notes": "users record U-005",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "U-006",
+      "name": "Anthony Reed",
+      "email": "groundhand@jacksontelcom.example",
+      "role": "Crew Member",
+      "defaultView": "field",
+      "personId": "E-031",
+      "crew": "Crew B",
+      "fieldType": "Aerial",
+      "notes": "users record U-006",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "U-007",
+      "name": "Carla Brooks",
+      "email": "traffic@jacksontelcom.example",
+      "role": "Crew Member",
+      "defaultView": "field",
+      "personId": "E-032",
+      "crew": "Crew B",
+      "fieldType": "Traffic Control",
+      "notes": "users record U-007",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "U-008",
+      "name": "Devon Price",
+      "email": "underground@jacksontelcom.example",
+      "role": "Crew Member",
+      "defaultView": "field",
+      "personId": "E-033",
+      "crew": "Crew A",
+      "fieldType": "Underground",
+      "notes": "users record U-008",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "U-009",
+      "name": "Isaiah Clark",
+      "email": "operator@jacksontelcom.example",
+      "role": "Crew Member",
+      "defaultView": "field",
+      "personId": "E-034",
+      "crew": "Crew A",
+      "fieldType": "Underground",
+      "notes": "users record U-009",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     }
   ],
   "roles": [
@@ -50,89 +215,171 @@
       "defaultView": "dashboard",
       "views": [
         "dashboard",
+        "tasks",
+        "documents",
         "projects",
         "field",
+        "time",
         "people",
         "equipment",
         "money",
-        "risk"
+        "risk",
+        "reports",
+        "settings"
       ],
       "create": [
         "projects",
+        "tasks",
+        "documents",
         "dailies",
+        "timeEntries",
         "people",
         "equipment",
         "invoices",
-        "safety"
+        "safety",
+        "contractRules",
+        "fieldUploadQueue",
+        "customerContactLog"
       ],
-      "purpose": "Full access across company operations, money, compliance, safety, reports, and settings."
+      "purpose": "Full access across profit, cash, compliance, safety, reporting, and setup.",
+      "notes": "roles record Admin",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "Foreman",
       "defaultView": "field",
       "views": [
         "dashboard",
+        "tasks",
+        "documents",
         "field",
+        "time",
         "projects",
         "equipment",
         "risk"
       ],
       "create": [
+        "tasks",
+        "documents",
         "dailies",
-        "safety"
+        "timeEntries",
+        "safety",
+        "fieldUploadQueue"
       ],
-      "purpose": "Assigned work only: field daily, JSA, inspections, photos, production, and hazards."
+      "purpose": "Assigned work only: field daily, JSA, inspections, photos, production, and hazards.",
+      "notes": "roles record Foreman",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "Operations",
       "defaultView": "projects",
       "views": [
         "dashboard",
+        "tasks",
+        "documents",
         "projects",
         "field",
+        "time",
         "equipment",
         "people",
-        "risk"
+        "risk",
+        "reports"
       ],
       "create": [
         "projects",
+        "tasks",
+        "documents",
         "dailies",
+        "timeEntries",
         "equipment",
-        "safety"
+        "safety",
+        "fieldUploadQueue"
       ],
-      "purpose": "PO schedule, crew assignment, production progress, blockers, and closeout readiness."
+      "purpose": "Map schedule, crew assignments, production progress, blockers, and closeout readiness.",
+      "notes": "roles record Operations",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "Billing",
-      "defaultView": "money",
+      "defaultView": "dashboard",
       "views": [
         "dashboard",
-        "money",
+        "tasks",
+        "documents",
         "projects",
-        "field"
+        "field",
+        "time",
+        "reports"
       ],
       "create": [
-        "invoices"
+        "tasks",
+        "documents",
+        "customerContactLog"
       ],
-      "purpose": "Billing readiness, invoice support packages, AR, retainage, disputes, and pay-when-paid tracking."
+      "purpose": "Support billing proof and follow-up tasks. Admin owns final billing view, package approval, SQUAN submission, AR, retainage, and payment decisions.",
+      "notes": "roles record Billing",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "Safety/Compliance",
       "defaultView": "risk",
       "views": [
         "dashboard",
+        "tasks",
+        "documents",
         "risk",
         "people",
         "equipment",
         "field",
-        "projects"
+        "time",
+        "projects",
+        "reports"
       ],
       "create": [
+        "tasks",
+        "documents",
         "safety",
         "people",
-        "equipment"
+        "equipment",
+        "fieldUploadQueue"
       ],
-      "purpose": "Certifications, inspections, incidents, corrective actions, SQUAN score, and audit exports."
+      "purpose": "Certifications, inspections, incidents, corrective actions, SQUAN score, and audit exports.",
+      "notes": "roles record Safety/Compliance",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "Crew Member",
+      "defaultView": "field",
+      "views": [
+        "dashboard",
+        "tasks",
+        "documents",
+        "field",
+        "time",
+        "projects",
+        "equipment",
+        "risk"
+      ],
+      "create": [
+        "tasks",
+        "safety",
+        "fieldUploadQueue"
+      ],
+      "purpose": "Limited field access for assignment, JSA/PPE signoff, safety plans, obstacles, time confirmation, and hazard reporting.",
+      "notes": "roles record Crew Member",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     }
   ],
   "crews": [
@@ -140,41 +387,69 @@
       "id": "Crew A",
       "foreman": "Marcus Hill",
       "members": [
-        "E-021"
+        "E-021",
+        "E-033",
+        "E-034"
       ],
-      "status": "Ready"
+      "status": "Completed Map 1 / Available",
+      "notes": "crews record Crew A",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "Crew B",
       "foreman": "Denise Carter",
       "members": [
         "E-014",
-        "E-026"
+        "E-026",
+        "E-031",
+        "E-032"
       ],
-      "status": "Blocked"
+      "status": "Completed Map 2 / Available",
+      "notes": "crews record Crew B",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "Crew C",
       "foreman": "Tasha Green",
       "members": [],
-      "status": "Scheduled"
+      "status": "Beginning Map 3",
+      "notes": "crews record Crew C",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     }
   ],
   "costCodes": [
     {
       "id": "LAB-FIBER",
       "name": "Fiber placement labor",
-      "category": "Labor"
+      "category": "Labor",
+      "notes": "costCodes record LAB-FIBER",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "EQ-BUCKET",
       "name": "Bucket truck hours",
-      "category": "Equipment"
+      "category": "Equipment",
+      "notes": "costCodes record EQ-BUCKET",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "MAT-SQUAN",
       "name": "SQUAN-supplied material",
-      "category": "Material"
+      "category": "Material",
+      "notes": "costCodes record MAT-SQUAN",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     }
   ],
   "unitPrices": [
@@ -182,19 +457,31 @@
       "id": "UP-FIBER-UG",
       "description": "Underground fiber placement",
       "unit": "ft",
-      "price": 8.75
+      "price": 8.75,
+      "notes": "Underground fiber placement",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "UP-SPLICE",
       "description": "Fiber splice",
       "unit": "each",
-      "price": 185
+      "price": 185,
+      "notes": "Fiber splice",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "UP-AERIAL",
       "description": "Aerial strand and fiber overlash",
       "unit": "ft",
-      "price": 6.4
+      "price": 6.4,
+      "notes": "Aerial strand and fiber overlash",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     }
   ],
   "projectUnits": [
@@ -202,89 +489,156 @@
       "id": "PU-24018-UG",
       "project": "PO-SQ-24018",
       "unitCode": "UP-FIBER-UG",
-      "description": "Underground fiber placement",
+      "description": "Map 1 underground fiber placement",
       "contractQuantity": 12000,
       "unitPrice": 8.75,
-      "completedQuantity": 1400,
-      "previouslyBilledQuantity": 0,
-      "billableQuantity": 1400
+      "completedQuantity": 12000,
+      "previouslyBilledQuantity": 12000,
+      "billableQuantity": 0,
+      "notes": "Map 1 underground fiber placement",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "PU-24018-SPLICE",
       "project": "PO-SQ-24018",
       "unitCode": "UP-SPLICE",
-      "description": "Fiber splice",
+      "description": "Map 1 fiber splices",
       "contractQuantity": 80,
       "unitPrice": 185,
-      "completedQuantity": 6,
-      "previouslyBilledQuantity": 0,
-      "billableQuantity": 6
+      "completedQuantity": 80,
+      "previouslyBilledQuantity": 80,
+      "billableQuantity": 0,
+      "notes": "Map 1 fiber splices",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "PU-24022-AERIAL",
       "project": "PO-SQ-24022",
       "unitCode": "UP-AERIAL",
-      "description": "Aerial strand and fiber overlash",
+      "description": "Map 2 aerial strand and fiber overlash",
       "contractQuantity": 15000,
+      "unitPrice": 6.4,
+      "completedQuantity": 15000,
+      "previouslyBilledQuantity": 15000,
+      "billableQuantity": 0,
+      "notes": "Map 2 aerial strand and fiber overlash",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "PU-24031-UG",
+      "project": "PO-SQ-24031",
+      "unitCode": "UP-FIBER-UG",
+      "description": "Map 3 beginning underground placement",
+      "contractQuantity": 9000,
+      "unitPrice": 8.75,
+      "completedQuantity": 0,
+      "previouslyBilledQuantity": 0,
+      "billableQuantity": 0,
+      "notes": "Map 3 beginning underground placement",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "PU-24031-AERIAL",
+      "project": "PO-SQ-24031",
+      "unitCode": "UP-AERIAL",
+      "description": "Map 3 aerial transition work",
+      "contractQuantity": 4000,
       "unitPrice": 6.4,
       "completedQuantity": 0,
       "previouslyBilledQuantity": 0,
-      "billableQuantity": 0
+      "billableQuantity": 0,
+      "notes": "Map 3 aerial transition work",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     }
   ],
   "dailyProduction": [
     {
-      "dailyId": "DLY-1007",
+      "dailyId": "DLY-MAP1-FINAL",
       "project": "PO-SQ-24018",
       "unitCode": "UP-FIBER-UG",
-      "description": "Underground fiber placement",
-      "quantity": 1400,
-      "notes": "North Jackson run"
+      "description": "Map 1 underground fiber placement",
+      "quantity": 12000,
+      "notes": "Map 1 complete and accepted"
     },
     {
-      "dailyId": "DLY-1007",
+      "dailyId": "DLY-MAP1-FINAL",
       "project": "PO-SQ-24018",
       "unitCode": "UP-SPLICE",
-      "description": "Fiber splice",
-      "quantity": 6,
-      "notes": "Handhole splice cases"
+      "description": "Map 1 fiber splices",
+      "quantity": 80,
+      "notes": "Map 1 splice package complete"
+    },
+    {
+      "dailyId": "DLY-MAP2-FINAL",
+      "project": "PO-SQ-24022",
+      "unitCode": "UP-AERIAL",
+      "description": "Map 2 aerial strand and fiber overlash",
+      "quantity": 15000,
+      "notes": "Map 2 complete and accepted"
     }
   ],
   "dailyLabor": [
     {
-      "dailyId": "DLY-1007",
+      "dailyId": "DLY-MAP1-FINAL",
       "project": "PO-SQ-24018",
-      "employee": "Marcus Hill",
-      "hours": 8.5,
-      "costRate": 42,
+      "employee": "Crew A labor",
+      "hours": 312,
+      "costRate": 36,
       "costCode": "LAB-FIBER"
     },
     {
-      "dailyId": "DLY-1007",
-      "project": "PO-SQ-24018",
-      "employee": "Crew A labor",
-      "hours": 25.5,
-      "costRate": 34,
+      "dailyId": "DLY-MAP2-FINAL",
+      "project": "PO-SQ-24022",
+      "employee": "Crew B labor",
+      "hours": 248,
+      "costRate": 35,
       "costCode": "LAB-FIBER"
     }
   ],
   "dailyEquipment": [
     {
-      "dailyId": "DLY-1007",
+      "dailyId": "DLY-MAP1-FINAL",
       "project": "PO-SQ-24018",
       "equipmentId": "SPL-03",
-      "hours": 2,
+      "hours": 18,
       "rate": 22,
+      "costCode": "EQ-BUCKET"
+    },
+    {
+      "dailyId": "DLY-MAP2-FINAL",
+      "project": "PO-SQ-24022",
+      "equipmentId": "TRK-08",
+      "hours": 74,
+      "rate": 68,
       "costCode": "EQ-BUCKET"
     }
   ],
   "dailyMaterials": [
     {
-      "dailyId": "DLY-1007",
+      "dailyId": "DLY-MAP1-FINAL",
       "project": "PO-SQ-24018",
       "materialId": "MAT-SQ-FIBER",
       "description": "SQUAN supplied 144ct fiber",
-      "quantity": 1480,
+      "quantity": 12380,
+      "unitCost": 0,
+      "owner": "SQUAN"
+    },
+    {
+      "dailyId": "DLY-MAP2-FINAL",
+      "project": "PO-SQ-24022",
+      "materialId": "MAT-SQ-FIBER",
+      "description": "SQUAN supplied aerial fiber",
+      "quantity": 15420,
       "unitCost": 0,
       "owner": "SQUAN"
     }
@@ -293,105 +647,247 @@
     {
       "id": "BR-PO-SQ-24018",
       "project": "PO-SQ-24018",
-      "status": "Ready to Bill",
-      "billableAmount": 13360,
-      "missingItems": "None",
-      "billingDeadline": "2026-05-24",
+      "status": "Billed",
+      "billableAmount": 0,
+      "missingItems": "None - invoice submitted and support package complete",
+      "billingDeadline": "2026-05-15",
+      "daysLeft": -24,
       "submittedDailies": 1,
-      "updatedAt": "2026-05-09T12:00:00.000Z"
+      "retainagePercent": 10,
+      "payWhenPaid": "Required",
+      "updatedAt": "2026-05-09T12:00:00.000Z",
+      "notes": "PO-SQ-24018 billing readiness note: missing None - invoice submitted and support package complete; deadline 2026-05-15.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Office Billing"
     },
     {
       "id": "BR-PO-SQ-24022",
       "project": "PO-SQ-24022",
-      "status": "Not Ready",
+      "status": "Billed",
       "billableAmount": 0,
-      "missingItems": "submitted daily, SOT, photos, as-builts",
-      "billingDeadline": "2026-05-18",
+      "missingItems": "None - invoice submitted and support package complete",
+      "billingDeadline": "2026-05-22",
+      "daysLeft": -17,
+      "submittedDailies": 1,
+      "retainagePercent": 10,
+      "payWhenPaid": "Required",
+      "updatedAt": "2026-05-09T12:00:00.000Z",
+      "notes": "PO-SQ-24022 billing readiness note: missing None - invoice submitted and support package complete; deadline 2026-05-22.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Office Billing"
+    },
+    {
+      "id": "BR-PO-SQ-24031",
+      "project": "PO-SQ-24031",
+      "status": "Beginning Phase",
+      "billableAmount": 0,
+      "missingItems": "No production submitted yet; intake, map review, permits, survey, SOT, photos, as-builts, QC closeout",
+      "billingDeadline": "2026-06-12",
+      "daysLeft": 34,
       "submittedDailies": 0,
-      "updatedAt": "2026-05-09T12:00:00.000Z"
+      "retainagePercent": 10,
+      "payWhenPaid": "Required",
+      "updatedAt": "2026-05-09T12:00:00.000Z",
+      "notes": "PO-SQ-24031 billing readiness note: missing No production submitted yet; intake, map review, permits, survey, SOT, photos, as-builts, QC closeout; deadline 2026-06-12.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Office Billing"
     }
   ],
   "projects": [
     {
       "id": "PO-SQ-24018",
+      "map": "Map 1",
       "customer": "SQUAN",
-      "scope": "Underground fiber placement - North Jackson",
-      "status": "Active",
+      "scope": "Map 1 - North Jackson underground fiber placement",
+      "status": "Completed / Billed",
       "crew": "Crew A",
       "requiredCerts": "OSHA 10, First Aid/CPR, Trenching",
-      "estimatedRevenue": 148000,
-      "baseActualCost": 92000,
-      "actualCost": 93250,
-      "forecastCost": 121800,
-      "billed": 82500,
+      "estimatedRevenue": 119800,
+      "baseActualCost": 73500,
+      "actualCost": 85128,
+      "forecastCost": 85128,
+      "billed": 119800,
       "start": "2026-04-15",
-      "billBy": "2026-05-24",
-      "docs": "811 ticket, permit JT-1182, customer authorization, site conditions, photos, as-builts"
+      "completed": "2026-05-01",
+      "billBy": "2026-05-15",
+      "docs": "Map, 811 ticket, permit JT-1182, site survey, SOT, photos, as-builts, QC closeout, invoice support package",
+      "arcgis": {
+        "mapUrl": "https://fieldmaps.arcgis.app/?itemID=jt-map-1-north-jackson",
+        "webMapId": "jt-map-1-north-jackson",
+        "layerName": "SQUAN Fiber Construction",
+        "featureIds": "UG-1200, HH-1182, SPL-018",
+        "workArea": "North Jackson underground route polygon",
+        "syncStatus": "Accepted",
+        "lastSyncedAt": "2026-05-01T17:15:00.000Z",
+        "obstaclePins": 0,
+        "gpsPoints": 42,
+        "photoRefs": "PHOTO-MAP1-001, PHOTO-MAP1-002",
+        "asBuiltStatus": "Accepted by prime",
+        "primeAcceptanceStatus": "Accepted",
+        "notes": "As-built markup and final GPS points accepted for closeout."
+      },
+      "notes": "Map 1 operating note: Map, 811 ticket, permit JT-1182, site survey, SOT, photos, as-builts, QC closeout, invoice support package",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "PO-SQ-24022",
+      "map": "Map 2",
       "customer": "SQUAN",
-      "scope": "Aerial strand and fiber overlash - West route",
-      "status": "At Risk",
+      "scope": "Map 2 - West route aerial strand and fiber overlash",
+      "status": "Completed / Billed",
       "crew": "Crew B",
-      "requiredCerts": "OSHA 10, Bucket Truck, Traffic Control",
-      "estimatedRevenue": 96500,
-      "baseActualCost": 69200,
-      "actualCost": 69200,
-      "forecastCost": 91400,
-      "billed": 48100,
-      "start": "2026-04-29",
-      "billBy": "2026-05-18",
-      "docs": "Pole attachment package, traffic plan, locate tickets"
+      "requiredCerts": "OSHA 10, Bucket Truck, Traffic Control, Flagger",
+      "estimatedRevenue": 96000,
+      "baseActualCost": 61200,
+      "actualCost": 74912,
+      "forecastCost": 74912,
+      "billed": 96000,
+      "start": "2026-04-22",
+      "completed": "2026-05-06",
+      "billBy": "2026-05-22",
+      "docs": "Map, pole attachment package, traffic plan, permits, SOT, photos, as-builts, QC closeout, invoice support package",
+      "arcgis": {
+        "mapUrl": "https://fieldmaps.arcgis.app/?itemID=jt-map-2-west-route",
+        "webMapId": "jt-map-2-west-route",
+        "layerName": "SQUAN Aerial Fiber",
+        "featureIds": "AER-2200, POLE-44-61, TC-009",
+        "workArea": "West route aerial span and pole attachment line",
+        "syncStatus": "Accepted",
+        "lastSyncedAt": "2026-05-06T18:05:00.000Z",
+        "obstaclePins": 0,
+        "gpsPoints": 35,
+        "photoRefs": "PHOTO-MAP2-001, PHOTO-MAP2-002",
+        "asBuiltStatus": "Accepted by prime",
+        "primeAcceptanceStatus": "Accepted",
+        "notes": "Aerial overlash route, pole photos, and traffic-control pins accepted."
+      },
+      "notes": "Map 2 operating note: Map, pole attachment package, traffic plan, permits, SOT, photos, as-builts, QC closeout, invoice support package",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "PO-SQ-24031",
+      "map": "Map 3",
       "customer": "SQUAN",
-      "scope": "Splicing, testing, and closeout package",
-      "status": "Submitted",
+      "scope": "Map 3 - East starter route intake and site survey",
+      "status": "Beginning Phase",
       "crew": "Crew C",
-      "requiredCerts": "Fiber Splicing, OTDR Calibration",
-      "estimatedRevenue": 58200,
-      "baseActualCost": 18800,
-      "actualCost": 18800,
-      "forecastCost": 42150,
+      "requiredCerts": "OSHA 10, Trenching, Bucket Truck, Traffic Control",
+      "estimatedRevenue": 104350,
+      "baseActualCost": 6400,
+      "actualCost": 6400,
+      "forecastCost": 81200,
       "billed": 0,
       "start": "2026-05-13",
       "billBy": "2026-06-12",
-      "docs": "SOT template, test package requirements, as-built standard"
+      "docs": "Map received; site survey pending; permits and 811 under review; no production or billing yet",
+      "arcgis": {
+        "mapUrl": "https://fieldmaps.arcgis.app/?itemID=jt-map-3-east-starter",
+        "webMapId": "jt-map-3-east-starter",
+        "layerName": "SQUAN East Starter Intake",
+        "featureIds": "INTAKE-303, OBS-303-EAST-XING",
+        "workArea": "East starter route beginning-phase walkout",
+        "syncStatus": "Needs Review",
+        "lastSyncedAt": "2026-05-10T14:20:00.000Z",
+        "obstaclePins": 1,
+        "gpsPoints": 8,
+        "photoRefs": "PHOTO-MAP3-001",
+        "asBuiltStatus": "Not started",
+        "primeAcceptanceStatus": "Pending",
+        "notes": "Prime Field Maps route exists, but East starter crossing obstruction needs clearer pin/photo before release."
+      },
+      "notes": "Map 3 operating note: Map received; site survey pending; permits and 811 under review; no production or billing yet",
+      "adminApprovals": {
+        "evidenceReviews": [
+          {
+            "key": "photo-evidence",
+            "label": "Photo evidence",
+            "status": "Rejected",
+            "by": "Office Billing",
+            "at": "2026-05-10T14:20:00.000Z",
+            "note": "Traffic-control photo does not show the East starter crossing obstruction clearly enough for SQUAN support.",
+            "sourceStatus": "Ready",
+            "correctionTaskId": "TASK-EVID-PO-SQ-24031-photo-evidence"
+          }
+        ]
+      },
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     }
   ],
   "dailies": [
     {
-      "id": "DLY-1007",
+      "id": "DLY-MAP1-FINAL",
       "project": "PO-SQ-24018",
-      "date": "2026-05-08",
+      "date": "2026-05-01",
       "foreman": "Marcus Hill",
       "crew": "Crew A",
       "jsa": "Complete",
-      "inspections": "Forms 4, 7, 8 complete",
-      "locate": "Current",
-      "production": "1,400 ft fiber placed; 6 splices",
-      "laborHours": 34,
-      "equipmentHours": 6.5,
-      "materials": "SQUAN fiber: 1,480 ft; handholes: 2",
-      "output": "SQUAN daily, SOT, photos, payroll, inventory posted",
-      "status": "Submitted"
+      "inspections": "Forms 4, 6, 7, 8 complete",
+      "locate": "Current through completion",
+      "production": "Map 1 complete: 12,000 ft underground fiber and 80 splices",
+      "laborHours": 312,
+      "equipmentHours": 18,
+      "materials": "SQUAN fiber: 12,380 ft; handholes documented",
+      "output": "SQUAN daily, SOT, photos, as-builts, payroll, inventory, invoice support posted",
+      "status": "Submitted",
+      "notes": "2026-05-01 daily note: SQUAN daily, SOT, photos, as-builts, payroll, inventory, invoice support posted",
+      "activityLog": [],
+      "createdAt": "2026-05-01T12:00:00.000Z",
+      "modifiedAt": "2026-05-01T12:00:00.000Z",
+      "owner": "Marcus Hill"
     },
     {
-      "id": "DLY-1008",
+      "id": "DLY-MAP2-FINAL",
       "project": "PO-SQ-24022",
-      "date": "2026-05-08",
+      "date": "2026-05-06",
       "foreman": "Denise Carter",
       "crew": "Crew B",
-      "jsa": "Blocked",
-      "inspections": "Bucket dielectric expired",
-      "locate": "Current",
-      "production": "No work start allowed",
-      "laborHours": 2,
+      "jsa": "Complete",
+      "inspections": "Bucket truck, traffic control, PPE complete",
+      "locate": "N/A aerial route",
+      "production": "Map 2 complete: 15,000 ft aerial overlash",
+      "laborHours": 248,
+      "equipmentHours": 74,
+      "materials": "SQUAN aerial fiber: 15,420 ft",
+      "output": "SQUAN daily, SOT, traffic photos, as-builts, payroll, inventory, invoice support posted",
+      "status": "Submitted",
+      "notes": "2026-05-06 daily note: SQUAN daily, SOT, traffic photos, as-builts, payroll, inventory, invoice support posted",
+      "activityLog": [],
+      "createdAt": "2026-05-06T12:00:00.000Z",
+      "modifiedAt": "2026-05-06T12:00:00.000Z",
+      "owner": "Denise Carter"
+    },
+    {
+      "id": "DLY-MAP3-INTAKE",
+      "project": "PO-SQ-24031",
+      "date": "2026-05-09",
+      "foreman": "Tasha Green",
+      "crew": "Crew C",
+      "jsa": "Not Started",
+      "inspections": "Pre-job not opened",
+      "locate": "811 pending review",
+      "production": "No production - beginning phase intake only",
+      "laborHours": 0,
       "equipmentHours": 0,
-      "materials": "None",
-      "output": "Compliance alert sent to Ronald"
+      "materials": "None issued",
+      "output": "Waiting on map review, site survey, permits, 811, crew/equipment assignment",
+      "status": "Draft",
+      "notes": "2026-05-09 daily note: Waiting on map review, site survey, permits, 811, crew/equipment assignment",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Tasha Green"
     }
   ],
   "people": [
@@ -405,7 +901,13 @@
       "compliance": "Expiring",
       "backgroundRefresh": "2027-01-18",
       "drugTest": "Current",
-      "workersComp": "7600"
+      "workersComp": "7600",
+      "notes": "John Miller compliance note: verify certifications before assignment to matching work type.",
+      "activityLog": [],
+      "status": "Expiring",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "John Miller"
     },
     {
       "id": "E-021",
@@ -417,7 +919,13 @@
       "compliance": "Clear",
       "backgroundRefresh": "2028-02-04",
       "drugTest": "Current",
-      "workersComp": "7600"
+      "workersComp": "7600",
+      "notes": "Marcus Hill compliance note: verify certifications before assignment to matching work type.",
+      "activityLog": [],
+      "status": "Clear",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Marcus Hill"
     },
     {
       "id": "E-026",
@@ -429,7 +937,85 @@
       "compliance": "Blocked",
       "backgroundRefresh": "2026-12-02",
       "drugTest": "Current",
-      "workersComp": "7600"
+      "workersComp": "7600",
+      "notes": "Ramon Fields compliance note: verify certifications before assignment to matching work type.",
+      "activityLog": [],
+      "status": "Blocked",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Ramon Fields"
+    },
+    {
+      "id": "E-031",
+      "name": "Anthony Reed",
+      "role": "Ground Hand",
+      "crew": "Crew B",
+      "certs": "OSHA 10, Aerial Awareness",
+      "nextExpiration": "2026-10-04",
+      "compliance": "Clear",
+      "backgroundRefresh": "2028-03-12",
+      "drugTest": "Current",
+      "workersComp": "7600",
+      "notes": "Anthony Reed compliance note: verify certifications before assignment to matching work type.",
+      "activityLog": [],
+      "status": "Clear",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Anthony Reed"
+    },
+    {
+      "id": "E-032",
+      "name": "Carla Brooks",
+      "role": "Traffic Control",
+      "crew": "Crew B",
+      "certs": "OSHA 10, Traffic Control, Flagger",
+      "nextExpiration": "2026-07-19",
+      "compliance": "Clear",
+      "backgroundRefresh": "2028-01-22",
+      "drugTest": "Current",
+      "workersComp": "7720",
+      "notes": "Carla Brooks compliance note: verify certifications before assignment to matching work type.",
+      "activityLog": [],
+      "status": "Clear",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Carla Brooks"
+    },
+    {
+      "id": "E-033",
+      "name": "Devon Price",
+      "role": "Underground Crew Member",
+      "crew": "Crew A",
+      "certs": "OSHA 10, Trenching Awareness",
+      "nextExpiration": "2026-11-02",
+      "compliance": "Clear",
+      "backgroundRefresh": "2028-04-01",
+      "drugTest": "Current",
+      "workersComp": "6217",
+      "notes": "Devon Price compliance note: verify certifications before assignment to matching work type.",
+      "activityLog": [],
+      "status": "Clear",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Devon Price"
+    },
+    {
+      "id": "E-034",
+      "name": "Isaiah Clark",
+      "role": "Underground Equipment Operator",
+      "crew": "Crew A",
+      "certs": "OSHA 10, Trenching, Equipment Operator",
+      "nextExpiration": "2026-06-28",
+      "compliance": "Clear",
+      "backgroundRefresh": "2027-11-15",
+      "drugTest": "Current",
+      "workersComp": "6217",
+      "notes": "Isaiah Clark compliance note: verify certifications before assignment to matching work type.",
+      "activityLog": [],
+      "status": "Clear",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Isaiah Clark"
     }
   ],
   "equipment": [
@@ -438,94 +1024,2260 @@
       "asset": "Bucket truck",
       "assigned": "Crew B",
       "owner": "Jackson Telcom",
-      "location": "West route",
-      "inspectionDue": "2026-05-07",
-      "status": "Unavailable",
+      "location": "Map 2 west route / returning to yard",
+      "inspectionDue": "2026-08-07",
+      "status": "Available",
       "costRate": 68,
-      "notes": "Annual ANSI A92 dielectric expired"
+      "notes": "Dielectric inspection corrected before Map 2 closeout",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "SPL-03",
       "asset": "Fusion splicer",
-      "assigned": "Crew C",
+      "assigned": "Crew A",
       "owner": "Jackson Telcom",
-      "location": "Shop",
+      "location": "Yard after Map 1 closeout",
       "inspectionDue": "2026-08-01",
       "status": "Available",
       "costRate": 22,
-      "notes": "Manufacturer calibration current"
+      "notes": "Manufacturer calibration current",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "VAC-02",
+      "asset": "Vac trailer / potholing kit",
+      "assigned": "Crew C",
+      "owner": "Jackson Telcom",
+      "location": "Staged for Map 3 site survey",
+      "inspectionDue": "2026-06-05",
+      "status": "Scheduled",
+      "costRate": 55,
+      "notes": "Needed for Map 3 utility conflict verification",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     },
     {
       "id": "MAT-SQ-FIBER",
-      "asset": "SQUAN supplied 144ct fiber",
-      "assigned": "PO-SQ-24018",
+      "asset": "SQUAN supplied fiber allocation",
+      "assigned": "PO-SQ-24031",
       "owner": "SQUAN",
       "location": "Yard",
       "inspectionDue": "N/A",
       "status": "Allocated",
       "costRate": 0,
-      "notes": "12,000 ft received; 7,420 ft remaining"
+      "notes": "Map 1 and 2 consumption reconciled; Map 3 allocation pending issue ticket",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     }
   ],
   "invoices": [
     {
-      "id": "INV-24018-02",
+      "id": "INV-MAP1-001",
       "project": "PO-SQ-24018",
       "submitted": "2026-05-03",
-      "gross": 82500,
-      "paid90": 74250,
-      "retainage10": 8250,
+      "gross": 119800,
+      "paid90": 107820,
+      "retainage10": 11980,
       "retainageRelease": "2027-05-03",
-      "status": "Open",
-      "support": "Dailies, SOT, photos, as-builts attached"
+      "status": "Paid 90% / Retainage Held",
+      "support": "Dailies, SOT, photos, as-builts, QC closeout attached",
+      "notes": "PO-SQ-24018 billing note: Dailies, SOT, photos, as-builts, QC closeout attached",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Office Billing"
     },
     {
-      "id": "INV-24022-01",
+      "id": "INV-MAP2-001",
       "project": "PO-SQ-24022",
-      "submitted": "2026-05-06",
-      "gross": 48100,
-      "paid90": 0,
-      "retainage10": 4810,
-      "retainageRelease": "2027-05-06",
-      "status": "Pay-when-paid logged",
-      "support": "Dailies attached; as-builts pending"
+      "submitted": "2026-05-08",
+      "gross": 96000,
+      "paid90": 86400,
+      "retainage10": 9600,
+      "retainageRelease": "2027-05-08",
+      "status": "Paid 90% / Retainage Held",
+      "support": "Dailies, SOT, traffic-control photos, as-builts, QC closeout attached",
+      "notes": "PO-SQ-24022 billing note: Dailies, SOT, traffic-control photos, as-builts, QC closeout attached",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Office Billing"
+    }
+  ],
+  "invoiceSubmissions": [
+    {
+      "id": "SUB-PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "invoice": "INV-MAP1-001",
+      "invoiceNumber": "INV-MAP1-001",
+      "submittedTo": "SQUAN",
+      "submissionDate": "2026-05-03",
+      "squanBillingContact": "SQUAN PM / AP",
+      "gross": 119800,
+      "expected90": 107820,
+      "retainage10": 11980,
+      "supportPackageStatus": "Complete",
+      "status": "Paid 90% / Retainage Held",
+      "deliveryMethod": "SQUAN billing portal / email",
+      "confirmationNumber": "SQUAN-RCPT-24018",
+      "followUpDate": "2026-05-17",
+      "followUpStatus": "Receipt recorded",
+      "attachmentsSent": [
+        "documents:DOC-MAP1-INVOICE",
+        "documents:DOC-MAP1-ASBUILT",
+        "documents:DOC-MAP1-PHOTOS",
+        "photoEvidence:PHOTO-MAP1-TRENCH"
+      ],
+      "receipt": {
+        "confirmationNumber": "SQUAN-RCPT-24018",
+        "submittedBy": "Office Billing",
+        "receivedBy": "SQUAN PM / AP",
+        "method": "SQUAN billing portal / email",
+        "receivedAt": "2026-05-03T15:15:00.000Z",
+        "followUpDate": "2026-05-17",
+        "followUpStatus": "Receipt recorded",
+        "notes": "Portal receipt captured with billing support package references."
+      },
+      "notes": "Map 1 SQUAN invoice submitted with daily reports, SOT, photos, as-builts, and QC closeout.",
+      "activityLog": [
+        {
+          "at": "2026-05-03T15:15:00.000Z",
+          "by": "Office Billing",
+          "note": "Receipt SQUAN-RCPT-24018 recorded from SQUAN portal."
+        }
+      ],
+      "createdAt": "2026-05-03T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Office Billing"
+    },
+    {
+      "id": "SUB-PO-SQ-24022",
+      "project": "PO-SQ-24022",
+      "invoice": "INV-MAP2-001",
+      "invoiceNumber": "INV-MAP2-001",
+      "submittedTo": "SQUAN",
+      "submissionDate": "2026-05-08",
+      "squanBillingContact": "SQUAN PM / AP",
+      "gross": 96000,
+      "expected90": 86400,
+      "retainage10": 9600,
+      "supportPackageStatus": "Complete",
+      "status": "Paid 90% / Retainage Held",
+      "deliveryMethod": "SQUAN billing portal / email",
+      "confirmationNumber": "SQUAN-RCPT-24022",
+      "followUpDate": "2026-05-22",
+      "followUpStatus": "Receipt recorded",
+      "attachmentsSent": [
+        "documents:DOC-MAP2-INVOICE",
+        "documents:DOC-MAP2-ASBUILT",
+        "documents:DOC-MAP2-PHOTOS",
+        "photoEvidence:PHOTO-MAP2-AERIAL",
+        "photoEvidence:PHOTO-MAP2-BUCKET"
+      ],
+      "receipt": {
+        "confirmationNumber": "SQUAN-RCPT-24022",
+        "submittedBy": "Office Billing",
+        "receivedBy": "SQUAN PM / AP",
+        "method": "SQUAN billing portal / email",
+        "receivedAt": "2026-05-08T16:05:00.000Z",
+        "followUpDate": "2026-05-22",
+        "followUpStatus": "Receipt recorded",
+        "notes": "Portal receipt captured with aerial package and traffic-control support references."
+      },
+      "notes": "Map 2 SQUAN invoice submitted with daily reports, SOT, photos, as-builts, traffic-control support, and QC closeout.",
+      "activityLog": [
+        {
+          "at": "2026-05-08T16:05:00.000Z",
+          "by": "Office Billing",
+          "note": "Receipt SQUAN-RCPT-24022 recorded from SQUAN portal."
+        }
+      ],
+      "createdAt": "2026-05-08T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Office Billing"
+    }
+  ],
+  "cashReceipts": [
+    {
+      "id": "CASH-90-INV-MAP1-001",
+      "project": "PO-SQ-24018",
+      "invoice": "INV-MAP1-001",
+      "submission": "SUB-PO-SQ-24018",
+      "retainage": "RET-MAP1-001",
+      "type": "90% AR",
+      "expectedDate": "2026-05-17",
+      "actualDate": "2026-05-10",
+      "expectedAmount": 107820,
+      "actualAmount": 107820,
+      "variance": 0,
+      "status": "Reconciled",
+      "reference": "ACH-SQUAN-MAP1-90",
+      "depositStatus": "Deposit Verified",
+      "depositBatch": "DEP-2026-05-10",
+      "bankProof": "Bank feed match ACH-SQUAN-MAP1-90",
+      "depositVerifiedBy": "Office Billing",
+      "depositVerifiedAt": "2026-05-10T15:00:00.000Z",
+      "receivedBy": "Office Billing",
+      "receivedAt": "2026-05-10T14:00:00.000Z",
+      "notes": "Map 1 90% payment reconciled to SQUAN receipt and invoice ledger.",
+      "activityLog": [],
+      "createdAt": "2026-05-10T14:00:00.000Z",
+      "modifiedAt": "2026-05-10T14:00:00.000Z"
+    },
+    {
+      "id": "CASH-90-INV-MAP2-001",
+      "project": "PO-SQ-24022",
+      "invoice": "INV-MAP2-001",
+      "submission": "SUB-PO-SQ-24022",
+      "retainage": "RET-MAP2-001",
+      "type": "90% AR",
+      "expectedDate": "2026-05-22",
+      "actualDate": "2026-05-11",
+      "expectedAmount": 86400,
+      "actualAmount": 86400,
+      "variance": 0,
+      "status": "Reconciled",
+      "reference": "ACH-SQUAN-MAP2-90",
+      "depositStatus": "Proof Attached",
+      "depositBatch": "DEP-2026-05-11",
+      "bankProof": "Bank feed match ACH-SQUAN-MAP2-90",
+      "depositVerifiedBy": "",
+      "depositVerifiedAt": "",
+      "receivedBy": "Office Billing",
+      "receivedAt": "2026-05-11T14:00:00.000Z",
+      "notes": "Map 2 90% payment reconciled to SQUAN receipt and invoice ledger.",
+      "activityLog": [],
+      "createdAt": "2026-05-11T14:00:00.000Z",
+      "modifiedAt": "2026-05-11T14:00:00.000Z"
+    }
+  ],
+  "cashDepositBatches": [
+    {
+      "id": "DEP-2026-05-10",
+      "depositDate": "2026-05-10",
+      "receiptIds": [
+        "CASH-90-INV-MAP1-001"
+      ],
+      "bankFeedAmount": 107820,
+      "status": "Verified",
+      "verifiedBy": "Office Billing",
+      "verifiedAt": "2026-05-10T15:00:00.000Z",
+      "notes": "Map 1 SQUAN ACH matched to bank feed and verified.",
+      "activityLog": [],
+      "createdAt": "2026-05-10T14:30:00.000Z",
+      "modifiedAt": "2026-05-10T15:00:00.000Z"
+    },
+    {
+      "id": "DEP-2026-05-11",
+      "depositDate": "2026-05-11",
+      "receiptIds": [
+        "CASH-90-INV-MAP2-001"
+      ],
+      "bankFeedAmount": 86400,
+      "status": "Ready to Verify",
+      "verifiedBy": "",
+      "verifiedAt": "",
+      "notes": "Map 2 bank proof attached; batch waiting for final verification.",
+      "activityLog": [],
+      "createdAt": "2026-05-11T14:30:00.000Z",
+      "modifiedAt": "2026-05-11T14:30:00.000Z"
     }
   ],
   "safety": [
     {
-      "id": "RISK-301",
+      "id": "RISK-MAP1-301",
       "project": "PO-SQ-24018",
       "type": "Near miss",
-      "date": "2026-05-08",
+      "date": "2026-04-25",
       "severity": "Medium",
       "rootCause": "Vehicle entered cone setup; traffic taper too short",
-      "correctiveAction": "Refresh traffic-control setup and verify Form 12 closure",
+      "correctiveAction": "Traffic-control refresh completed and verified before Map 1 closeout",
       "owner": "Ronald Jackson",
-      "due": "2026-05-13",
-      "status": "Open"
+      "due": "2026-04-29",
+      "status": "Closed",
+      "notes": "Near miss note: Traffic-control refresh completed and verified before Map 1 closeout",
+      "activityLog": [],
+      "createdAt": "2026-04-25T12:00:00.000Z",
+      "modifiedAt": "2026-04-25T12:00:00.000Z"
     },
     {
-      "id": "RISK-302",
+      "id": "RISK-MAP2-302",
       "project": "PO-SQ-24022",
-      "type": "Missed inspection",
-      "date": "2026-05-08",
+      "type": "Equipment inspection",
+      "date": "2026-04-30",
       "severity": "High",
-      "rootCause": "Annual dielectric date not checked before dispatch",
-      "correctiveAction": "Block TRK-08 and schedule ANSI A92 inspection",
+      "rootCause": "Annual dielectric date needed verification before aerial dispatch",
+      "correctiveAction": "TRK-08 inspection corrected and attached to Map 2 package",
       "owner": "Ronald Jackson",
-      "due": "2026-05-10",
-      "status": "Open"
+      "due": "2026-05-02",
+      "status": "Closed",
+      "notes": "Equipment inspection note: TRK-08 inspection corrected and attached to Map 2 package",
+      "activityLog": [],
+      "createdAt": "2026-04-30T12:00:00.000Z",
+      "modifiedAt": "2026-04-30T12:00:00.000Z"
+    },
+    {
+      "id": "RISK-MAP3-303",
+      "project": "PO-SQ-24031",
+      "type": "Pre-job hazard",
+      "date": "2026-05-09",
+      "severity": "Medium",
+      "rootCause": "Map 3 utility conflicts not field verified yet",
+      "correctiveAction": "Complete walkout, potholing plan, and permit review before production release",
+      "owner": "Safety Compliance",
+      "due": "2026-05-12",
+      "status": "Open",
+      "notes": "Pre-job hazard note: Complete walkout, potholing plan, and permit review before production release",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
     }
   ],
   "documents": [
     {
-      "id": "DOC-811-24018",
+      "id": "DOC-MAP1-ROUTE",
+      "project": "PO-SQ-24018",
+      "type": "Map",
+      "name": "Map 1 North Jackson route map",
+      "status": "Viewable",
+      "path": "/documents/PO-SQ-24018/maps/map-1-north-jackson.pdf",
+      "folder": "Maps",
+      "author": "Marcus Hill",
+      "uploadedAt": "2026-05-03T15:45:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "No",
+      "fileType": "pdf",
+      "pinned": "Yes",
+      "notes": "Map review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-03T15:45:00.000Z",
+      "modifiedAt": "2026-05-03T15:45:00.000Z",
+      "owner": "Marcus Hill"
+    },
+    {
+      "id": "DOC-MAP1-811",
       "project": "PO-SQ-24018",
       "type": "811",
-      "name": "811 ticket confirmation",
-      "status": "Current",
-      "path": "/documents/PO-SQ-24018/811"
+      "name": "Map 1 811 ticket confirmation",
+      "status": "Closed",
+      "path": "/documents/PO-SQ-24018/811",
+      "folder": "811 / Locate Tickets",
+      "author": "Marcus Hill",
+      "uploadedAt": "2026-05-03T15:45:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "Yes",
+      "fileType": "pdf",
+      "pinned": "Yes",
+      "notes": "811 review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-03T15:45:00.000Z",
+      "modifiedAt": "2026-05-03T15:45:00.000Z",
+      "owner": "Marcus Hill"
+    },
+    {
+      "id": "DOC-MAP1-SURVEY",
+      "project": "PO-SQ-24018",
+      "type": "Site Survey",
+      "name": "Map 1 PM/foreman walkout notes",
+      "status": "Reviewed",
+      "path": "/documents/PO-SQ-24018/surveys/walkout.pdf",
+      "folder": "Site Surveys",
+      "author": "Marcus Hill",
+      "uploadedAt": "2026-05-03T15:45:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "Yes",
+      "fileType": "pdf",
+      "pinned": "Yes",
+      "notes": "Site Survey review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-03T15:45:00.000Z",
+      "modifiedAt": "2026-05-03T15:45:00.000Z",
+      "owner": "Marcus Hill"
+    },
+    {
+      "id": "DOC-MAP1-ASBUILT",
+      "project": "PO-SQ-24018",
+      "type": "As-built",
+      "name": "Map 1 as-built package",
+      "status": "Attached",
+      "path": "/documents/PO-SQ-24018/as-builts",
+      "folder": "As-Builts",
+      "author": "Marcus Hill",
+      "uploadedAt": "2026-05-03T15:45:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "No",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "As-built review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-03T15:45:00.000Z",
+      "modifiedAt": "2026-05-03T15:45:00.000Z",
+      "owner": "Marcus Hill"
+    },
+    {
+      "id": "DOC-MAP1-PHOTOS",
+      "project": "PO-SQ-24018",
+      "type": "Photos",
+      "name": "Map 1 closeout photo set",
+      "status": "Attached",
+      "path": "/documents/PO-SQ-24018/photos",
+      "folder": "Photos",
+      "author": "Marcus Hill",
+      "uploadedAt": "2026-05-03T15:45:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "Yes",
+      "fileType": "folder",
+      "pinned": "No",
+      "notes": "Photos review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-03T15:45:00.000Z",
+      "modifiedAt": "2026-05-03T15:45:00.000Z",
+      "owner": "Marcus Hill"
+    },
+    {
+      "id": "DOC-MAP1-INVOICE",
+      "project": "PO-SQ-24018",
+      "type": "Invoice Support",
+      "name": "Map 1 billed support package",
+      "status": "Submitted",
+      "path": "/documents/PO-SQ-24018/invoice-support",
+      "folder": "Invoice Support",
+      "author": "Marcus Hill",
+      "uploadedAt": "2026-05-03T15:45:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "No",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "Invoice Support review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-03T15:45:00.000Z",
+      "modifiedAt": "2026-05-03T15:45:00.000Z",
+      "owner": "Marcus Hill"
+    },
+    {
+      "id": "DOC-MAP2-ROUTE",
+      "project": "PO-SQ-24022",
+      "type": "Map",
+      "name": "Map 2 West route aerial map",
+      "status": "Viewable",
+      "path": "/documents/PO-SQ-24022/maps/map-2-west-route.pdf",
+      "folder": "Maps",
+      "author": "Denise Carter",
+      "uploadedAt": "2026-05-08T16:30:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "No",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "Map review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-08T16:30:00.000Z",
+      "modifiedAt": "2026-05-08T16:30:00.000Z",
+      "owner": "Denise Carter"
+    },
+    {
+      "id": "DOC-MAP2-PERMIT",
+      "project": "PO-SQ-24022",
+      "type": "Permit",
+      "name": "Map 2 traffic permit and pole package",
+      "status": "Closed",
+      "path": "/documents/PO-SQ-24022/permits/traffic-plan.pdf",
+      "folder": "Permits",
+      "author": "Denise Carter",
+      "uploadedAt": "2026-05-08T16:30:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "Yes",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "Permit review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-08T16:30:00.000Z",
+      "modifiedAt": "2026-05-08T16:30:00.000Z",
+      "owner": "Denise Carter"
+    },
+    {
+      "id": "DOC-MAP2-SURVEY",
+      "project": "PO-SQ-24022",
+      "type": "Site Survey",
+      "name": "Map 2 aerial walkout notes",
+      "status": "Reviewed",
+      "path": "/documents/PO-SQ-24022/surveys/walkout.pdf",
+      "folder": "Site Surveys",
+      "author": "Denise Carter",
+      "uploadedAt": "2026-05-08T16:30:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "Yes",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "Site Survey review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-08T16:30:00.000Z",
+      "modifiedAt": "2026-05-08T16:30:00.000Z",
+      "owner": "Denise Carter"
+    },
+    {
+      "id": "DOC-MAP2-ASBUILT",
+      "project": "PO-SQ-24022",
+      "type": "As-built",
+      "name": "Map 2 as-built package",
+      "status": "Attached",
+      "path": "/documents/PO-SQ-24022/as-builts",
+      "folder": "As-Builts",
+      "author": "Denise Carter",
+      "uploadedAt": "2026-05-08T16:30:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "No",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "As-built review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-08T16:30:00.000Z",
+      "modifiedAt": "2026-05-08T16:30:00.000Z",
+      "owner": "Denise Carter"
+    },
+    {
+      "id": "DOC-MAP2-PHOTOS",
+      "project": "PO-SQ-24022",
+      "type": "Photos",
+      "name": "Map 2 closeout and traffic-control photos",
+      "status": "Attached",
+      "path": "/documents/PO-SQ-24022/photos",
+      "folder": "Photos",
+      "author": "Denise Carter",
+      "uploadedAt": "2026-05-08T16:30:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "Yes",
+      "fileType": "folder",
+      "pinned": "No",
+      "notes": "Photos review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-08T16:30:00.000Z",
+      "modifiedAt": "2026-05-08T16:30:00.000Z",
+      "owner": "Denise Carter"
+    },
+    {
+      "id": "DOC-MAP2-INVOICE",
+      "project": "PO-SQ-24022",
+      "type": "Invoice Support",
+      "name": "Map 2 billed support package",
+      "status": "Submitted",
+      "path": "/documents/PO-SQ-24022/invoice-support",
+      "folder": "Invoice Support",
+      "author": "Denise Carter",
+      "uploadedAt": "2026-05-08T16:30:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "No",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "Invoice Support review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-08T16:30:00.000Z",
+      "modifiedAt": "2026-05-08T16:30:00.000Z",
+      "owner": "Denise Carter"
+    },
+    {
+      "id": "DOC-MAP3-ROUTE",
+      "project": "PO-SQ-24031",
+      "type": "Map",
+      "name": "Map 3 East starter route map",
+      "status": "Viewable",
+      "path": "/documents/PO-SQ-24031/maps/map-3-east-starter.pdf",
+      "folder": "Maps",
+      "author": "Operations Coordinator",
+      "uploadedAt": "2026-05-09T12:00:00.000Z",
+      "requiredForBilling": "Yes",
+      "requiredForSafety": "No",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "Map review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Operations Coordinator"
+    },
+    {
+      "id": "DOC-MAP3-811",
+      "project": "PO-SQ-24031",
+      "type": "811",
+      "name": "Map 3 811 ticket request",
+      "status": "Needs Review",
+      "path": "/documents/PO-SQ-24031/811",
+      "folder": "811 / Locate Tickets",
+      "author": "Operations Coordinator",
+      "uploadedAt": "2026-05-09T12:00:00.000Z",
+      "requiredForBilling": "No",
+      "requiredForSafety": "Yes",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "811 review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Operations Coordinator"
+    },
+    {
+      "id": "DOC-MAP3-SURVEY",
+      "project": "PO-SQ-24031",
+      "type": "Site Survey",
+      "name": "Map 3 site survey checklist",
+      "status": "Pending",
+      "path": "/documents/PO-SQ-24031/surveys/pending",
+      "folder": "Site Surveys",
+      "author": "Operations Coordinator",
+      "uploadedAt": "2026-05-09T12:00:00.000Z",
+      "requiredForBilling": "No",
+      "requiredForSafety": "Yes",
+      "fileType": "pdf",
+      "pinned": "No",
+      "notes": "Site Survey review note: confirm current version before billing, safety, or audit use.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Operations Coordinator"
     }
   ],
-  "auditLog": []
+  "photoEvidence": [
+    {
+      "id": "PHOTO-MAP1-TRENCH",
+      "project": "PO-SQ-24018",
+      "linkedRecord": "OBS-MAP1-01",
+      "workflowStage": "Map 1 underground closeout",
+      "category": "Underground utility verification",
+      "caption": "Placeholder showing where Map 1 field photos, potholing evidence, and closeout images are stored.",
+      "imageUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Underground_cable_in_trench_(50855598013).jpg?width=640",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Underground_cable_in_trench_(50855598013).jpg",
+      "credit": "Cape Hatteras National Seashore / Wikimedia Commons",
+      "license": "Public Domain Mark",
+      "status": "Placeholder",
+      "notes": "photoEvidence record PHOTO-MAP1-TRENCH",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "PHOTO-MAP2-AERIAL",
+      "project": "PO-SQ-24022",
+      "linkedRecord": "OBS-MAP2-01",
+      "workflowStage": "Map 2 aerial closeout",
+      "category": "Aerial pole/fiber condition",
+      "caption": "Placeholder showing where Map 2 aerial pole, attachment, and span closeout photos are stored.",
+      "imageUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Utility_pole_with_numerous_wires.jpg?width=640",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Utility_pole_with_numerous_wires.jpg",
+      "credit": "NotAnAstronaut / Wikimedia Commons",
+      "license": "CC BY 4.0",
+      "status": "Placeholder",
+      "notes": "photoEvidence record PHOTO-MAP2-AERIAL",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "PHOTO-MAP2-BUCKET",
+      "project": "PO-SQ-24022",
+      "linkedRecord": "TRK-08",
+      "workflowStage": "Map 2 equipment inspection",
+      "category": "Aerial equipment",
+      "caption": "Placeholder showing where bucket truck inspection/readiness photos attach to Map 2.",
+      "imageUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Bucket_truck_work,_Oct._14_(37675487296).jpg?width=640",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bucket_truck_work,_Oct._14_(37675487296).jpg",
+      "credit": "Western Area Power / Wikimedia Commons",
+      "license": "CC BY 2.0",
+      "status": "Placeholder",
+      "notes": "photoEvidence record PHOTO-MAP2-BUCKET",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "PHOTO-MAP3-TRAFFIC",
+      "project": "PO-SQ-24031",
+      "linkedRecord": "DLY-MAP3-INTAKE",
+      "workflowStage": "Map 3 pre-job traffic control",
+      "category": "Traffic control",
+      "caption": "Placeholder showing where beginning-phase traffic-control and setup photos will be captured.",
+      "imageUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/A_Traffic_cones_in_the_Road_construction_truck.jpg?width=640",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:A_Traffic_cones_in_the_Road_construction_truck.jpg",
+      "credit": "Peachyeung316 / Wikimedia Commons",
+      "license": "CC BY-SA 4.0",
+      "status": "Placeholder",
+      "notes": "photoEvidence record PHOTO-MAP3-TRAFFIC",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "PHOTO-MAP3-CROSSING-CORRECTED",
+      "project": "PO-SQ-24031",
+      "linkedRecord": "OBS-MAP3-02",
+      "workflowStage": "Map 3 beginning-phase obstruction verification",
+      "category": "GPS field capture",
+      "caption": "Corrected GPS photo showing the East starter crossing, cone line, and potholing area clearly enough for Operations/Safety review.",
+      "imageUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Utility_pole_with_numerous_wires.jpg?width=640",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Utility_pole_with_numerous_wires.jpg",
+      "credit": "NotAnAstronaut / Wikimedia Commons",
+      "license": "CC BY 4.0",
+      "status": "Accepted",
+      "reviewStatus": "Accepted",
+      "acceptedForBilling": "Yes",
+      "acceptedForSafety": "Yes",
+      "acceptedForCloseout": "Yes",
+      "evidenceKey": "photo-evidence",
+      "createdBy": "Marcus Hill",
+      "reviewedBy": "Safety Compliance",
+      "reviewedAt": "2026-05-10T16:40:00.000Z",
+      "notes": "Accepted field capture photo for Map 3 obstruction package, release-to-field evidence, and future billing/closeout support.",
+      "activityLog": [
+        {
+          "at": "2026-05-10T16:40:00.000Z",
+          "by": "Safety Compliance",
+          "note": "Accepted as corrected field capture evidence."
+        }
+      ],
+      "createdAt": "2026-05-10T16:15:00.000Z",
+      "modifiedAt": "2026-05-10T16:40:00.000Z"
+    }
+  ],
+  "siteSurveys": [
+    {
+      "id": "SS-MAP1-01",
+      "project": "PO-SQ-24018",
+      "route": "Map 1 - North Jackson",
+      "walkoutDate": "2026-04-14",
+      "reviewedBy": "Ronald Jackson / Marcus Hill",
+      "permitStatus": "Reviewed",
+      "utilityConflicts": "Gas service crossing at Maple Ave verified and documented",
+      "specialConditions": "Aerial-to-underground transition at handhole H-17 completed",
+      "status": "Closed",
+      "notes": "Map 1 - North Jackson survey note: Gas service crossing at Maple Ave verified and documented; Aerial-to-underground transition at handhole H-17 completed.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "SS-MAP2-01",
+      "project": "PO-SQ-24022",
+      "route": "Map 2 - West route",
+      "walkoutDate": "2026-04-21",
+      "reviewedBy": "Operations Coordinator / Denise Carter",
+      "permitStatus": "Reviewed",
+      "utilityConflicts": "Low clearance near pole W-33 resolved with SQUAN direction",
+      "specialConditions": "Traffic control completed before bucket work",
+      "status": "Closed",
+      "notes": "Map 2 - West route survey note: Low clearance near pole W-33 resolved with SQUAN direction; Traffic control completed before bucket work.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "SS-MAP3-01",
+      "project": "PO-SQ-24031",
+      "route": "Map 3 - East starter route",
+      "walkoutDate": "2026-05-10",
+      "reviewedBy": "Operations Coordinator / Tasha Green",
+      "permitStatus": "Pending",
+      "utilityConflicts": "Gas, water, and power crossings need field verification",
+      "specialConditions": "Mixed underground/aerial transition under review",
+      "status": "Beginning Phase",
+      "notes": "Map 3 - East starter route survey note: Gas, water, and power crossings need field verification; Mixed underground/aerial transition under review.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "OBS-MAP1-01",
+      "project": "PO-SQ-24018",
+      "location": "Map 1 / Maple Ave handhole H-17",
+      "type": "Utility conflict",
+      "description": "Gas service crossing verified before bore path; documented in closeout package.",
+      "photoRefs": "PHOTO-MAP1-TRENCH",
+      "impact": "Resolved safety risk",
+      "responsibleParty": "Jackson Telcom",
+      "status": "Resolved",
+      "notes": "Map 1 / Maple Ave handhole H-17 obstacle note: Gas service crossing verified before bore path; documented in closeout package. Impact: Resolved safety risk. Responsible party: Jackson Telcom.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "OBS-MAP2-01",
+      "project": "PO-SQ-24022",
+      "location": "Map 2 / Pole W-33",
+      "type": "Low clearance",
+      "description": "Aerial clearance issue reviewed with SQUAN and closed before billing.",
+      "photoRefs": "PHOTO-MAP2-AERIAL",
+      "impact": "Resolved redesign risk",
+      "responsibleParty": "SQUAN / Jackson Telcom",
+      "status": "Resolved",
+      "notes": "Map 2 / Pole W-33 obstacle note: Aerial clearance issue reviewed with SQUAN and closed before billing. Impact: Resolved redesign risk. Responsible party: SQUAN / Jackson Telcom.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "OBS-MAP3-01",
+      "project": "PO-SQ-24031",
+      "location": "Map 3 / East starter crossing E-04",
+      "type": "Utility conflict",
+      "description": "Possible gas/water crossing needs field survey, photos, and potholing plan before production.",
+      "photoRefs": "Pending field photos",
+      "impact": "Work release blocker",
+      "responsibleParty": "Jackson Telcom",
+      "status": "Open",
+      "notes": "Map 3 / East starter crossing E-04 obstacle note: Possible gas/water crossing needs field survey, photos, and potholing plan before production. Impact: Work release blocker. Responsible party: Jackson Telcom.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "OBS-MAP3-02",
+      "project": "PO-SQ-24031",
+      "location": "Map 3 / East starter crossing E-04 north shoulder",
+      "type": "Map markup pin",
+      "description": "Corrected markup pin documenting the planned potholing window, cone taper, and no-work buffer before release-to-field.",
+      "photoRefs": "PHOTO-MAP3-CROSSING-CORRECTED",
+      "impact": "Release-to-field evidence",
+      "blockerImpact": "Closeout support",
+      "responsibleParty": "Jackson Telcom",
+      "status": "Field Verified",
+      "reviewStatus": "Accepted",
+      "acceptedForBilling": "Yes",
+      "acceptedForSafety": "Yes",
+      "acceptedForCloseout": "Yes",
+      "evidenceKey": "accepted-field-captures",
+      "createdBy": "Marcus Hill",
+      "reviewedBy": "Operations Coordinator",
+      "reviewedAt": "2026-05-10T16:45:00.000Z",
+      "notes": "Accepted markup/obstruction evidence from Field Maps capture. Original obstruction remains open until 811 and permit release are complete.",
+      "activityLog": [
+        {
+          "at": "2026-05-10T16:45:00.000Z",
+          "by": "Operations Coordinator",
+          "note": "Accepted corrected markup pin as Map 3 release and closeout evidence."
+        }
+      ],
+      "createdAt": "2026-05-10T16:18:00.000Z",
+      "modifiedAt": "2026-05-10T16:45:00.000Z"
+    }
+  ],
+  "qcCloseouts": [
+    {
+      "id": "QC-MAP1-01",
+      "project": "PO-SQ-24018",
+      "segment": "Map 1 full route",
+      "workType": "Underground fiber placement",
+      "inspector": "Marcus Hill",
+      "photoRefs": "PHOTO-MAP1-TRENCH and closeout set",
+      "workmanship": "Passed",
+      "reworkNeeded": "No",
+      "chargebackRisk": "Low",
+      "status": "Passed",
+      "notes": "Map 1 full route QC note: workmanship Passed; rework No; chargeback risk Low.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "QC-MAP2-01",
+      "project": "PO-SQ-24022",
+      "segment": "Map 2 full aerial route",
+      "workType": "Aerial overlash",
+      "inspector": "Denise Carter",
+      "photoRefs": "PHOTO-MAP2-AERIAL, PHOTO-MAP2-BUCKET",
+      "workmanship": "Passed",
+      "reworkNeeded": "No",
+      "chargebackRisk": "Low",
+      "status": "Passed",
+      "notes": "Map 2 full aerial route QC note: workmanship Passed; rework No; chargeback risk Low.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "QC-MAP3-01",
+      "project": "PO-SQ-24031",
+      "segment": "Map 3 intake route",
+      "workType": "Pre-production review",
+      "inspector": "Tasha Green",
+      "photoRefs": "Pending",
+      "workmanship": "Not started",
+      "reworkNeeded": "Unknown",
+      "chargebackRisk": "Unknown",
+      "status": "Pending",
+      "notes": "Map 3 intake route QC note: workmanship Not started; rework Unknown; chargeback risk Unknown.",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    }
+  ],
+  "retainageLedger": [
+    {
+      "id": "RET-INV-MAP1-001",
+      "invoice": "INV-MAP1-001",
+      "project": "PO-SQ-24018",
+      "heldAmount": 11980,
+      "releaseDate": "2027-05-03",
+      "status": "Held",
+      "disputeReason": "None",
+      "followUpDate": "2026-06-03",
+      "followUpStatus": "Scheduled",
+      "paymentNote": "Map 1 paid 90%; 12-month retainage clock active",
+      "notes": "Map 1 paid 90%; 12-month retainage clock active",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Office Billing"
+    },
+    {
+      "id": "RET-INV-MAP2-001",
+      "invoice": "INV-MAP2-001",
+      "project": "PO-SQ-24022",
+      "heldAmount": 9600,
+      "releaseDate": "2027-05-08",
+      "status": "Held",
+      "disputeReason": "None",
+      "followUpDate": "2026-06-08",
+      "followUpStatus": "Scheduled",
+      "paymentNote": "Map 2 paid 90%; 12-month retainage clock active",
+      "notes": "Map 2 paid 90%; 12-month retainage clock active",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "owner": "Office Billing"
+    }
+  ],
+  "costBlockers": [
+    {
+      "id": "CB-MAP1-01",
+      "project": "PO-SQ-24018",
+      "type": "Fuel",
+      "date": "2026-04-28",
+      "impactCost": 420,
+      "impactHours": 0,
+      "owner": "Operations",
+      "status": "Closed",
+      "notes": "Map 1 fuel impact recorded in final job cost",
+      "activityLog": [],
+      "createdAt": "2026-04-28T12:00:00.000Z",
+      "modifiedAt": "2026-04-28T12:00:00.000Z"
+    },
+    {
+      "id": "CB-MAP2-01",
+      "project": "PO-SQ-24022",
+      "type": "Equipment downtime",
+      "date": "2026-04-30",
+      "impactCost": 1360,
+      "impactHours": 8,
+      "owner": "Operations",
+      "status": "Closed",
+      "notes": "Bucket inspection issue resolved before Map 2 billing",
+      "activityLog": [],
+      "createdAt": "2026-04-30T12:00:00.000Z",
+      "modifiedAt": "2026-04-30T12:00:00.000Z"
+    },
+    {
+      "id": "CB-MAP3-01",
+      "project": "PO-SQ-24031",
+      "type": "Permit / utility review",
+      "date": "2026-05-09",
+      "impactCost": 0,
+      "impactHours": 0,
+      "owner": "Operations",
+      "status": "Open",
+      "notes": "Beginning-phase blocker until map, permit, 811, and site survey clear",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    }
+  ],
+  "squanScores": [
+    {
+      "id": "SCORE-2026-05",
+      "period": "2026-05",
+      "score": 91,
+      "rating": "A",
+      "programDocsPoints": 55,
+      "trainingDocsPoints": 18,
+      "safetyStatsPoints": 18,
+      "mitigationRequired": "No",
+      "status": "Monitor",
+      "notes": "squanScores record SCORE-2026-05",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    }
+  ],
+  "auditLog": [
+    {
+      "id": "AUD-0001",
+      "at": "2026-05-10T01:36:57.918Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0001",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "AUD-0002",
+      "at": "2026-05-10T01:36:59.314Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0002",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "AUD-0003",
+      "at": "2026-05-10T01:38:09.652Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0003",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "AUD-0004",
+      "at": "2026-05-10T01:42:55.277Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "operator@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0004",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "AUD-0005",
+      "at": "2026-05-10T01:47:24.949Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "billing@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0005",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "AUD-0006",
+      "at": "2026-05-10T02:16:58.005Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0006",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "AUD-0007",
+      "at": "2026-05-10T04:19:48.010Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "underground@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0007",
+      "activityLog": [],
+      "createdAt": "2026-05-10T04:19:48.010Z",
+      "modifiedAt": "2026-05-10T04:19:48.010Z"
+    },
+    {
+      "id": "AUD-0008",
+      "at": "2026-05-10T04:31:02.581Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0008",
+      "activityLog": [],
+      "createdAt": "2026-05-10T04:31:02.581Z",
+      "modifiedAt": "2026-05-10T04:31:02.581Z"
+    },
+    {
+      "id": "AUD-0009",
+      "at": "2026-05-14T15:41:02.359Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0009",
+      "activityLog": [],
+      "createdAt": "2026-05-14T15:41:02.359Z",
+      "modifiedAt": "2026-05-14T15:41:02.359Z"
+    },
+    {
+      "id": "AUD-0010",
+      "at": "2026-05-19T22:09:13.716Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-MAP-INTAKE"
+      },
+      "notes": "auditLog record AUD-0010",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.716Z",
+      "modifiedAt": "2026-05-19T22:09:13.716Z"
+    },
+    {
+      "id": "AUD-0011",
+      "at": "2026-05-19T22:09:13.728Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-811-PERMITS"
+      },
+      "notes": "auditLog record AUD-0011",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.728Z",
+      "modifiedAt": "2026-05-19T22:09:13.728Z"
+    },
+    {
+      "id": "AUD-0012",
+      "at": "2026-05-19T22:09:13.733Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-SAFETY-STARTER"
+      },
+      "notes": "auditLog record AUD-0012",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.733Z",
+      "modifiedAt": "2026-05-19T22:09:13.733Z"
+    },
+    {
+      "id": "AUD-0013",
+      "at": "2026-05-19T22:09:13.749Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-SAFETY-SAFETY-ITEM-NEEDS-REVIEW"
+      },
+      "notes": "auditLog record AUD-0013",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.749Z",
+      "modifiedAt": "2026-05-19T22:09:13.749Z"
+    },
+    {
+      "id": "AUD-0014",
+      "at": "2026-05-19T22:09:13.756Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-SAFETY-STARTER"
+      },
+      "notes": "auditLog record AUD-0014",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.756Z",
+      "modifiedAt": "2026-05-19T22:09:13.756Z"
+    },
+    {
+      "id": "AUD-0015",
+      "at": "2026-05-19T22:09:13.766Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-ADMIN-RELEASE"
+      },
+      "notes": "auditLog record AUD-0015",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.766Z",
+      "modifiedAt": "2026-05-19T22:09:13.766Z"
+    },
+    {
+      "id": "AUD-0016",
+      "at": "2026-05-19T22:09:13.771Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-MAP-INTAKE"
+      },
+      "notes": "auditLog record AUD-0016",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.771Z",
+      "modifiedAt": "2026-05-19T22:09:13.771Z"
+    },
+    {
+      "id": "AUD-0017",
+      "at": "2026-05-19T22:09:13.774Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-811-PERMITS"
+      },
+      "notes": "auditLog record AUD-0017",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.774Z",
+      "modifiedAt": "2026-05-19T22:09:13.774Z"
+    },
+    {
+      "id": "AUD-0018",
+      "at": "2026-05-20T00:27:39.657Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0018",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:39.657Z",
+      "modifiedAt": "2026-05-20T00:27:39.657Z"
+    },
+    {
+      "id": "AUD-0019",
+      "at": "2026-05-20T00:27:39.683Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-0019",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:39.683Z",
+      "modifiedAt": "2026-05-20T00:27:39.683Z"
+    },
+    {
+      "id": "AUD-0020",
+      "at": "2026-05-20T00:27:48.308Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-CREW"
+      },
+      "notes": "auditLog record AUD-0020",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:48.308Z",
+      "modifiedAt": "2026-05-20T00:27:48.308Z"
+    },
+    {
+      "id": "AUD-0021",
+      "at": "2026-05-20T00:27:48.312Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-CREW"
+      },
+      "notes": "auditLog record AUD-0021",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:48.312Z",
+      "modifiedAt": "2026-05-20T00:27:48.312Z"
+    },
+    {
+      "id": "AUD-0022",
+      "at": "2026-05-20T00:27:48.317Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-BILLING-PROOF-ACCEPTED-FIELD-DAILY"
+      },
+      "notes": "auditLog record AUD-0022",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:48.317Z",
+      "modifiedAt": "2026-05-20T00:27:48.317Z"
+    },
+    {
+      "id": "AUD-0023",
+      "at": "2026-05-20T00:27:48.320Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-BILLING-PROOF-DAILY-EVIDENCE-PACKAGE-QA"
+      },
+      "notes": "auditLog record AUD-0023",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:48.320Z",
+      "modifiedAt": "2026-05-20T00:27:48.320Z"
+    }
+  ],
+  "timeEntries": [
+    {
+      "id": "TE-MAP1-001",
+      "employeeId": "E-021",
+      "employee": "Marcus Hill",
+      "role": "Foreman",
+      "crew": "Crew A",
+      "project": "PO-SQ-24018",
+      "dailyId": "DLY-MAP1-FINAL",
+      "date": "2026-05-01",
+      "clockIn": "06:30",
+      "clockOut": "16:30",
+      "breakMinutes": 30,
+      "regularHours": 8,
+      "overtimeHours": 1.5,
+      "travelHours": 0.5,
+      "standbyHours": 0,
+      "delayReason": "None",
+      "costCode": "LAB-FIBER",
+      "workType": "Underground",
+      "approvalStatus": "Approved",
+      "foremanApproval": "Marcus Hill",
+      "payrollStatus": "Ready for export",
+      "jobCostStatus": "Posted",
+      "notes": "Marcus Hill time note: confirm hours before payroll export.",
+      "activityLog": [],
+      "createdAt": "2026-05-01T12:00:00.000Z",
+      "modifiedAt": "2026-05-01T12:00:00.000Z"
+    },
+    {
+      "id": "TE-MAP1-002",
+      "employeeId": "E-033",
+      "employee": "Devon Price",
+      "role": "Underground Crew Member",
+      "crew": "Crew A",
+      "project": "PO-SQ-24018",
+      "dailyId": "DLY-MAP1-FINAL",
+      "date": "2026-05-01",
+      "clockIn": "06:30",
+      "clockOut": "16:00",
+      "breakMinutes": 30,
+      "regularHours": 8,
+      "overtimeHours": 1,
+      "travelHours": 0,
+      "standbyHours": 0,
+      "delayReason": "None",
+      "costCode": "LAB-FIBER",
+      "workType": "Underground",
+      "approvalStatus": "Approved",
+      "foremanApproval": "Marcus Hill",
+      "payrollStatus": "Ready for export",
+      "jobCostStatus": "Posted",
+      "notes": "Devon Price time note: confirm hours before payroll export.",
+      "activityLog": [],
+      "createdAt": "2026-05-01T12:00:00.000Z",
+      "modifiedAt": "2026-05-01T12:00:00.000Z"
+    },
+    {
+      "id": "TE-MAP1-003",
+      "employeeId": "E-034",
+      "employee": "Isaiah Clark",
+      "role": "Underground Equipment Operator",
+      "crew": "Crew A",
+      "project": "PO-SQ-24018",
+      "dailyId": "DLY-MAP1-FINAL",
+      "date": "2026-05-01",
+      "clockIn": "06:45",
+      "clockOut": "16:15",
+      "breakMinutes": 30,
+      "regularHours": 8,
+      "overtimeHours": 1,
+      "travelHours": 0,
+      "standbyHours": 0,
+      "delayReason": "None",
+      "costCode": "LAB-FIBER",
+      "workType": "Equipment Operator",
+      "approvalStatus": "Approved",
+      "foremanApproval": "Marcus Hill",
+      "payrollStatus": "Ready for export",
+      "jobCostStatus": "Posted",
+      "notes": "Isaiah Clark time note: confirm hours before payroll export.",
+      "activityLog": [],
+      "createdAt": "2026-05-01T12:00:00.000Z",
+      "modifiedAt": "2026-05-01T12:00:00.000Z"
+    },
+    {
+      "id": "TE-MAP2-001",
+      "employeeId": "E-014",
+      "employee": "John Miller",
+      "role": "Lineman",
+      "crew": "Crew B",
+      "project": "PO-SQ-24022",
+      "dailyId": "DLY-MAP2-FINAL",
+      "date": "2026-05-06",
+      "clockIn": "06:15",
+      "clockOut": "15:45",
+      "breakMinutes": 30,
+      "regularHours": 8,
+      "overtimeHours": 1,
+      "travelHours": 0.5,
+      "standbyHours": 0,
+      "delayReason": "None",
+      "costCode": "LAB-FIBER",
+      "workType": "Aerial",
+      "approvalStatus": "Approved",
+      "foremanApproval": "Denise Carter",
+      "payrollStatus": "Ready for export",
+      "jobCostStatus": "Posted",
+      "notes": "John Miller time note: confirm hours before payroll export.",
+      "activityLog": [],
+      "createdAt": "2026-05-06T12:00:00.000Z",
+      "modifiedAt": "2026-05-06T12:00:00.000Z"
+    },
+    {
+      "id": "TE-MAP2-002",
+      "employeeId": "E-031",
+      "employee": "Anthony Reed",
+      "role": "Ground Hand",
+      "crew": "Crew B",
+      "project": "PO-SQ-24022",
+      "dailyId": "DLY-MAP2-FINAL",
+      "date": "2026-05-06",
+      "clockIn": "06:15",
+      "clockOut": "15:45",
+      "breakMinutes": 30,
+      "regularHours": 8,
+      "overtimeHours": 1,
+      "travelHours": 0.5,
+      "standbyHours": 0,
+      "delayReason": "None",
+      "costCode": "LAB-FIBER",
+      "workType": "Aerial Ground",
+      "approvalStatus": "Approved",
+      "foremanApproval": "Denise Carter",
+      "payrollStatus": "Ready for export",
+      "jobCostStatus": "Posted",
+      "notes": "Anthony Reed time note: confirm hours before payroll export.",
+      "activityLog": [],
+      "createdAt": "2026-05-06T12:00:00.000Z",
+      "modifiedAt": "2026-05-06T12:00:00.000Z"
+    },
+    {
+      "id": "TE-MAP2-003",
+      "employeeId": "E-032",
+      "employee": "Carla Brooks",
+      "role": "Traffic Control",
+      "crew": "Crew B",
+      "project": "PO-SQ-24022",
+      "dailyId": "DLY-MAP2-FINAL",
+      "date": "2026-05-06",
+      "clockIn": "06:00",
+      "clockOut": "15:30",
+      "breakMinutes": 30,
+      "regularHours": 8,
+      "overtimeHours": 1,
+      "travelHours": 0,
+      "standbyHours": 0,
+      "delayReason": "None",
+      "costCode": "LAB-FIBER",
+      "workType": "Traffic Control",
+      "approvalStatus": "Approved",
+      "foremanApproval": "Denise Carter",
+      "payrollStatus": "Ready for export",
+      "jobCostStatus": "Posted",
+      "notes": "Carla Brooks time note: confirm hours before payroll export.",
+      "activityLog": [],
+      "createdAt": "2026-05-06T12:00:00.000Z",
+      "modifiedAt": "2026-05-06T12:00:00.000Z"
+    },
+    {
+      "id": "TE-MAP3-001",
+      "employeeId": "E-021",
+      "employee": "Marcus Hill",
+      "role": "Foreman",
+      "crew": "Crew A",
+      "project": "PO-SQ-24031",
+      "dailyId": "DLY-MAP3-INTAKE",
+      "date": "2026-05-09",
+      "clockIn": "",
+      "clockOut": "",
+      "breakMinutes": 0,
+      "regularHours": 0,
+      "overtimeHours": 0,
+      "travelHours": 0,
+      "standbyHours": 0,
+      "delayReason": "Beginning phase - no field production yet",
+      "costCode": "LAB-FIBER",
+      "workType": "Site Survey",
+      "approvalStatus": "Draft",
+      "foremanApproval": "Pending",
+      "payrollStatus": "Not ready",
+      "jobCostStatus": "Not posted",
+      "notes": "Beginning phase - no field production yet",
+      "activityLog": [],
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-MAP3-SURVEY",
+      "title": "Complete Map 3 site survey and walkout",
+      "relatedType": "Project",
+      "relatedId": "PO-SQ-24031",
+      "project": "PO-SQ-24031",
+      "owner": "Operations Coordinator",
+      "role": "Operations",
+      "dueDate": "2026-05-10",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Project & PO Hub",
+      "notes": "Map 3 is beginning phase. Verify route, hazards, and aerial/underground transitions.",
+      "source": "PO intake checklist",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-MAP3-811",
+      "title": "Review 811 ticket for Map 3",
+      "relatedType": "Document",
+      "relatedId": "DOC-MAP3-811",
+      "project": "PO-SQ-24031",
+      "owner": "Operations Coordinator",
+      "role": "Operations",
+      "dueDate": "2026-05-10",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "811 must be current before production release.",
+      "source": "MSA daily/pre-job gate",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-MAP3-OBSPHOTO",
+      "title": "Capture obstacle photos for East starter crossing E-04",
+      "relatedType": "Obstacle",
+      "relatedId": "OBS-MAP3-01",
+      "project": "PO-SQ-24031",
+      "owner": "Tasha Green",
+      "role": "Foreman",
+      "dueDate": "2026-05-11",
+      "priority": "High",
+      "status": "Closed",
+      "workflowArea": "Field Operations",
+      "notes": "Corrected field capture PHOTO-MAP3-CROSSING-CORRECTED and markup OBS-MAP3-02 satisfy the obstruction photo requirement for release review.",
+      "source": "Site intelligence",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-10T16:45:00.000Z",
+      "activityLog": [
+        {
+          "at": "2026-05-10T16:45:00.000Z",
+          "by": "Operations Coordinator",
+          "note": "Closed after corrected field capture evidence was accepted."
+        }
+      ]
+    },
+    {
+      "id": "TASK-MAP3-TIME",
+      "title": "Confirm draft time entry for Map 3 intake",
+      "relatedType": "Time Entry",
+      "relatedId": "TE-MAP3-001",
+      "project": "PO-SQ-24031",
+      "owner": "Marcus Hill",
+      "role": "Foreman",
+      "dueDate": "2026-05-09",
+      "priority": "Medium",
+      "status": "Open",
+      "workflowArea": "Time Tracking",
+      "notes": "Draft time is not payroll-ready.",
+      "source": "Time tracking",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-MAP3-SAFETY",
+      "title": "Close pre-job hazard for Map 3 utility conflicts",
+      "relatedType": "Safety Event",
+      "relatedId": "RISK-MAP3-303",
+      "project": "PO-SQ-24031",
+      "owner": "Safety Compliance",
+      "role": "Safety/Compliance",
+      "dueDate": "2026-05-12",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Safety & Risk",
+      "notes": "Complete walkout, potholing plan, and permit review before release.",
+      "source": "Safety risk log",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-MAP1-RETAINAGE",
+      "title": "Track Map 1 retainage release clock",
+      "relatedType": "Retainage",
+      "relatedId": "RET-INV-MAP1-001",
+      "project": "PO-SQ-24018",
+      "owner": "Office Billing",
+      "role": "Billing",
+      "dueDate": "2027-05-03",
+      "priority": "Low",
+      "status": "Scheduled",
+      "workflowArea": "Money",
+      "notes": "Map 1 paid 90%; retainage held until release date.",
+      "source": "Retainage ledger",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-EVID-PO-SQ-24031-photo-evidence",
+      "title": "Correct rejected evidence: Photo evidence",
+      "relatedType": "Evidence",
+      "relatedId": "photo-evidence",
+      "project": "PO-SQ-24031",
+      "owner": "Crew C",
+      "role": "Foreman",
+      "dueDate": "2026-05-11",
+      "priority": "High",
+      "status": "Closed",
+      "workflowArea": "Field Operations",
+      "notes": "Corrected field capture PHOTO-MAP3-CROSSING-CORRECTED was accepted and linked for billing, safety, and closeout evidence.",
+      "source": "Evidence correction",
+      "evidenceKey": "photo-evidence",
+      "evidenceLabel": "Photo evidence",
+      "correctionStatus": "Accepted",
+      "createdAt": "2026-05-10T14:20:00.000Z",
+      "modifiedAt": "2026-05-10T16:40:00.000Z",
+      "activityLog": [
+        {
+          "at": "2026-05-10T14:20:00.000Z",
+          "by": "Office Billing",
+          "note": "Evidence rejected and correction requested."
+        },
+        {
+          "at": "2026-05-10T16:40:00.000Z",
+          "by": "Safety Compliance",
+          "note": "Corrected GPS photo accepted and correction task closed."
+        }
+      ]
+    },
+    {
+      "id": "TASK-FIELD-CAPTURE-MAP3-CORRECTION",
+      "title": "Correct Map 3 crossing field capture",
+      "relatedType": "Field Capture",
+      "relatedId": "SYNC-MAP3-PHOTO-001",
+      "project": "PO-SQ-24031",
+      "owner": "Marcus Hill",
+      "role": "Foreman",
+      "dueDate": "2026-05-11",
+      "priority": "High",
+      "status": "Closed",
+      "workflowArea": "Field Operations",
+      "notes": "Original GPS photo was corrected by PHOTO-MAP3-CROSSING-CORRECTED and OBS-MAP3-02; accepted evidence is linked to release, billing, safety, and closeout.",
+      "source": "Field capture review",
+      "syncId": "SYNC-MAP3-PHOTO-001",
+      "reviewStatus": "Closed",
+      "createdAt": "2026-05-10T14:25:00.000Z",
+      "modifiedAt": "2026-05-10T16:45:00.000Z",
+      "activityLog": [
+        {
+          "at": "2026-05-10T14:25:00.000Z",
+          "by": "Safety Compliance",
+          "note": "Correction requested from field capture review."
+        },
+        {
+          "at": "2026-05-10T16:45:00.000Z",
+          "by": "Operations Coordinator",
+          "note": "Closed after corrected photo and markup were accepted."
+        }
+      ]
+    },
+    {
+      "id": "TASK-MAP2-RETAINAGE",
+      "title": "Track Map 2 retainage release clock",
+      "relatedType": "Retainage",
+      "relatedId": "RET-INV-MAP2-001",
+      "project": "PO-SQ-24022",
+      "owner": "Office Billing",
+      "role": "Billing",
+      "dueDate": "2027-05-08",
+      "priority": "Low",
+      "status": "Scheduled",
+      "workflowArea": "Money",
+      "notes": "Map 2 paid 90%; retainage held until release date.",
+      "source": "Retainage ledger",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-CERT-E014",
+      "title": "Renew John Miller certification package",
+      "relatedType": "Person",
+      "relatedId": "E-014",
+      "project": "PO-SQ-24022",
+      "owner": "Safety Compliance",
+      "role": "Safety/Compliance",
+      "dueDate": "2026-05-21",
+      "priority": "Medium",
+      "status": "Open",
+      "workflowArea": "People & Compliance",
+      "notes": "Certification expiration inside 30 days.",
+      "source": "Compliance ledger",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-CREW-TIME-E033",
+      "title": "Devon Price time confirmation",
+      "relatedType": "Time Entry",
+      "relatedId": "TE-MAP1-002",
+      "project": "PO-SQ-24018",
+      "owner": "Devon Price",
+      "role": "Crew Member",
+      "dueDate": "2026-05-09",
+      "priority": "Low",
+      "status": "Open",
+      "workflowArea": "Time Tracking",
+      "notes": "Crew member confirmation before payroll export.",
+      "source": "Crew member portal",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-CREW-JSA-E031",
+      "title": "Anthony Reed JSA/PPE acknowledgment",
+      "relatedType": "Daily",
+      "relatedId": "DLY-MAP2-FINAL",
+      "project": "PO-SQ-24022",
+      "owner": "Anthony Reed",
+      "role": "Crew Member",
+      "dueDate": "2026-05-09",
+      "priority": "Low",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Crew member JSA/PPE acknowledgment captured from field portal.",
+      "source": "Crew member portal",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-CASH-REQUEST-RETAINAGE-STATUS-PO-SQ-24018",
+      "title": "Request SQUAN retainage release status",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Office Billing",
+      "role": "Billing",
+      "dueDate": "2026-05-12",
+      "priority": "Medium",
+      "status": "Open",
+      "workflowArea": "Billing",
+      "notes": "Confirm retainage release clock, SQUAN acceptance date, and next release follow-up. Future retainage exposure is $21,580.",
+      "source": "Cash decision workflow",
+      "scenario": "Baseline",
+      "projectedEndingCash": -4120,
+      "atRiskExposure": 0,
+      "cashDecision": "request-retainage-status",
+      "createdAt": "2026-05-09T12:00:00.000Z",
+      "modifiedAt": "2026-05-09T12:00:00.000Z",
+      "activityLog": []
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-MAP-INTAKE",
+      "title": "Needs Fix: Map intake",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "Map 1: Complete the setup step, then recheck Ready for field work. Proof needed: Scope, unit schedule, customer requirements, and billing window",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Field Ready",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.673Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.673Z",
+      "modifiedAt": "2026-05-19T22:09:13.673Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-811-PERMITS",
+      "title": "Needs Fix: 811 / permits",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "Map 1: Complete the setup step, then recheck Ready for field work. Proof needed: 811 attached; permit missing",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Needs Review",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.674Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.674Z",
+      "modifiedAt": "2026-05-19T22:09:13.674Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-SAFETY-STARTER",
+      "title": "Needs Fix: Safety starter",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: 1 safety document(s) need review",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.676Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.676Z",
+      "modifiedAt": "2026-05-19T22:09:13.676Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-SAFETY-SAFETY-ITEM-NEEDS-REVIEW",
+      "title": "Needs Fix: Safety item needs review",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Safety/Compliance",
+      "role": "Safety/Compliance",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Safety & Risk",
+      "notes": "Map 1: Review the safety item, add corrective proof, then clear or return it. Proof needed: 0 incident(s), 0 obstacle(s), 4 safety doc gap(s), 0 cert block(s), 0 equipment item(s).",
+      "source": "Needs Fix",
+      "needsFixGroup": "Safety",
+      "needsFixStatus": "Blocked",
+      "needsFixAction": "Safety & Risk",
+      "needsFixFocus": "Safety fixes",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.676Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.676Z",
+      "modifiedAt": "2026-05-19T22:09:13.676Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-SAFETY-STARTER",
+      "title": "Needs Fix: Safety starter",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "Map 1: Complete the setup step, then recheck Ready for field work. Proof needed: 1 safety document(s) need review",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Needs Review",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.675Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.675Z",
+      "modifiedAt": "2026-05-19T22:09:13.675Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-ADMIN-RELEASE",
+      "title": "Needs Fix: Admin release",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: Map must be Admin released or exception-approved before field production starts.",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.675Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.675Z",
+      "modifiedAt": "2026-05-19T22:09:13.675Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-MAP-INTAKE",
+      "title": "Needs Fix: Map intake",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: Scope, unit schedule, customer requirements, and billing window",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.675Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.675Z",
+      "modifiedAt": "2026-05-19T22:09:13.675Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-811-PERMITS",
+      "title": "Needs Fix: 811 / permits",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: 811 attached; permit missing",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.675Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.675Z",
+      "modifiedAt": "2026-05-19T22:09:13.675Z"
+    },
+    {
+      "id": "TASK-DAILY-EOD-PO-SQ-24031",
+      "title": "Submit draft daily for Map 3",
+      "relatedType": "Daily",
+      "relatedId": "DLY-MAP3-INTAKE",
+      "project": "PO-SQ-24031",
+      "owner": "Operations Coordinator",
+      "role": "Operations",
+      "dueDate": "2026-05-09",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 3: DLY-MAP3-INTAKE saved May 9 at 8:00 AM. Gate blockers: Admin release, Map intake, ArcGIS Field Maps, 811 / permits, Obstacles, Equipment, Safety starter.",
+      "source": "End-of-day daily",
+      "dailyStatus": "Draft",
+      "gateStatus": "Start blocked",
+      "blockerLabels": [
+        "Admin release",
+        "Map intake",
+        "ArcGIS Field Maps",
+        "811 / permits",
+        "Obstacles",
+        "Equipment",
+        "Safety starter"
+      ],
+      "createdAt": "2026-05-20T00:27:39.661Z",
+      "modifiedAt": "2026-05-20T00:27:39.661Z",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:39.661Z",
+          "by": "System",
+          "note": "End-of-day daily task synced: Draft; Start blocked."
+        }
+      ]
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-CREW",
+      "title": "Needs Fix: Crew",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Safety Compliance",
+      "role": "Safety/Compliance",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "People & Compliance",
+      "notes": "Map 1: Complete the setup step, then recheck Ready for field work. Proof needed: Marcus Hill: Clear, Devon Price: Blocked, Isaiah Clark: Blocked",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Blocked",
+      "needsFixAction": "People & Compliance",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:48.301Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-20T00:27:48.301Z",
+      "modifiedAt": "2026-05-20T00:27:48.301Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-CREW",
+      "title": "Needs Fix: Crew",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: Marcus Hill: Clear, Devon Price: Blocked, Isaiah Clark: Blocked",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:48.302Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-20T00:27:48.302Z",
+      "modifiedAt": "2026-05-20T00:27:48.302Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-BILLING-PROOF-ACCEPTED-FIELD-DAILY",
+      "title": "Needs Fix: Accepted field daily",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-15",
+      "priority": "Medium",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open the linked workflow, fix the proof, then recheck Billing. Proof needed: Blocking: Operations acceptance, accepted Operations review, generated daily forms, daily support documents, daily photo evidence.",
+      "source": "Needs Fix",
+      "needsFixGroup": "Billing Proof",
+      "needsFixStatus": "Submitted",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Invoice package",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:48.302Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-20T00:27:48.302Z",
+      "modifiedAt": "2026-05-20T00:27:48.302Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-BILLING-PROOF-DAILY-EVIDENCE-PACKAGE-QA",
+      "title": "Needs Fix: Daily evidence package QA",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Admin",
+      "role": "Admin",
+      "dueDate": "2026-05-15",
+      "priority": "Medium",
+      "status": "Open",
+      "workflowArea": "Billing",
+      "notes": "Map 1: Open the linked workflow, fix the proof, then recheck Billing. Proof needed: PKG-DLY-MAP1-FINAL needs review: Daily Report, SOT, JSA / forms, Photo evidence, Materials, QC review.",
+      "source": "Needs Fix",
+      "needsFixGroup": "Billing Proof",
+      "needsFixStatus": "Not Accepted",
+      "needsFixAction": "Billing",
+      "needsFixFocus": "Invoice package",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:48.303Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-20T00:27:48.303Z",
+      "modifiedAt": "2026-05-20T00:27:48.303Z"
+    }
+  ],
+  "formSubmissions": [],
+  "fieldUploadQueue": [],
+  "customerContactLog": [],
+  "packageSnapshots": [],
+  "packetLocks": [],
+  "alertControls": [],
+  "collectionSubmissions": [],
+  "collectionDecisionPackets": [],
+  "offlineSyncQueue": [
+    {
+      "id": "SYNC-MAP3-PACKAGE-001",
+      "project": "PO-SQ-24031",
+      "type": "Offline map package downloaded",
+      "summary": "Foreman downloaded Map 3 Field Maps package, 811 ticket draft, site survey checklist, and obstruction layer for offline walkout.",
+      "notes": "Map 3 offline package is available for foreman walkout and field capture.",
+      "relatedRecord": "PO-SQ-24031",
+      "status": "Downloaded",
+      "blockerImpact": "Release readiness",
+      "capturedBy": "Marcus Hill",
+      "createdAt": "2026-05-10T07:05:00.000Z",
+      "modifiedAt": "2026-05-10T07:05:00.000Z",
+      "activityLog": [
+        {
+          "at": "2026-05-10T07:05:00.000Z",
+          "by": "Marcus Hill",
+          "note": "Offline package downloaded for Map 3 beginning-phase walkout."
+        }
+      ]
+    },
+    {
+      "id": "SYNC-MAP3-PHOTO-001",
+      "project": "PO-SQ-24031",
+      "type": "GPS photo capture",
+      "summary": "Initial traffic-control photo for the East starter crossing did not show the obstruction clearly enough.",
+      "notes": "Returned by Safety Compliance because the original field photo did not show the crossing, cone taper, and potholing area clearly.",
+      "relatedRecord": "PHOTO-MAP3-TRAFFIC",
+      "status": "Synced",
+      "syncedAt": "2026-05-10T14:10:00.000Z",
+      "blockerImpact": "Billing Blocker",
+      "capturedBy": "Marcus Hill",
+      "createdAt": "2026-05-10T13:55:00.000Z",
+      "modifiedAt": "2026-05-10T14:25:00.000Z",
+      "review": {
+        "status": "Closed",
+        "reviewedBy": "Safety Compliance",
+        "reviewedAt": "2026-05-10T16:45:00.000Z",
+        "note": "Original photo was superseded by accepted corrected photo and markup evidence."
+      },
+      "correctionVersions": [
+        {
+          "version": 1,
+          "at": "2026-05-10T16:15:00.000Z",
+          "by": "Marcus Hill",
+          "summary": "Captured corrected crossing photo and linked markup pin for review."
+        }
+      ],
+      "activityLog": [
+        {
+          "at": "2026-05-10T14:25:00.000Z",
+          "by": "Safety Compliance",
+          "note": "Returned for correction."
+        },
+        {
+          "at": "2026-05-10T16:15:00.000Z",
+          "by": "Marcus Hill",
+          "note": "Corrected field capture submitted."
+        }
+      ]
+    },
+    {
+      "id": "SYNC-MAP3-PHOTO-002",
+      "project": "PO-SQ-24031",
+      "type": "GPS photo capture",
+      "summary": "Corrected GPS photo accepted for Map 3 obstruction verification and release-to-field evidence.",
+      "notes": "Accepted corrected GPS photo from field capture review.",
+      "relatedRecord": "PHOTO-MAP3-CROSSING-CORRECTED",
+      "status": "Synced",
+      "syncedAt": "2026-05-10T16:20:00.000Z",
+      "blockerImpact": "No blocker",
+      "capturedBy": "Marcus Hill",
+      "createdAt": "2026-05-10T16:15:00.000Z",
+      "modifiedAt": "2026-05-10T16:40:00.000Z",
+      "review": {
+        "status": "Accepted",
+        "reviewedBy": "Safety Compliance",
+        "reviewedAt": "2026-05-10T16:40:00.000Z",
+        "note": "Accepted for release-to-field, billing support, safety, and closeout evidence."
+      },
+      "acceptedForBilling": "Yes",
+      "acceptedForSafety": "Yes",
+      "acceptedForCloseout": "Yes",
+      "evidenceKey": "photo-evidence",
+      "activityLog": [
+        {
+          "at": "2026-05-10T16:40:00.000Z",
+          "by": "Safety Compliance",
+          "note": "Accepted corrected GPS photo."
+        }
+      ]
+    },
+    {
+      "id": "SYNC-MAP3-MARKUP-001",
+      "project": "PO-SQ-24031",
+      "type": "Map markup pin",
+      "summary": "Corrected markup pin accepted for the East starter crossing potholing window and cone taper.",
+      "notes": "Accepted corrected markup pin for release, billing support, safety, and closeout evidence.",
+      "relatedRecord": "OBS-MAP3-02",
+      "status": "Synced",
+      "syncedAt": "2026-05-10T16:22:00.000Z",
+      "blockerImpact": "Closeout support",
+      "capturedBy": "Marcus Hill",
+      "createdAt": "2026-05-10T16:18:00.000Z",
+      "modifiedAt": "2026-05-10T16:45:00.000Z",
+      "review": {
+        "status": "Accepted",
+        "reviewedBy": "Operations Coordinator",
+        "reviewedAt": "2026-05-10T16:45:00.000Z",
+        "note": "Accepted as obstruction markup evidence. Permit and 811 remain required before field release."
+      },
+      "acceptedForBilling": "Yes",
+      "acceptedForSafety": "Yes",
+      "acceptedForCloseout": "Yes",
+      "evidenceKey": "accepted-field-captures",
+      "activityLog": [
+        {
+          "at": "2026-05-10T16:45:00.000Z",
+          "by": "Operations Coordinator",
+          "note": "Accepted corrected markup pin."
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "dataVersion": "2026-05-10.11",
+    "updatedAt": "2026-05-10T16:50:00.000Z"
+  },
+  "fieldEvidence": [],
+  "priceSheetItems": [],
+  "squanImports": [],
+  "squanProductionLines": [],
+  "productionDailies": [],
+  "productionLines": [],
+  "contractorPayables": [],
+  "techWorkEntries": [],
+  "billingLedger": [],
+  "quantityReconciliation": [],
+  "squanMapFeatures": []
 }
