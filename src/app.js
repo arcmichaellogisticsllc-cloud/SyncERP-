@@ -720,6 +720,11 @@ const seedData = {
     {
       "id": "PO-SQ-24018",
       "map": "Map 1",
+      "squanMapName": "CRYSMIXI",
+      "squanGroup": "Jackson Telecom",
+      "squanConstructionName": "CRYSMIXI Construction",
+      "squanLastUpdatedAt": "2025-04-08T06:54:39-04:00",
+      "squanArcgisStatus": "Closed / Billed",
       "customer": "SQUAN",
       "scope": "Map 1 - North Jackson underground fiber placement",
       "status": "Completed / Billed",
@@ -757,6 +762,11 @@ const seedData = {
     {
       "id": "PO-SQ-24022",
       "map": "Map 2",
+      "squanMapName": "PTASMIXI",
+      "squanGroup": "Jackson Telecom",
+      "squanConstructionName": "PTASMIXI Construction",
+      "squanLastUpdatedAt": "2025-04-10T20:14:21-04:00",
+      "squanArcgisStatus": "Closed / Billed",
       "customer": "SQUAN",
       "scope": "Map 2 - West route aerial strand and fiber overlash",
       "status": "Completed / Billed",
@@ -794,6 +804,11 @@ const seedData = {
     {
       "id": "PO-SQ-24031",
       "map": "Map 3",
+      "squanMapName": "PINCMIXJ SOUTH",
+      "squanGroup": "Jackson Telecom",
+      "squanConstructionName": "PINCMIXJ SOUTH Construction",
+      "squanLastUpdatedAt": "2026-02-05T14:01:02-05:00",
+      "squanArcgisStatus": "Needs Review",
       "customer": "SQUAN",
       "scope": "Map 3 - East starter route intake and site survey",
       "status": "Beginning Phase",
@@ -845,6 +860,11 @@ const seedData = {
       "id": "BSP-MIC-0190",
       "customer": "SQUAN",
       "map": "BSP-MIC-0190",
+      "squanMapName": "MRLTMIAC",
+      "squanGroup": "Jackson Telecom",
+      "squanConstructionName": "MRLTMIAC Construction",
+      "squanLastUpdatedAt": "2025-10-15T11:29:30-04:00",
+      "squanArcgisStatus": "Production Import",
       "scope": "SQUAN NTP demo production import",
       "status": "Production Import",
       "crew": "Crew A",
@@ -25401,6 +25421,7 @@ function renderProjectHub() {
   if (selected && selected.id !== state.selectedProjectId) state.selectedProjectId = selected.id;
 
   return `
+    ${renderSquanMapCardShelf(rows, selected)}
     <section class="project-hub">
       <div class="panel project-list-panel">
         <div class="panel-header">
@@ -25423,6 +25444,64 @@ function renderProjectHub() {
         ${renderMapPlanWorkflowPanel(selected, "Maps")}
         ${renderArcgisPlanDisplayPanel(selected)}
         ${renderProjectDetail(selected)}
+      </div>
+    </section>
+  `;
+}
+
+function squanMapTitle(project) {
+  return project?.squanMapName || project?.map || project?.id || "Unassigned Map";
+}
+
+function squanConstructionTitle(project) {
+  return project?.squanConstructionName || `${squanMapTitle(project)} Construction`;
+}
+
+function squanMapUpdatedLabel(project) {
+  const value = project?.squanLastUpdatedAt || project?.arcgis?.lastSyncedAt || project?.modifiedAt || project?.createdAt;
+  return value ? formatDateTime(value) : "No SQUAN update date";
+}
+
+function renderSquanMapCardShelf(rows, selected) {
+  const group = selected?.squanGroup || rows.find(row => row.squanGroup)?.squanGroup || "Jackson Telecom";
+  return `
+    <section class="panel squan-map-card-shelf">
+      <div class="squan-map-shelf-head">
+        <label>
+          <span>Groups</span>
+          <select aria-label="SQUAN group">
+            <option>${escapeAttr(group)}</option>
+          </select>
+        </label>
+        <div>
+          <span class="eyebrow">SQUAN ArcGIS Maps</span>
+          <h2>Working map plans</h2>
+          <p>Select the same map card the field team sees in SQUAN, then manage dailies, proof, billing, and audit in Sync-ERP.</p>
+        </div>
+      </div>
+      <div class="squan-map-card-grid">
+        ${rows.map(project => {
+          const features = mapPlanFeatureRows(project);
+          const layers = uniqueList(features.map(feature => feature.layerName || "Production")).slice(0, 4);
+          return `
+            <button class="squan-arcgis-card ${project.id === selected?.id ? "selected" : ""}" data-project-id="${project.id}">
+              <div class="squan-arcgis-title">
+                <strong>${escapeAttr(squanConstructionTitle(project))}</strong>
+                <small>${escapeAttr(squanMapUpdatedLabel(project))}</small>
+              </div>
+              <div class="squan-arcgis-preview">
+                <span class="squan-route route-a"></span>
+                <span class="squan-route route-b"></span>
+                <span class="squan-route route-c"></span>
+                <em>${escapeAttr(squanMapTitle(project))}</em>
+              </div>
+              <div class="squan-arcgis-meta">
+                <span class="status ${statusClass(project.squanArcgisStatus || project.status)}">${plainStatus(project.squanArcgisStatus || project.status)}</span>
+                <small>${features.length} feature(s)${layers.length ? ` · ${layers.map(escapeAttr).join(", ")}` : ""}</small>
+              </div>
+            </button>
+          `;
+        }).join("") || `<p class="empty-state">No SQUAN maps match the current filters.</p>`}
       </div>
     </section>
   `;
@@ -33459,7 +33538,7 @@ function renderDocumentPortfolioSummary(documents) {
 
 function projectLabel(projectId) {
   const project = (state.data.projects || []).find(item => item.id === projectId);
-  return project ? `${project.map || project.id} - ${project.scope}` : projectId;
+  return project ? `${squanMapTitle(project)} - ${project.scope}` : projectId;
 }
 
 function documentPurpose(document) {
@@ -33610,18 +33689,18 @@ function renderSelectedMapBillingPanel(project, context) {
     <section class="panel selected-billing-panel">
       <div class="panel-header">
         <div>
-          <h2>${project.map || project.id}</h2>
-          <p>${project.scope || "Selected Map billing status"}</p>
+          <h2>${escapeAttr(squanMapTitle(project))}</h2>
+          <p>${escapeAttr(squanConstructionTitle(project))} · ${escapeAttr(project.scope || "Selected Map billing status")}</p>
         </div>
         <button class="primary-btn" data-workflow-action="${nextAction.action}" data-workflow-id="${project.id}" data-workflow-focus="${nextAction.focus}">${nextAction.label}</button>
       </div>
       <div class="selected-billing-grid">
+        <span>SQUAN map<strong>${escapeAttr(squanMapTitle(project))}</strong></span>
         <span>Map / NTP<strong>${project.id}</strong></span>
         <span>Billable<strong>${currency(readiness?.billableAmount || invoice?.gross || 0)}</strong></span>
         <span>Closed / Billed<strong>${closedBilled ? "Yes" : "No"}</strong></span>
         <span>Proof<strong>${plainStatus(proofStatus)}</strong></span>
         <span>SQUAN submission<strong>${plainStatus(submission?.status || "Not sent")}</strong></span>
-        <span>Payment<strong>${ledger ? currency(ledger.ledger.unpaid90 || 0) : "No invoice"}</strong></span>
       </div>
       <p class="readiness-note">Next: ${nextAction.detail}</p>
     </section>
@@ -33680,7 +33759,7 @@ function renderBillingCodeBreakdownPanel(project, context) {
           <h2>Code breakdown</h2>
           <p>Submitted code quantities totaled from the imported price sheet.</p>
         </div>
-        <span class="status ${statusClass(closedBilled ? "Ready" : "Open")}">${closedBilled ? "Closed / Billed" : "Open Billing"}</span>
+        <span class="status ${statusClass(closedBilled ? "Ready" : "Open")}">${closedBilled ? "Closed / Billed" : "Open Billing"} · ${escapeAttr(squanMapTitle(project))}</span>
       </div>
       <div class="billing-code-summary">
         <span>Codes<strong>${rows.length}</strong></span>
