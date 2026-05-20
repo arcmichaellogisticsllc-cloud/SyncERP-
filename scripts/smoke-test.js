@@ -514,6 +514,8 @@ const importFirstProductionTokens = [
   ["Production daily invoice source lines", "Production Control daily line"],
   ["Admin daily production home", "renderAdminDailyProductionSyncHome"],
   ["Admin daily production review", "renderAdminDailyProductionReviewQueue"],
+  ["Simplified Admin command center", "renderAdminSimplifiedCommandCenter"],
+  ["Admin advanced workflow drawer", "Advanced workflow details"],
   ["Map daily billing status", "renderMapDailyProductionStatusPanel"],
   ["Daily production audit report", "renderDailyProductionAuditReport"],
   ["Daily production sync label", "Daily / Production Sync"],

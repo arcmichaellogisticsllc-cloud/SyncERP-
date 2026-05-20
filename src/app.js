@@ -7395,37 +7395,164 @@ function renderOwnerOperatingSignals(projects, readiness, cashSummary) {
   `;
 }
 
+function adminDailyReviewItems(projects) {
+  return dailyProductionSyncRows(projects)
+    .filter(row => row.status !== "No Activity")
+    .map(row => ({
+      title: squanMapTitle(row.project),
+      detail: `${row.unsyncedFieldDailies.length} unsynced daily · ${row.proofMissing.length} proof issue · ${row.quantityMismatch.length} quantity issue`,
+      status: row.status,
+      action: "Production",
+      project: row.project.id,
+      focus: "Daily Detail View",
+      label: "Review daily"
+    }));
+}
+
+function adminMoneyItems(projects, readiness, cashSummary) {
+  const readyBilling = readiness
+    .filter(item => item.status === "Ready to Bill")
+    .map(item => ({
+      title: `${item.project} ready to bill`,
+      detail: `${currency(item.billableAmount || 0)} ready for SQUAN package.`,
+      status: "Ready",
+      action: "Billing",
+      project: item.project,
+      focus: "Invoice package",
+      label: "Open billing"
+    }));
+  const overduePayments = paymentFollowUpRows()
+    .filter(item => !item.paid90Complete && item.daysUntilFollowUp !== null && item.daysUntilFollowUp <= 0)
+    .map(item => ({
+      title: `${item.project?.map || item.project?.id || "Invoice"} payment follow-up`,
+      detail: `${currency(item.ledger?.unpaid90 || 0)} unpaid 90%; follow-up ${item.followUpDate || "due"}.`,
+      status: "Open",
+      action: "Billing",
+      project: item.project?.id || "",
+      focus: "Payment Ledger",
+      label: "Track money"
+    }));
+  if (!readyBilling.length && !overduePayments.length && cashSummary.atRisk) {
+    return [{
+      title: "Cash forecast needs review",
+      detail: `${currency(cashSummary.atRisk)} at-risk cash in the 13-week forecast.`,
+      status: "Needs Review",
+      action: "Billing",
+      project: projects[0]?.id || "",
+      focus: "Payment Ledger",
+      label: "Open cash"
+    }];
+  }
+  return [...readyBilling, ...overduePayments];
+}
+
+function renderAdminActionLane(title, detail, rows, emptyText) {
+  return `
+    <section class="panel admin-action-lane">
+      <div class="panel-header">
+        <div>
+          <h2>${title}</h2>
+          <p>${detail}</p>
+        </div>
+        <span>${rows.length}</span>
+      </div>
+      <div class="packet-home-list">
+        ${rows.slice(0, 5).map(row => `
+          <article>
+            <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+            <div>
+              <strong>${row.title}</strong>
+              <small>${row.detail}</small>
+            </div>
+            <div class="packet-home-actions">
+              ${row.taskId ? `<button class="secondary-btn" data-task-open="${row.taskId}">Open task</button>` : `<button class="secondary-btn" data-workflow-action="${row.action}" data-workflow-id="${row.project || state.selectedProjectId || ""}" data-workflow-focus="${row.focus || ""}" data-report-scope="${row.reportScope || ""}">${row.label || "Open"}</button>`}
+            </div>
+          </article>
+        `).join("") || `<p class="empty-state">${emptyText}</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminSimplifiedCommandCenter({ projects, readiness, alerts, cashSummary, decisions, activeRisks }) {
+  const dailyItems = adminDailyReviewItems(projects);
+  const moneyItems = adminMoneyItems(projects, readiness, cashSummary);
+  const doNow = decisions.slice(0, 5);
+  const next = doNow[0] || dailyItems[0] || moneyItems[0] || null;
+  return `
+    <section class="panel admin-simple-command">
+      <div class="admin-simple-head">
+        <div>
+          <span class="eyebrow">Admin</span>
+          <h2>${next ? next.title : "No critical admin decisions"}</h2>
+          <p>${next ? next.detail : "The high-level workflow is clear. Use the lanes below only when a count needs attention."}</p>
+        </div>
+        ${next ? `<button class="primary-btn" data-workflow-action="${next.action}" data-workflow-id="${next.project || state.selectedProjectId || projects[0]?.id || ""}" data-workflow-focus="${next.focus || "Admin"}" data-report-scope="${next.reportScope || ""}">${next.label || "Open next"}</button>` : `<button class="primary-btn" data-workflow-action="Project & Map Hub" data-workflow-id="${state.selectedProjectId || projects[0]?.id || ""}">Open Maps</button>`}
+      </div>
+      <div class="admin-simple-metrics">
+        ${metric("Do now", doNow.length, "Owner decisions and urgent tasks")}
+        ${metric("Field to billing", dailyItems.length, "Daily, proof, quantity, and ledger gaps")}
+        ${metric("Money", moneyItems.length, `${currency(cashSummary.atRisk)} forecast risk`)}
+        ${metric("Safety", activeRisks, "Open incidents/compliance items")}
+      </div>
+      <div class="admin-simple-steps">
+        ${[
+          ["1", "Decide", doNow.length ? "Needs Review" : "Clear", "Owner approvals, urgent alerts, and critical tasks.", "Tasks", "Admin decision"],
+          ["2", "Move field work", dailyItems.length ? "Needs Review" : "Clear", "Daily capture, proof, quantity, and production approval.", "Production", "Daily Detail View"],
+          ["3", "Bill / collect", moneyItems.length ? "Open" : "Clear", "Ready to bill, unpaid 90%, retainage, and cash risk.", "Billing", "Payment Ledger"],
+          ["4", "Audit only when needed", alerts.length ? "Tracked" : "Clear", "Reports, packet locks, and support exports stay behind details.", "Reports", "Executive Report"]
+        ].map(step => `
+          <button class="field-mobile-step ${statusClass(step[2])}" data-workflow-action="${step[4]}" data-workflow-id="${state.selectedProjectId || projects[0]?.id || ""}" data-workflow-focus="${step[5]}" ${step[4] === "Reports" ? `data-report-scope="Executive Report"` : ""}>
+            <span>${step[0]}</span>
+            <strong>${step[1]}</strong>
+            <small>${step[3]}</small>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+    <div class="admin-simple-lanes">
+      ${renderAdminActionLane("Do now", "Only items that need an Admin decision or immediate follow-up.", doNow, "No owner-level decision is blocking work.")}
+      ${renderAdminActionLane("Field to Billing", "Daily capture, proof, quantity reconciliation, and ledger handoff.", dailyItems, "No daily-to-billing item needs Admin review.")}
+      ${renderAdminActionLane("Money", "Ready-to-bill, unpaid payment, retainage, and forecast risk.", moneyItems, "No money item needs Admin action.")}
+    </div>
+  `;
+}
+
+function renderAdminAdvancedWorkflowDrawer(projects, readiness, alerts, cashSummary, decisions) {
+  return `
+    <details class="admin-advanced-workflows">
+      <summary>
+        <span>Advanced workflow details</span>
+        <small>Open only when you need SLA dashboards, packet alerts, operating signals, or workflow drill-ins.</small>
+      </summary>
+      <div class="admin-advanced-body">
+        ${renderOwnerCommandCenter(projects, readiness, alerts, cashSummary)}
+        ${renderAdminOwnerDecisionQueue(decisions)}
+        ${renderAdminDailyProductionReviewQueue(projects)}
+        ${renderOwnerOperatingSignals(projects, readiness, cashSummary)}
+        ${renderDailyPackageSlaDashboard(projects)}
+        ${state.role === "Admin" ? renderDailyPackageAlertHomeSummary(projects) : ""}
+        ${renderPacketAlertAdminSummary(projects)}
+        ${renderAdminWorkflowDrillIns(projects)}
+      </div>
+    </details>
+  `;
+}
+
 function renderAdminExceptions() {
   const projects = scopedRows("projects");
-  const invoices = scopedRows("invoices");
   const safety = scopedRows("safety");
   const readiness = scopedRows("billingReadiness");
-  const revenue = sum(projects, "estimatedRevenue");
-  const forecastCost = sum(projects, "forecastCost");
   const alerts = buildAlerts();
   const urgentAlerts = alerts.filter(alert => ["Critical", "High"].includes(alert.severity));
-  const readyNotInvoiced = readiness.filter(item => item.status === "Ready to Bill");
   const activeRisks = safety.filter(item => item.status !== "Closed").length;
   const cashSummary = cashForecastSummary();
   const decisions = adminOwnerDecisionRows(projects, readiness, alerts);
 
   return `
     ${renderRoleWorkQueueHeader("Admin")}
-    <section class="metrics">
-      ${metric("Forecast margin", `${Math.round(((revenue - forecastCost) / revenue) * 100)}%`, `${currency(revenue - forecastCost)} forecast gross profit`)}
-      ${metric("Urgent owner alerts", urgentAlerts.length, `${alerts.length} total alerts`)}
-      ${metric("Ready to bill", currency(sum(readyNotInvoiced, "billableAmount")), `${readyNotInvoiced.length} package(s)`)}
-      ${metric("13-week cash", currency(cashSummary.next13Total), `${currency(cashSummary.atRisk)} at risk`)}
-      ${metric("Open safety", activeRisks, "Incidents, inspections, corrective actions")}
-    </section>
-    ${renderOwnerCommandCenter(projects, readiness, alerts, cashSummary)}
-    ${renderAdminOwnerDecisionQueue(decisions)}
-    ${renderAdminDailyProductionReviewQueue(projects)}
-    ${renderOwnerOperatingSignals(projects, readiness, cashSummary)}
-    ${renderDailyPackageSlaDashboard(projects)}
-    ${state.role === "Admin" ? renderDailyPackageAlertHomeSummary(projects) : ""}
-    ${renderPacketAlertAdminSummary(projects)}
-    ${renderAdminWorkflowDrillIns(projects)}
+    ${renderAdminSimplifiedCommandCenter({ projects, readiness, alerts: urgentAlerts, cashSummary, decisions, activeRisks })}
+    ${renderAdminAdvancedWorkflowDrawer(projects, readiness, alerts, cashSummary, decisions)}
   `;
 }
 
