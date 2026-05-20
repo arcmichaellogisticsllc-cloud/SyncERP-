@@ -1,11 +1,11 @@
 :root {
   color-scheme: light;
-  --bg: #f5f7fa;
+  --bg: #f4f6f8;
   --surface: #ffffff;
-  --surface-strong: #eef3f7;
+  --surface-strong: #f8fafc;
   --ink: #17212b;
   --muted: #647384;
-  --line: #dbe3eb;
+  --line: #d7dee7;
   --primary: #1167b1;
   --primary-strong: #0a4f8b;
   --brand: #1167b1;
@@ -14,7 +14,7 @@
   --warning: #b96500;
   --danger: #b42318;
   --radius: 8px;
-  --shadow: 0 10px 30px rgba(22, 33, 43, 0.08);
+  --shadow: 0 1px 2px rgba(22, 33, 43, 0.06);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -497,6 +497,12 @@ button {
   background: var(--primary-strong);
 }
 
+.secondary-btn:hover,
+.icon-btn:hover {
+  border-color: #b9c6d5;
+  background: #f8fafc;
+}
+
 .icon-btn {
   width: 40px;
   padding: 0;
@@ -506,7 +512,7 @@ button {
   padding: 14px;
   padding-bottom: 104px;
   min-width: 0;
-  background: #eef3fb;
+  background: var(--bg);
 }
 
 .data-notice {
@@ -5088,6 +5094,114 @@ tbody tr:hover {
 .priority.medium {
   background: #fff7e6;
   color: var(--warning);
+}
+
+.priority,
+.status {
+  border: 1px solid transparent;
+}
+
+/* Neutral container system: keep color in actions and small badges, not whole cards. */
+.panel,
+.metric,
+.record-card,
+.queue-card,
+.mobile-record-card,
+.readiness-card,
+.daily-detail-card,
+.daily-arcgis-side,
+.map-command-card,
+.lifecycle-next-step,
+.lifecycle-walkthrough-step,
+.map-lifecycle-step,
+.field-mobile-step,
+.field-action-card,
+.workflow-path-card,
+.workflow-stepper-step,
+.workflow-step,
+.erp-spine-step,
+.map-workflow-step,
+.map-source-card,
+.billing-slice-card,
+.billing-five-step,
+.daily-handoff-card,
+.report-packet-card,
+.requirement-card,
+.wizard-step,
+.proof-row,
+.packet-home-list article,
+.packet-preview-list article,
+.packet-checklist-grid article,
+.daily-guided-steps article,
+.daily-package-grid article,
+.daily-evidence-qa-grid article,
+.billing-helper-steps article,
+.billing-gate-grid article,
+.financial-closeout-grid article,
+.foreman-next-card,
+.foreman-simple-step,
+.foreman-home-card,
+.foreman-home-status article,
+.foreman-check-card,
+.foreman-tool-card,
+.operations-step-card,
+.operations-tool-card,
+.operations-status-strip article,
+.safety-step-card,
+.safety-tool-card,
+.safety-status-strip article {
+  background: #ffffff;
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.field-mobile-step:where(.ok, .clear, .ready, .submitted, .bad, .blocked, .warn, .needs-review, .pending),
+.field-action-card:where(.ok, .clear, .ready, .submitted, .bad, .blocked, .warn, .needs-review, .pending),
+.workflow-path-card:where(.active, .current, .ok, .ready, .blocked, .needs-review, .pending),
+.workflow-stepper-step:where(.active, .current, .ok, .ready, .blocked, .needs-review, .pending),
+.erp-spine-step:where(.ready, .released, .submitted, .tracked, .blocked, .missing, .not-ready, .needs-review, .open, .pending),
+.map-workflow-step:where(.ok, .warn, .bad),
+.map-source-card:where(.ready, .submitted, .clear, .closed, .needs-review, .open, .not-ready, .missing, .blocked),
+.billing-slice-card:where(.ok, .warn, .bad),
+.billing-five-step:where(.ok, .warn, .bad),
+.daily-handoff-card:where(.needs-review, .missing, .pending, .variance, .ready, .locked),
+.report-packet-card:where(.needs-review, .ready, .locked),
+.requirement-card:where(.ok, .warn, .bad),
+.wizard-step:where(.ok, .warn, .bad),
+.daily-guided-steps article:where(.ok, .ready, .submitted, .bad, .blocked, .needs-review),
+.daily-package-grid article:where(.ready, .blocked),
+.daily-evidence-qa-grid article:where(.ready, .blocked),
+.billing-helper-steps article:where(.ready, .blocked),
+.billing-gate-grid article:where(.ready, .blocked),
+.financial-closeout-grid article:where(.ok, .warn, .bad),
+.foreman-next-card:where(.ok, .warn, .info, .bad),
+.foreman-simple-step:where(.ok, .warn, .info, .bad),
+.foreman-home-status article:where(.ready, .blocked),
+.production-ledger-table article:where(.ready, .rate-missing, .needs-review),
+.packet-preview-list article:where(.ready, .blocked),
+.packet-checklist-grid article:where(.needs-review),
+.guided-fix-card:where(.bad, .warn) {
+  background: #ffffff;
+}
+
+.field-mobile-step:where(.active, .current),
+.workflow-path-card:where(.active, .current),
+.workflow-stepper-step:where(.active, .current),
+.billing-card.active,
+.squan-map-card.selected,
+.project-list button.active,
+.report-packet-card:hover,
+.daily-handoff-card:hover {
+  border-color: var(--primary);
+  background: #ffffff;
+}
+
+.field-mobile-step:where(.active, .current),
+.workflow-path-card:where(.active, .current),
+.workflow-stepper-step:where(.active, .current),
+.map-command-card.primary,
+.data-control-card.primary {
+  box-shadow: inset 3px 0 0 var(--primary);
 }
 
 .priority.low {
@@ -13767,6 +13881,130 @@ tbody tr:hover {
   padding: 30px;
   color: var(--muted);
   text-align: center;
+}
+
+/* Final neutral-container pass: later feature styles may set tinted backgrounds, so reset
+   operational containers here while preserving badge colors and blue actions. */
+.panel,
+.metric,
+.record-card,
+.queue-card,
+.mobile-record-card,
+.readiness-card,
+.daily-detail-card,
+.daily-arcgis-side,
+.map-command-card,
+.lifecycle-next-step,
+.lifecycle-walkthrough-step,
+.map-lifecycle-step,
+.field-mobile-step,
+.field-action-card,
+.workflow-path-card,
+.workflow-stepper-step,
+.workflow-step,
+.erp-spine-step,
+.map-workflow-step,
+.map-source-card,
+.billing-slice-card,
+.billing-five-step,
+.daily-handoff-card,
+.report-packet-card,
+.requirement-card,
+.wizard-step,
+.proof-row,
+.packet-home-list article,
+.packet-preview-list article,
+.packet-checklist-grid article,
+.daily-guided-steps article,
+.daily-package-grid article,
+.daily-evidence-qa-grid article,
+.billing-helper-steps article,
+.billing-gate-grid article,
+.financial-closeout-grid article,
+.foreman-next-card,
+.foreman-simple-step,
+.foreman-home-card,
+.foreman-home-status article,
+.foreman-check-card,
+.foreman-tool-card,
+.operations-step-card,
+.operations-tool-card,
+.operations-status-strip article,
+.safety-step-card,
+.safety-tool-card,
+.safety-status-strip article,
+.production-ledger-table article,
+.project-row,
+.compact-card,
+.compact-photo-card,
+.photo-card,
+.evidence-card,
+.obstacle-card {
+  background: #ffffff;
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.field-mobile-step:where(.ok, .clear, .ready, .submitted, .bad, .blocked, .warn, .needs-review, .pending),
+.field-action-card:where(.ok, .clear, .ready, .submitted, .bad, .blocked, .warn, .needs-review, .pending),
+.workflow-path-card:where(.active, .current, .ok, .ready, .blocked, .needs-review, .pending),
+.workflow-stepper-step:where(.active, .current, .ok, .ready, .blocked, .needs-review, .pending),
+.erp-spine-step:where(.ready, .released, .submitted, .tracked, .blocked, .missing, .not-ready, .needs-review, .open, .pending),
+.map-workflow-step:where(.ok, .warn, .bad),
+.map-source-card:where(.ready, .submitted, .clear, .closed, .needs-review, .open, .not-ready, .missing, .blocked),
+.billing-slice-card:where(.ok, .warn, .bad),
+.billing-five-step:where(.ok, .warn, .bad),
+.daily-handoff-card:where(.needs-review, .missing, .pending, .variance, .ready, .locked),
+.report-packet-card:where(.needs-review, .ready, .locked),
+.requirement-card:where(.ok, .warn, .bad),
+.wizard-step:where(.ok, .warn, .bad),
+.daily-guided-steps article:where(.ok, .ready, .submitted, .bad, .blocked, .needs-review),
+.daily-package-grid article:where(.ready, .blocked),
+.daily-evidence-qa-grid article:where(.ready, .blocked),
+.billing-helper-steps article:where(.ready, .blocked),
+.billing-gate-grid article:where(.ready, .blocked),
+.financial-closeout-grid article:where(.ok, .warn, .bad),
+.foreman-next-card:where(.ok, .warn, .info, .bad),
+.foreman-simple-step:where(.ok, .warn, .info, .bad),
+.foreman-home-status article:where(.ready, .blocked),
+.production-ledger-table article:where(.ready, .rate-missing, .needs-review),
+.packet-preview-list article:where(.ready, .blocked),
+.packet-checklist-grid article:where(.needs-review),
+.guided-fix-card:where(.bad, .warn) {
+  background: #ffffff;
+}
+
+.nav button.active,
+.nav button:hover {
+  background: #344d7c;
+}
+
+.workflow-context-bar button.active {
+  background: #ffffff;
+  box-shadow: inset 0 -3px 0 var(--primary);
+}
+
+.workflow-context-bar button:hover {
+  background: #ffffff;
+}
+
+.primary-btn {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+
+.secondary-btn {
+  background: #ffffff;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.secondary-btn:hover,
+.icon-btn:hover {
+  background: #ffffff;
+  border-color: var(--primary);
+  color: var(--primary-strong);
 }
 
 .mobile-menu {
