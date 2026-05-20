@@ -517,6 +517,8 @@ const importFirstProductionTokens = [
   ["Simplified Admin command center", "renderAdminSimplifiedCommandCenter"],
   ["Admin advanced workflow drawer", "Advanced workflow details"],
   ["Workflow context strip", "renderWorkflowContextBar"],
+  ["Normalized workflow status", "workflowStatusBadge"],
+  ["Needs work indicator", "Needs work"],
   ["Daily Capture nav label", "Daily Capture"],
   ["Billing code totals subtitle", "Closed/billed status, code breakdown"],
   ["Map daily billing status", "renderMapDailyProductionStatusPanel"],

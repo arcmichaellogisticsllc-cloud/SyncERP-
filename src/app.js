@@ -4166,6 +4166,48 @@ function plainStatus(status) {
   return labels[normal] || text || "Pending";
 }
 
+function workflowStatus(status) {
+  const text = String(status || "").trim();
+  const normal = text.toLowerCase();
+  const done = [
+    "done", "complete", "completed", "completed / billed", "closed", "paid", "submitted",
+    "submitted to squan", "sent to squan", "locked", "finalized", "billed", "used for billing"
+  ];
+  const ready = [
+    "ready", "clear", "clear to start", "active", "current", "available", "accepted",
+    "approved", "admin approved", "reviewed", "attached", "field ready", "field verified",
+    "passed", "tracked", "ready to bill", "billing ready", "ready to submit", "ready to verify",
+    "reconciled", "proof attached", "deposit verified", "verified", "synced", "viewable"
+  ];
+  const blocked = [
+    "blocked", "rejected", "rejected by squan", "hold", "unavailable", "missing",
+    "past due", "overdue / forfeiture risk", "chargeback received", "rework required",
+    "billing blocker", "closeout blocker", "escalated"
+  ];
+  if (done.includes(normal)) return { label: "Done", className: "done", icon: "✓", detail: text };
+  if (ready.includes(normal)) return { label: "Ready", className: "ready", icon: "✓", detail: text };
+  if (blocked.includes(normal)) return { label: "Blocked", className: "blocked", icon: "!", detail: text };
+  return { label: "Needs work", className: "needs-work", icon: "•", detail: text || "Pending" };
+}
+
+function workflowStatusClass(status) {
+  return workflowStatus(status).className;
+}
+
+function workflowStatusLabel(status) {
+  return workflowStatus(status).label;
+}
+
+function workflowStatusIcon(status) {
+  return workflowStatus(status).icon;
+}
+
+function workflowStatusBadge(status, detail = "") {
+  const normalized = workflowStatus(status);
+  const title = escapeAttr(detail || normalized.detail || normalized.label);
+  return `<span class="workflow-status ${normalized.className}" title="${title}"><em>${normalized.icon}</em>${normalized.label}</span>`;
+}
+
 function navIcon(name) {
   const icons = {
     home: `<path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-7h6v7"></path>`,
@@ -6458,7 +6500,7 @@ function openNeedsFixRemedyDrawer(projectId, rowId, pathKey = "fix-problems") {
           <h3>${row.title}</h3>
           <p>${canAct ? row.next : `${row.owner} owns this fix. Send the request so the work is tracked instead of guessing what to do next.`}</p>
         </div>
-        <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+        ${workflowStatusBadge(row.status)}
       </section>
       <section>
         <h3>What must happen</h3>
@@ -7288,12 +7330,12 @@ function renderMapDailyProductionStatusPanel(project) {
           <h2>Daily capture handoff</h2>
           <p>Compact check of the path from SQUAN/ArcGIS daily evidence to Jackson production, proof, billing, and quantity reconciliation.</p>
         </div>
-        <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+        ${workflowStatusBadge(row.status)}
       </div>
       <div class="daily-handoff-strip">
         ${statusCards.map(card => `
-          <button class="daily-handoff-card ${statusClass(card.status)}" data-workflow-action="${card.label === "Billing" ? "Billing" : card.label === "Quantity" ? "Reports" : "Production"}" data-workflow-id="${project.id}" data-workflow-focus="${card.label === "Billing" ? "Code breakdown" : card.label === "Quantity" ? "Daily / Production Audit Trail" : "Daily Detail View"}" ${card.label === "Quantity" ? `data-report-scope="Executive Report"` : ""}>
-            <span class="status ${statusClass(card.status)}">${plainStatus(card.status)}</span>
+          <button class="daily-handoff-card ${workflowStatusClass(card.status)}" data-workflow-action="${card.label === "Billing" ? "Billing" : card.label === "Quantity" ? "Reports" : "Production"}" data-workflow-id="${project.id}" data-workflow-focus="${card.label === "Billing" ? "Code breakdown" : card.label === "Quantity" ? "Daily / Production Audit Trail" : "Daily Detail View"}" ${card.label === "Quantity" ? `data-report-scope="Executive Report"` : ""}>
+            ${workflowStatusBadge(card.status)}
             <strong>${card.label}</strong>
             <em>${card.value}</em>
             <small>${card.detail}</small>
@@ -7331,7 +7373,7 @@ function renderDailyProductionAuditReport(projects = scopedRows("projects")) {
               <span>Lines<small>${row.lines.map(line => line.id).slice(0, 3).join(", ") || "None"}${row.lines.length > 3 ? ` +${row.lines.length - 3}` : ""}</small></span>
               <span>Billing ledger<small>${row.ledger.map(item => item.id).slice(0, 2).join(", ") || "Pending"}${row.ledger.length > 2 ? ` +${row.ledger.length - 2}` : ""}</small></span>
               <span>Reconciliation<small>${row.quantity.length ? `${row.quantity.length} row(s), variance ${variance.toLocaleString()}` : "Pending SQUAN export"}</small></span>
-              <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+              ${workflowStatusBadge(row.status)}
             </article>
           `;
         }).join("") || `<p class="empty-state">No daily/production audit records are available yet.</p>`}
@@ -7399,7 +7441,7 @@ function renderOwnerCommandCenter(projects, readiness, alerts, cashSummary) {
       </div>
       <div class="field-mobile-steps owner-workflow-steps">
         ${steps.map(step => `
-          <button class="field-mobile-step ${statusClass(step[2])}" data-workflow-action="${step[4]}" data-workflow-id="${state.selectedProjectId || projects[0]?.id || ""}" data-workflow-focus="${step[5]}" ${step[4] === "Reports" ? `data-report-scope="Executive Report"` : ""}>
+          <button class="field-mobile-step ${workflowStatusClass(step[2])}" data-workflow-action="${step[4]}" data-workflow-id="${state.selectedProjectId || projects[0]?.id || ""}" data-workflow-focus="${step[5]}" ${step[4] === "Reports" ? `data-report-scope="Executive Report"` : ""}>
             <span>${step[0]}</span>
             <strong>${step[1]}</strong>
             <small>${step[3]}</small>
@@ -7465,7 +7507,7 @@ function renderOwnerOperatingSignals(projects, readiness, cashSummary) {
       <div class="packet-home-list">
         ${signals.map(item => `
           <article>
-            <span class="status ${statusClass(item.status)}">${item.status}</span>
+            ${workflowStatusBadge(item.status)}
             <div>
               <strong>${item.title}</strong>
               <small>${item.detail}</small>
@@ -7544,7 +7586,7 @@ function renderAdminActionLane(title, detail, rows, emptyText) {
       <div class="packet-home-list">
         ${rows.slice(0, 5).map(row => `
           <article>
-            <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+            ${workflowStatusBadge(row.status)}
             <div>
               <strong>${row.title}</strong>
               <small>${row.detail}</small>
@@ -7587,7 +7629,7 @@ function renderAdminSimplifiedCommandCenter({ projects, readiness, alerts, cashS
           ["3", "Bill / collect", moneyItems.length ? "Open" : "Clear", "Ready to bill, unpaid 90%, retainage, and cash risk.", "Billing", "Payment Ledger"],
           ["4", "Audit only when needed", alerts.length ? "Tracked" : "Clear", "Reports, packet locks, and support exports stay behind details.", "Reports", "Executive Report"]
         ].map(step => `
-          <button class="field-mobile-step ${statusClass(step[2])}" data-workflow-action="${step[4]}" data-workflow-id="${state.selectedProjectId || projects[0]?.id || ""}" data-workflow-focus="${step[5]}" ${step[4] === "Reports" ? `data-report-scope="Executive Report"` : ""}>
+          <button class="field-mobile-step ${workflowStatusClass(step[2])}" data-workflow-action="${step[4]}" data-workflow-id="${state.selectedProjectId || projects[0]?.id || ""}" data-workflow-focus="${step[5]}" ${step[4] === "Reports" ? `data-report-scope="Executive Report"` : ""}>
             <span>${step[0]}</span>
             <strong>${step[1]}</strong>
             <small>${step[3]}</small>
@@ -21798,8 +21840,8 @@ function renderReportPacketPriorityQueue(projects, selectedProject) {
         ${packetRows.map(row => {
           const firstBlocker = row.blockers[0];
           return `
-            <button class="report-packet-card ${statusClass(row.status)}" data-workflow-action="${firstBlocker?.action || "Reports"}" data-workflow-id="${selectedProject?.id || ""}" data-workflow-focus="${row.scope}" data-report-scope="${row.scope}">
-              <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+            <button class="report-packet-card ${workflowStatusClass(row.status)}" data-workflow-action="${firstBlocker?.action || "Reports"}" data-workflow-id="${selectedProject?.id || ""}" data-workflow-focus="${row.scope}" data-report-scope="${row.scope}">
+              ${workflowStatusBadge(row.status)}
               <strong>${row.scope}</strong>
               <em>${row.ready}/${row.total || 0}</em>
               <small>${firstBlocker ? firstBlocker.label : row.lock ? "Packet locked" : "Ready to export"}</small>
@@ -21815,7 +21857,7 @@ function renderReportPacketPriorityQueue(projects, selectedProject) {
         <div class="packet-home-list compact">
           ${rows.map(row => `
             <article>
-              <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+              ${workflowStatusBadge(row.status)}
               <div>
                 <strong>${row.title}</strong>
                 <small>${row.detail}</small>
@@ -33916,7 +33958,7 @@ function renderBillingCodeBreakdownPanel(project, context) {
           <h2>Code breakdown</h2>
           <p>Submitted code quantities totaled from the imported price sheet.</p>
         </div>
-        <span class="status ${statusClass(closedBilled ? "Ready" : "Open")}">${closedBilled ? "Closed / Billed" : "Open Billing"} · ${escapeAttr(squanMapTitle(project))}</span>
+        ${workflowStatusBadge(closedBilled ? "Done" : "Open Billing", squanMapTitle(project))}
       </div>
       <div class="billing-code-summary">
         <span>Closed / Billed<strong>${closedBilled ? "Yes" : "No"}</strong></span>
@@ -33952,7 +33994,7 @@ function renderBillingCodeBreakdownPanel(project, context) {
                 <td>${currency(row.rate || 0)}</td>
                 <td>${currency(row.priceSheetTotal || 0)}</td>
                 <td>${currency(row.billableTotal || 0)}</td>
-                <td><span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span></td>
+                <td>${workflowStatusBadge(row.status)}</td>
               </tr>
             `).join("") || `<tr><td colspan="9">No submitted production codes for this Map yet.</td></tr>`}
           </tbody>

@@ -5091,6 +5091,50 @@ tbody tr:hover {
   color: var(--primary-strong);
 }
 
+.workflow-status {
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.workflow-status em {
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.workflow-status.ready {
+  background: #e6f6f1;
+  color: #0b6f5c;
+  border-color: #b8e4d8;
+}
+
+.workflow-status.needs-work {
+  background: #fff1d8;
+  color: #955100;
+  border-color: #f3d08a;
+}
+
+.workflow-status.blocked {
+  background: #fee4e2;
+  color: var(--danger);
+  border-color: #f4b8b2;
+}
+
+.workflow-status.done {
+  background: #e7f1fb;
+  color: var(--primary-strong);
+  border-color: #bdd7ef;
+}
+
 .priority.medium {
   background: #fff7e6;
   color: var(--warning);
@@ -5155,8 +5199,8 @@ tbody tr:hover {
   box-shadow: none;
 }
 
-.field-mobile-step:where(.ok, .clear, .ready, .submitted, .bad, .blocked, .warn, .needs-review, .pending),
-.field-action-card:where(.ok, .clear, .ready, .submitted, .bad, .blocked, .warn, .needs-review, .pending),
+.field-mobile-step:where(.ok, .clear, .ready, .done, .submitted, .bad, .blocked, .warn, .needs-review, .needs-work, .pending),
+.field-action-card:where(.ok, .clear, .ready, .done, .submitted, .bad, .blocked, .warn, .needs-review, .needs-work, .pending),
 .workflow-path-card:where(.active, .current, .ok, .ready, .blocked, .needs-review, .pending),
 .workflow-stepper-step:where(.active, .current, .ok, .ready, .blocked, .needs-review, .pending),
 .erp-spine-step:where(.ready, .released, .submitted, .tracked, .blocked, .missing, .not-ready, .needs-review, .open, .pending),
@@ -5164,8 +5208,8 @@ tbody tr:hover {
 .map-source-card:where(.ready, .submitted, .clear, .closed, .needs-review, .open, .not-ready, .missing, .blocked),
 .billing-slice-card:where(.ok, .warn, .bad),
 .billing-five-step:where(.ok, .warn, .bad),
-.daily-handoff-card:where(.needs-review, .missing, .pending, .variance, .ready, .locked),
-.report-packet-card:where(.needs-review, .ready, .locked),
+.daily-handoff-card:where(.needs-review, .needs-work, .missing, .pending, .variance, .ready, .done, .locked),
+.report-packet-card:where(.needs-review, .needs-work, .ready, .done, .locked),
 .requirement-card:where(.ok, .warn, .bad),
 .wizard-step:where(.ok, .warn, .bad),
 .daily-guided-steps article:where(.ok, .ready, .submitted, .bad, .blocked, .needs-review),
@@ -13945,8 +13989,8 @@ tbody tr:hover {
   box-shadow: none;
 }
 
-.field-mobile-step:where(.ok, .clear, .ready, .submitted, .bad, .blocked, .warn, .needs-review, .pending),
-.field-action-card:where(.ok, .clear, .ready, .submitted, .bad, .blocked, .warn, .needs-review, .pending),
+.field-mobile-step:where(.ok, .clear, .ready, .done, .submitted, .bad, .blocked, .warn, .needs-review, .needs-work, .pending),
+.field-action-card:where(.ok, .clear, .ready, .done, .submitted, .bad, .blocked, .warn, .needs-review, .needs-work, .pending),
 .workflow-path-card:where(.active, .current, .ok, .ready, .blocked, .needs-review, .pending),
 .workflow-stepper-step:where(.active, .current, .ok, .ready, .blocked, .needs-review, .pending),
 .erp-spine-step:where(.ready, .released, .submitted, .tracked, .blocked, .missing, .not-ready, .needs-review, .open, .pending),
@@ -13954,8 +13998,8 @@ tbody tr:hover {
 .map-source-card:where(.ready, .submitted, .clear, .closed, .needs-review, .open, .not-ready, .missing, .blocked),
 .billing-slice-card:where(.ok, .warn, .bad),
 .billing-five-step:where(.ok, .warn, .bad),
-.daily-handoff-card:where(.needs-review, .missing, .pending, .variance, .ready, .locked),
-.report-packet-card:where(.needs-review, .ready, .locked),
+.daily-handoff-card:where(.needs-review, .needs-work, .missing, .pending, .variance, .ready, .done, .locked),
+.report-packet-card:where(.needs-review, .needs-work, .ready, .done, .locked),
 .requirement-card:where(.ok, .warn, .bad),
 .wizard-step:where(.ok, .warn, .bad),
 .daily-guided-steps article:where(.ok, .ready, .submitted, .bad, .blocked, .needs-review),
