@@ -21782,30 +21782,52 @@ function renderReportPacketPriorityQueue(projects, selectedProject) {
       scope: event.detail?.scope || state.reportPrintScope
     }));
   const rows = [...reopenTasks, ...mismatchRows, ...packetBlockers].slice(0, 12);
+  const needsReview = packetRows.filter(row => row.status === "Needs Review");
+  const ready = packetRows.filter(row => row.status === "Ready");
+  const locked = packetRows.filter(row => row.status === "Locked");
   return `
     <section class="panel report-priority-actions">
       <div class="panel-header">
         <div>
-          <h2>Packet priority queue</h2>
-          <p>Open packet tasks, scope mismatches, and checklist blockers that prevent clean submission or audit export.</p>
+          <h2>Packet readiness board</h2>
+          <p>Pick the packet scope first. Open the detailed blocker list only when a packet is not ready.</p>
         </div>
-        <span>${rows.length} item(s)</span>
+        <span>${needsReview.length} review · ${ready.length} ready · ${locked.length} locked</span>
       </div>
-      <div class="packet-home-list">
-        ${rows.map(row => `
-          <article>
-            <span class="status ${statusClass(row.status)}">${row.status}</span>
-            <div>
-              <strong>${row.title}</strong>
-              <small>${row.detail}</small>
-            </div>
-            <div class="packet-home-actions">
-              ${row.task ? `<button class="secondary-btn" data-task-open="${row.task.id}">Task</button>` : ""}
-              <button class="secondary-btn" data-workflow-action="${row.action}" data-workflow-id="${selectedProject?.id || ""}" data-workflow-focus="${row.scope}" data-report-scope="${row.scope}">Open</button>
-            </div>
-          </article>
-        `).join("") || `<p class="empty-state">No packet blocker is currently open.</p>`}
+      <div class="report-packet-board">
+        ${packetRows.map(row => {
+          const firstBlocker = row.blockers[0];
+          return `
+            <button class="report-packet-card ${statusClass(row.status)}" data-workflow-action="${firstBlocker?.action || "Reports"}" data-workflow-id="${selectedProject?.id || ""}" data-workflow-focus="${row.scope}" data-report-scope="${row.scope}">
+              <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+              <strong>${row.scope}</strong>
+              <em>${row.ready}/${row.total || 0}</em>
+              <small>${firstBlocker ? firstBlocker.label : row.lock ? "Packet locked" : "Ready to export"}</small>
+            </button>
+          `;
+        }).join("")}
       </div>
+      <details class="packet-blocker-details">
+        <summary>
+          <span>Detailed blocker list</span>
+          <small>${rows.length} task, mismatch, or checklist item(s)</small>
+        </summary>
+        <div class="packet-home-list compact">
+          ${rows.map(row => `
+            <article>
+              <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+              <div>
+                <strong>${row.title}</strong>
+                <small>${row.detail}</small>
+              </div>
+              <div class="packet-home-actions">
+                ${row.task ? `<button class="secondary-btn" data-task-open="${row.task.id}">Task</button>` : ""}
+                <button class="secondary-btn" data-workflow-action="${row.action}" data-workflow-id="${selectedProject?.id || ""}" data-workflow-focus="${row.scope}" data-report-scope="${row.scope}">Open</button>
+              </div>
+            </article>
+          `).join("") || `<p class="empty-state">No packet blocker is currently open.</p>`}
+        </div>
+      </details>
     </section>
   `;
 }

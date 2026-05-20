@@ -4152,6 +4152,97 @@ button {
   color: var(--ink);
 }
 
+.report-packet-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.report-packet-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 5px;
+  align-content: start;
+}
+
+.report-packet-card:hover {
+  border-color: #b8c7d8;
+  background: #f8fbff;
+}
+
+.report-packet-card.needs-review {
+  background: #fffdf8;
+}
+
+.report-packet-card.ready,
+.report-packet-card.locked {
+  background: #f8fffc;
+}
+
+.report-packet-card .status {
+  justify-self: start;
+}
+
+.report-packet-card strong,
+.report-packet-card em,
+.report-packet-card small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.report-packet-card strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.report-packet-card em {
+  color: var(--ink);
+  font-style: normal;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.report-packet-card small {
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.packet-blocker-details {
+  border-top: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.packet-blocker-details > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.packet-blocker-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.packet-blocker-details > summary span {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.packet-blocker-details > summary small {
+  color: var(--muted);
+}
+
 .workflow-sync-notice {
   margin: 0 12px 12px;
   border: 1px solid var(--line);
@@ -13761,6 +13852,7 @@ tbody tr:hover {
   .admin-simple-steps,
   .admin-simple-lanes,
   .daily-handoff-strip,
+  .report-packet-board,
   .production-ledger-table article,
   .production-ledger-actions,
   .safety-status-strip,
@@ -14225,6 +14317,7 @@ tbody tr:hover {
   .admin-simple-steps,
   .admin-simple-lanes,
   .daily-handoff-strip,
+  .report-packet-board,
   .safety-status-strip,
   .safety-step-grid,
   .safety-map-list,
