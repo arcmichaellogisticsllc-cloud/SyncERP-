@@ -226,7 +226,7 @@ const workflowFocusRoutes = [
   ["Daily start focus route", "daily start\", \"jsa\", \"ppe\", \"safety start"],
   ["Operations release focus route", "includesAny(\"release\")"],
   ["Safety incident focus route", "form 12\", \"incident\", \"near miss\", \"corrective"],
-  ["Billing package focus route", "invoice\", \"package\", \"packet"]
+  ["Billing package focus route", "Invoice package"]
 ];
 
 for (const [label, token] of workflowFocusRoutes) {
@@ -298,12 +298,13 @@ for (const [label, token] of operationsUiTokens) {
 }
 
 const billingUiTokens = [
-  ["Billing can-we-bill home", "renderBillingCanWeBillHome"],
-  ["Billing simple path", "renderBillingMapBillingPath"],
-  ["Billing Map queue", "renderBillingMapQueue"],
-  ["Billing quick tools", "renderBillingQuickTools"],
-  ["Billing plain question", "Can we bill"],
-  ["Billing step cards", "billing-step-card"]
+  ["Billing slice command", "renderBillingCommandCenterSlice"],
+  ["Selected Map billing panel", "renderSelectedMapBillingPanel"],
+  ["Billing code breakdown", "renderBillingCodeBreakdownPanel"],
+  ["Billing five-step path", "renderBillingFiveStepSlice"],
+  ["Billing work queues", "renderBillingQueueTabs"],
+  ["Billing plain action", "Bill, submit, collect"],
+  ["Billing step cards", "billing-five-step"]
 ];
 
 for (const [label, token] of billingUiTokens) {
@@ -331,18 +332,18 @@ const plainLanguageTokens = [
   ["Plain proof label", "Files / Proof"],
   ["Plain billing label", "Billing"],
   ["Plain field label", "Today’s Work"],
-  ["Plain held-back money wording", "Money held back"],
+  ["Plain held-back money wording", "10% Retainage"],
   ["Plain unpaid wording", "Unpaid follow-up"],
   ["Plain payment ledger wording", "Map Payment Ledger"],
   ["Payment ledger row helper", "function mapPaymentLedgerRows"],
   ["Payment ledger row renderer", "function renderMapPaymentLedgerRow"],
   ["Payment ledger invoice sent column", "Invoice sent"],
   ["Payment ledger close billing column", "Close billing"],
-  ["Billing today command view", "function renderBillingTodayCommand"],
-  ["Billing payment action queue", "function renderBillingPaymentActionQueue"],
-  ["Billing close guard", "function renderBillingCloseGuardPanel"],
-  ["Billing aging buckets", "function renderBillingAgingBuckets"],
-  ["Billing daily work wording", "Billing Today"],
+  ["Billing slice command view", "function renderBillingCommandCenterSlice"],
+  ["Billing selected map panel", "function renderSelectedMapBillingPanel"],
+  ["Billing code breakdown", "function renderBillingCodeBreakdownPanel"],
+  ["Billing five-step wording", "Five steps only"],
+  ["Billing daily work wording", "Bill, submit, collect"],
   ["Daily requirement wording", "Daily requirements"],
   ["Daily guided workflow", "Daily work path"],
   ["Daily form output preview", "What this daily will export"],
@@ -354,9 +355,9 @@ const plainLanguageTokens = [
   ["Completed forms server endpoint", "/api/reports/completed-forms.csv"],
   ["Production invoice ledger wording", "Production to invoice ledger"],
   ["Production invoice ledger helper", "function productionToInvoiceLedger"],
-  ["Billing work-to-do wording", "Work to do"],
+  ["Billing work-to-do wording", "Work queues"],
   ["Plain payment detail wording", "Payment Detail"],
-  ["Plain billing close wording", "Can we close billing?"],
+  ["Plain billing close wording", "Closed / Billed"],
   ["Plain 10 percent held wording", "10% Held Back"],
   ["Plain unpaid follow-up panel", "Unpaid money follow-up"],
   ["Plain deposit proof wording", "Deposit Proof"],
@@ -393,7 +394,7 @@ const compactQueueTokens = [
   ["Shared status pills do not stretch", "packet-home-list article > .status"],
   ["Plain missing safety proof", "Missing safety proof"],
   ["Admin decisions grouped", "renderAdminDecisionGroup"],
-  ["Billing work grouped", "renderBillingWorkGroup"],
+  ["Billing work grouped", "renderBillingQueueTabs"],
   ["Task first actions", "Tasks To Do First"],
   ["Collections grouped", "renderCollectionsWorkGroup"],
   ["Collections plain title", "Collections Follow-Up"]
@@ -589,8 +590,8 @@ for (const [label, token] of acceptedPacketTokens) {
 
 const mapLayoutCleanupTokens = [
   ["Map detail shell", "map-detail-shell"],
-  ["Sticky Map selector", "project-list-panel"],
-  ["Bounded Map selector", "max-height: calc(100vh - 156px)"],
+  ["Collapsed Map selector", "collapsed-project-list"],
+  ["Map selector summary", "Filters and list"],
   ["Responsive Map workbench", ".project-hub"]
 ];
 

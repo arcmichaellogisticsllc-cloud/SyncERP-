@@ -1558,18 +1558,6 @@ button {
   color: var(--muted);
 }
 
-.billing-simple-home,
-.billing-simple-path,
-.billing-map-queue,
-.billing-tools-panel,
-.billing-today-command,
-.billing-payment-actions,
-.billing-close-guard,
-.billing-aging-buckets {
-  display: grid;
-  gap: 14px;
-}
-
 .billing-slice-command,
 .selected-billing-panel,
 .billing-code-breakdown,
@@ -1590,8 +1578,7 @@ button {
   margin: 2px 0 6px;
 }
 
-.billing-simple-head p,
-.billing-tools-panel p {
+.billing-simple-head p {
   margin: 0;
   color: var(--muted);
   line-height: 1.45;
@@ -1786,82 +1773,6 @@ button {
   padding: 0 12px 12px;
 }
 
-.billing-status-strip,
-.billing-step-grid,
-.billing-map-list,
-.billing-tool-grid,
-.billing-today-grid,
-.billing-payment-groups,
-.billing-guard-grid,
-.billing-aging-grid {
-  display: grid;
-  gap: 10px;
-}
-
-.billing-status-strip {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.billing-step-grid,
-.billing-tool-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
-.billing-map-list {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.billing-today-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.billing-payment-groups {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.billing-guard-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.billing-aging-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.billing-status-strip article,
-.billing-step-card,
-.billing-map-list button,
-.billing-tool-card,
-.billing-today-card,
-.billing-payment-groups > article,
-.billing-guard-grid article,
-.billing-aging-grid > article {
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: #f8fafc;
-  padding: 12px;
-}
-
-.billing-today-card {
-  text-align: left;
-  display: grid;
-  gap: 6px;
-  color: var(--ink);
-}
-
-.billing-today-card span,
-.billing-today-card small,
-.billing-guard-grid small,
-.billing-aging-grid small {
-  display: block;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-.billing-today-card strong {
-  font-size: 24px;
-}
-
 .production-invoice-ledger {
   display: grid;
   gap: 12px;
@@ -1936,106 +1847,6 @@ button {
 .production-ledger-note.stale {
   color: #9a3412;
   font-weight: 700;
-}
-
-.billing-action-list {
-  display: grid;
-  gap: 8px;
-}
-
-.billing-action-list button,
-.billing-aging-grid button {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #ffffff;
-  color: var(--ink);
-  padding: 10px;
-  text-align: left;
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-
-.billing-action-list strong,
-.billing-action-list small,
-.billing-action-list em,
-.billing-aging-grid strong,
-.billing-aging-grid small {
-  display: block;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.billing-action-list em {
-  color: var(--primary-strong);
-  font-style: normal;
-  font-weight: 900;
-  font-size: 12px;
-}
-
-.billing-guard-grid article {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-}
-
-.billing-guard-grid article.ok {
-  border-color: #a8dacd;
-  background: #f3fbf8;
-}
-
-.billing-guard-grid article.warn {
-  border-color: #fed7aa;
-  background: #fff7ed;
-}
-
-.billing-map-list button.selected {
-  border-color: #9ac7f2;
-  background: #eef7ff;
-}
-
-.billing-status-strip span,
-.billing-status-strip small,
-.billing-step-card small,
-.billing-map-list small,
-.billing-tool-card small {
-  display: block;
-  color: var(--muted);
-}
-
-.billing-status-strip strong {
-  display: block;
-  margin: 5px 0;
-  font-size: 18px;
-  overflow-wrap: anywhere;
-}
-
-.billing-step-card,
-.billing-map-list button,
-.billing-tool-card {
-  text-align: left;
-  display: grid;
-  gap: 7px;
-  color: var(--ink);
-}
-
-.billing-step-card > span {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #e7eef6;
-  color: var(--primary-strong);
-  font-weight: 800;
-}
-
-.billing-step-card em {
-  justify-self: start;
-  font-style: normal;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--muted);
 }
 
 .safety-simple-home,
@@ -9902,7 +9713,7 @@ tbody tr:hover {
 
 .project-hub {
   display: grid;
-  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   align-items: stretch;
   min-width: 0;
@@ -10059,13 +9870,23 @@ tbody tr:hover {
 }
 
 .project-list-panel {
-  position: sticky;
-  top: 12px;
-  max-height: calc(100vh - 156px);
-  min-height: min(640px, calc(100vh - 156px));
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+.collapsed-project-list summary {
+  cursor: pointer;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 900;
+}
+
+.collapsed-project-list summary small {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .map-detail-shell {
@@ -13517,18 +13338,10 @@ tbody tr:hover {
   .operations-step-grid,
   .operations-map-list,
   .operations-tool-grid,
-  .billing-status-strip,
   .billing-slice-cards,
   .selected-billing-grid,
   .billing-five-step-grid,
   .billing-queue-grid,
-  .billing-step-grid,
-  .billing-map-list,
-  .billing-tool-grid,
-  .billing-today-grid,
-  .billing-payment-groups,
-  .billing-guard-grid,
-  .billing-aging-grid,
   .production-ledger-table article,
   .production-ledger-actions,
   .safety-status-strip,
@@ -13980,18 +13793,10 @@ tbody tr:hover {
   .operations-step-grid,
   .operations-map-list,
   .operations-tool-grid,
-  .billing-status-strip,
   .billing-slice-cards,
   .selected-billing-grid,
   .billing-five-step-grid,
   .billing-queue-grid,
-  .billing-step-grid,
-  .billing-map-list,
-  .billing-tool-grid,
-  .billing-today-grid,
-  .billing-payment-groups,
-  .billing-guard-grid,
-  .billing-aging-grid,
   .safety-status-strip,
   .safety-step-grid,
   .safety-map-list,
