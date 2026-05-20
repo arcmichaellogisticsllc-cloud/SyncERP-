@@ -30109,75 +30109,93 @@ function renderProductionDailyForm(projects, codes) {
     <section class="panel production-panel">
       <div class="panel-header">
         <div>
-          <h2>Submit Work</h2>
-          <p>Contractors and techs enter the work Jackson needs to approve.</p>
+          <h2>Daily Capture</h2>
+          <p>Capture the simplified SQUAN daily: header, crew, production code, ArcGIS reference, and proof note.</p>
         </div>
       </div>
       <form class="production-form" id="productionDailyForm">
-        <label>Submitter type
-          <select id="productionSourceType">
-            <option>Contractor Daily</option>
-            <option>In-House Tech Daily</option>
-          </select>
-        </label>
-        <label>Submitter
-          <input id="productionSubmittedBy" value="${escapeAttr(state.user?.name || "Jackson Telcom LLC")}">
-        </label>
-        <label>Map / NTP
-          <select id="productionProject">
-            ${projects.map(project => `<option value="${escapeAttr(project.id)}">${escapeAttr(project.id)} · ${escapeAttr(project.map || project.scope || "")}</option>`).join("")}
-            <option value="BSP-MIC-0190">BSP-MIC-0190 · SQUAN NTP</option>
-          </select>
-        </label>
-        <label>Work date
-          <input id="productionWorkedDate" type="date" value="${isoDate(today)}">
-        </label>
-        <label>Daily ID
-          <input id="productionDailyExternalId" placeholder="SQUAN daily ID or Jackson daily ID">
-        </label>
-        <label>Node / CLLI
-          <input id="productionClli" placeholder="Node / CLLI from SQUAN or ArcGIS">
-        </label>
-        <label>Street / feeder
-          <input id="productionFeeder" placeholder="Street, feeder, or DTAP">
-        </label>
-        <label>Hours
-          <input id="productionHours" type="number" step="0.25" min="0" value="0">
-        </label>
-        <label>Vehicle / equipment
-          <input id="productionVehicle" placeholder="Truck, vehicle, or equipment">
-        </label>
-        <label>Crew allocation
-          <input id="productionCrewAllocation" value="100%" placeholder="100%">
-        </label>
-        <label>Code
-          <select id="productionCode">
-            ${codes.map(code => `<option>${escapeAttr(code)}</option>`).join("")}
-            <option>TS01</option>
-          </select>
-        </label>
-        <label>Quantity
-          <input id="productionQuantity" type="number" step="0.01" min="0" value="1">
-        </label>
-        <label>OBJECTID
-          <input id="productionObjectId" placeholder="Future ArcGIS OBJECTID">
-        </label>
-        <label>GlobalID
-          <input id="productionGlobalId" placeholder="Future ArcGIS GlobalID">
-        </label>
-        <label>point_x
-          <input id="productionPointX" placeholder="Future longitude / x">
-        </label>
-        <label>point_y
-          <input id="productionPointY" placeholder="Future latitude / y">
-        </label>
-        <label>ArcGIS notes
-          <input id="productionArcgisNotes" placeholder="Feature notes, obstruction, or engineering comment">
-        </label>
-        <label>Proof note
-          <input id="productionProofNote" placeholder="Photos, as-built, pole tag, or SQUAN export reference">
-        </label>
-        <button class="primary-btn" type="submit" ${canSubmit ? "" : "disabled"}>Submit line</button>
+        <div class="production-form-section">
+          <div class="section-heading compact"><h3>Header</h3><span>Daily</span></div>
+          <label>Submitter type
+            <select id="productionSourceType" required>
+              <option>Contractor Daily</option>
+              <option>In-House Tech Daily</option>
+            </select>
+          </label>
+          <label>Submitter / tech / foreman
+            <input id="productionSubmittedBy" value="${escapeAttr(state.user?.name || "Jackson Telcom LLC")}" required>
+          </label>
+          <label>Map / NTP
+            <select id="productionProject" required>
+              ${projects.map(project => `<option value="${escapeAttr(project.id)}">${escapeAttr(squanMapTitle(project))} · ${escapeAttr(project.id)}</option>`).join("")}
+              <option value="BSP-MIC-0190">BSP-MIC-0190 · SQUAN NTP</option>
+            </select>
+          </label>
+          <label>Work date
+            <input id="productionWorkedDate" type="date" value="${isoDate(today)}" required>
+          </label>
+          <label>Daily ID
+            <input id="productionDailyExternalId" placeholder="SQUAN daily ID or Jackson daily ID">
+          </label>
+          <label>Vehicle / equipment
+            <input id="productionVehicle" placeholder="Truck, vehicle, or equipment">
+          </label>
+        </div>
+        <div class="production-form-section">
+          <div class="section-heading compact"><h3>Crew / Labor</h3><span>Allocation</span></div>
+          <label>Hours
+            <input id="productionHours" type="number" step="0.25" min="0" value="0">
+          </label>
+          <label>Crew allocation
+            <input id="productionCrewAllocation" value="100%" placeholder="100%">
+          </label>
+        </div>
+        <div class="production-form-section">
+          <div class="section-heading compact"><h3>Production Codes</h3><span>Quantity</span></div>
+          <label>Code
+            <select id="productionCode" required>
+              ${codes.map(code => `<option>${escapeAttr(code)}</option>`).join("")}
+              <option>TS01</option>
+            </select>
+          </label>
+          <label>Quantity
+            <input id="productionQuantity" type="number" step="0.01" min="0" value="1" required>
+          </label>
+        </div>
+        <div class="production-form-section">
+          <div class="section-heading compact"><h3>ArcGIS Feature Reference</h3><span>Display-first</span></div>
+          <label>Node / CLLI
+            <input id="productionClli" placeholder="Node / CLLI from SQUAN or ArcGIS">
+          </label>
+          <label>Street / feeder / DTAP
+            <input id="productionFeeder" placeholder="Street, feeder, or DTAP">
+          </label>
+          <label>OBJECTID
+            <input id="productionObjectId" placeholder="Future ArcGIS OBJECTID">
+          </label>
+          <label>GlobalID
+            <input id="productionGlobalId" placeholder="Future ArcGIS GlobalID">
+          </label>
+          <label>point_x
+            <input id="productionPointX" placeholder="Future longitude / x">
+          </label>
+          <label>point_y
+            <input id="productionPointY" placeholder="Future latitude / y">
+          </label>
+          <label class="wide">ArcGIS notes
+            <input id="productionArcgisNotes" placeholder="Feature notes, obstruction, or engineering comment">
+          </label>
+        </div>
+        <div class="production-form-section">
+          <div class="section-heading compact"><h3>As-Builts / Photos</h3><span>Required for submit</span></div>
+          <label class="wide">Proof note
+            <input id="productionProofNote" placeholder="Photo, as-built, video, pole tag, or SQUAN evidence reference">
+          </label>
+        </div>
+        <div class="production-form-actions">
+          <button class="secondary-btn" type="button" id="productionSaveDraft" ${canSubmit ? "" : "disabled"}>Save draft</button>
+          <button class="primary-btn" type="submit" ${canSubmit ? "" : "disabled"}>Submit daily</button>
+        </div>
       </form>
     </section>
   `;
@@ -31101,34 +31119,59 @@ async function handleProductionCsvImport(input, importType) {
   render();
 }
 
-function handleProductionDailySubmit(event) {
-  event.preventDefault();
-  if (!canCreate("productionLines") && !["Admin", "Operations", "Billing"].includes(state.role)) return;
-  const now = new Date().toISOString();
+function productionDailyFormValues() {
   const sourceType = document.getElementById("productionSourceType")?.value || "Contractor Daily";
   const submittedBy = document.getElementById("productionSubmittedBy")?.value?.trim() || state.user?.name || "Jackson Telcom";
-  const project = document.getElementById("productionProject")?.value || state.selectedProjectId || "";
-  const workedDate = document.getElementById("productionWorkedDate")?.value || isoDate(new Date());
-  const externalDailyId = document.getElementById("productionDailyExternalId")?.value?.trim() || "";
-  const clli = document.getElementById("productionClli")?.value?.trim() || "";
-  const feeder = document.getElementById("productionFeeder")?.value?.trim() || "";
-  const hours = Number(document.getElementById("productionHours")?.value || 0);
-  const vehicle = document.getElementById("productionVehicle")?.value?.trim() || "";
-  const crewAllocation = document.getElementById("productionCrewAllocation")?.value?.trim() || "100%";
-  const code = document.getElementById("productionCode")?.value || "";
-  const quantity = Number(document.getElementById("productionQuantity")?.value || 0);
-  const objectId = document.getElementById("productionObjectId")?.value?.trim() || "";
-  const globalId = document.getElementById("productionGlobalId")?.value?.trim() || "";
-  const pointX = document.getElementById("productionPointX")?.value?.trim() || "";
-  const pointY = document.getElementById("productionPointY")?.value?.trim() || "";
-  const arcgisNotes = document.getElementById("productionArcgisNotes")?.value?.trim() || "";
-  const proofNote = document.getElementById("productionProofNote")?.value?.trim() || "";
+  return {
+    sourceType,
+    submittedBy,
+    project: document.getElementById("productionProject")?.value || state.selectedProjectId || "",
+    workedDate: document.getElementById("productionWorkedDate")?.value || isoDate(new Date()),
+    externalDailyId: document.getElementById("productionDailyExternalId")?.value?.trim() || "",
+    clli: document.getElementById("productionClli")?.value?.trim() || "",
+    feeder: document.getElementById("productionFeeder")?.value?.trim() || "",
+    hours: Number(document.getElementById("productionHours")?.value || 0),
+    vehicle: document.getElementById("productionVehicle")?.value?.trim() || "",
+    crewAllocation: document.getElementById("productionCrewAllocation")?.value?.trim() || "100%",
+    code: document.getElementById("productionCode")?.value || "",
+    quantity: Number(document.getElementById("productionQuantity")?.value || 0),
+    objectId: document.getElementById("productionObjectId")?.value?.trim() || "",
+    globalId: document.getElementById("productionGlobalId")?.value?.trim() || "",
+    pointX: document.getElementById("productionPointX")?.value?.trim() || "",
+    pointY: document.getElementById("productionPointY")?.value?.trim() || "",
+    arcgisNotes: document.getElementById("productionArcgisNotes")?.value?.trim() || "",
+    proofNote: document.getElementById("productionProofNote")?.value?.trim() || ""
+  };
+}
+
+function validateProductionDailyCapture(values, status = "Submitted") {
+  if (status === "Draft") return [];
+  const blockers = [];
+  if (!values.project) blockers.push("Map / NTP is required.");
+  if (!values.workedDate) blockers.push("Work date is required.");
+  if (!values.submittedBy) blockers.push("Submitter / tech / foreman is required.");
+  if (!values.code) blockers.push("Production code is required.");
+  if (Number(values.quantity || 0) <= 0) blockers.push("Quantity must be greater than zero.");
+  if (!values.proofNote) blockers.push("Proof note is required before submit. Reference the photo, as-built, video, pole tag, or SQUAN evidence.");
+  return blockers;
+}
+
+function saveProductionDailyFromForm(status = "Submitted") {
+  if (!canCreate("productionLines") && !["Admin", "Operations", "Billing"].includes(state.role)) return;
+  const values = productionDailyFormValues();
+  const blockers = validateProductionDailyCapture(values, status);
+  if (blockers.length) {
+    alert(`Daily cannot be submitted yet:\n\n${blockers.join("\n")}`);
+    return;
+  }
+  const now = new Date().toISOString();
+  const { sourceType, submittedBy, project, workedDate, externalDailyId, clli, feeder, hours, vehicle, crewAllocation, code, quantity, objectId, globalId, pointX, pointY, arcgisNotes, proofNote } = values;
   const price = productionPriceForCode(code);
   const unitRate = Number(price?.subRate || price?.price || 0);
   const dailyId = `PD-${Date.now()}`;
   const lineId = `PL-${Date.now()}`;
   const proofStatus = proofNote ? "Attached" : "Missing";
-  const reviewStatus = proofNote ? "Submitted" : "Needs Proof";
+  const reviewStatus = status === "Draft" ? "Draft" : proofNote ? "Submitted" : "Needs Proof";
 
   const daily = {
     id: dailyId,
@@ -31144,9 +31187,9 @@ function handleProductionDailySubmit(event) {
     hours,
     vehicle,
     crewAllocation,
-    status: "Submitted",
-    notes: proofNote || arcgisNotes || `${sourceType} submitted for Jackson review.`,
-    activityLog: [{ at: now, by: submittedBy, note: "Production daily submitted." }],
+    status,
+    notes: proofNote || arcgisNotes || `${sourceType} ${status === "Draft" ? "saved as draft" : "submitted for Jackson review"}.`,
+    activityLog: [{ at: now, by: submittedBy, note: status === "Draft" ? "Production daily draft saved." : "Production daily submitted." }],
     createdAt: now,
     modifiedAt: now
   };
@@ -31173,11 +31216,11 @@ function handleProductionDailySubmit(event) {
     pointY,
     arcgisNotes,
     reviewStatus,
-    payableStatus: sourceType.includes("Contractor") ? "Pending Review" : "Job Cost",
-    billableStatus: "Pending Review",
+    payableStatus: status === "Draft" ? "Draft" : sourceType.includes("Contractor") ? "Pending Review" : "Job Cost",
+    billableStatus: status === "Draft" ? "Draft" : "Pending Review",
     proofStatus,
     notes: proofNote || "Proof required before approval.",
-    activityLog: [{ at: now, by: submittedBy, note: "Production line submitted for review." }],
+    activityLog: [{ at: now, by: submittedBy, note: status === "Draft" ? "Production line draft saved." : "Production line submitted for review." }],
     createdAt: now,
     modifiedAt: now
   };
@@ -31207,7 +31250,7 @@ function handleProductionDailySubmit(event) {
       productionLineId: lineId,
       source: sourceType,
       evidenceType: "Note / field proof",
-      status: "Submitted",
+      status: status === "Draft" ? "Draft" : "Submitted",
       productionDailyId: dailyId,
       notes: proofNote,
       objectId,
@@ -31217,9 +31260,19 @@ function handleProductionDailySubmit(event) {
       modifiedAt: now
     });
   }
-  appendAuditLocal("production.daily-submitted", { daily: dailyId, line: lineId, project, by: submittedBy });
-  persist("Production daily submitted for Jackson review");
+  appendAuditLocal(status === "Draft" ? "production.daily-draft" : "production.daily-submitted", { daily: dailyId, line: lineId, project, by: submittedBy });
+  state.selectedProductionDailyId = dailyId;
+  persist(status === "Draft" ? "Production daily draft saved" : "Production daily submitted for Jackson review");
   render();
+}
+
+function handleProductionDailySubmit(event) {
+  event.preventDefault();
+  saveProductionDailyFromForm("Submitted");
+}
+
+function handleProductionDailyDraftSave() {
+  saveProductionDailyFromForm("Draft");
 }
 
 function createProductionDailyFromFeature(featureId) {
@@ -33632,8 +33685,9 @@ function renderBillingCodeBreakdownPanel(project, context) {
         <span class="status ${statusClass(closedBilled ? "Ready" : "Open")}">${closedBilled ? "Closed / Billed" : "Open Billing"} · ${escapeAttr(squanMapTitle(project))}</span>
       </div>
       <div class="billing-code-summary">
+        <span>Closed / Billed<strong>${closedBilled ? "Yes" : "No"}</strong></span>
         <span>Codes<strong>${rows.length}</strong></span>
-        <span>Submitted qty<strong>${Number(sum(rows, "submittedQty") || 0).toLocaleString()}</strong></span>
+        <span>Quantity submitted<strong>${Number(sum(rows, "submittedQty") || 0).toLocaleString()}</strong></span>
         <span>Approved qty<strong>${Number(sum(rows, "approvedQty") || 0).toLocaleString()}</strong></span>
         <span>Price-sheet total<strong>${currency(sum(rows, "priceSheetTotal"))}</strong></span>
         <span>Billable total<strong>${currency(sum(rows, "billableTotal"))}</strong></span>
@@ -43779,6 +43833,8 @@ function bindEvents() {
 
   const productionForm = document.getElementById("productionDailyForm");
   if (productionForm) productionForm.addEventListener("submit", handleProductionDailySubmit);
+  const productionSaveDraft = document.getElementById("productionSaveDraft");
+  if (productionSaveDraft) productionSaveDraft.addEventListener("click", handleProductionDailyDraftSave);
 
   document.querySelectorAll("[data-production-daily-select]").forEach(select => {
     select.addEventListener("change", () => {

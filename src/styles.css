@@ -3535,6 +3535,36 @@ button {
   margin-top: 12px;
 }
 
+.production-form {
+  align-items: start;
+}
+
+.production-form-section {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 12px;
+}
+
+.production-form-section .section-heading {
+  grid-column: 1 / -1;
+}
+
+.production-form-section .wide {
+  grid-column: 1 / -1;
+}
+
+.production-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .production-daily-detail {
   margin-top: 12px;
 }
@@ -13500,6 +13530,7 @@ tbody tr:hover {
   .map-plan-metrics,
   .map-plan-steps,
   .workflow-action-plan,
+  .production-form-section,
   .production-proof-groups,
   .daily-detail-layout,
   .daily-detail-grid,
@@ -13956,6 +13987,7 @@ tbody tr:hover {
   .map-plan-metrics,
   .map-plan-steps,
   .workflow-action-plan,
+  .production-form-section,
   .production-proof-groups,
   .daily-detail-layout,
   .daily-detail-grid,
