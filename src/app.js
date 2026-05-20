@@ -33501,30 +33501,304 @@ function renderMoney() {
   const invoices = scopedRows("invoices").filter(matches);
   const retainageLedger = scopedRows("retainageLedger").filter(matches);
   const cashReceipts = cashReconciliationRows().filter(matches);
-  const selectedProject = scopedRows("projects").find(project => project.id === state.selectedProjectId);
+  const projects = scopedRows("projects");
+  const selectedProject = projects.find(project => project.id === state.selectedProjectId) || projects[0];
   const gross = sum(invoices, "gross");
   const paid = sum(invoices, "paid90");
   const retainage = sum(retainageLedger, "heldAmount") || sum(invoices, "retainage10");
+  const context = billingSliceContext(projects, invoices, retainageLedger);
   return `
-    ${selectedProject ? renderMapPlanWorkflowPanel(selectedProject, "Billing") : ""}
-    <section class="metrics">
-      ${metric("Gross invoiced", currency(gross), "Requires dailies and as-builts")}
-      ${metric("90% received", currency(paid), "Cash applied against expected payment")}
-      ${metric("10% held back", currency(retainage), "Release dates tracked")}
-      ${metric("13-week risk", currency(gross - paid), "Unpaid 90% and pay-when-paid exposure")}
-    </section>
+    ${renderBillingCommandCenterSlice(context)}
+    ${selectedProject ? renderSelectedMapBillingPanel(selectedProject, context) : ""}
+    ${selectedProject ? renderBillingCodeBreakdownPanel(selectedProject, context) : ""}
+    ${selectedProject ? renderBillingFiveStepSlice(selectedProject, context) : ""}
+    ${renderBillingQueueTabs(context)}
     ${selectedProject ? renderPacketLockNotice(selectedProject, "Money, payment, and 10% held-back records") : ""}
-    ${renderPostSubmissionArDashboard(scopedRows("projects"))}
-    ${renderArAgingPanel()}
-    ${renderMissingEvidenceInbox(scopedRows("tasks"))}
-    ${renderBillingReadinessMatrix()}
-    ${selectedProject ? renderInvoicePackageBuilder(selectedProject) : ""}
-    ${renderBillingReadinessQueue()}
-    ${renderBankDepositBatchWorkflow(cashReceipts)}
-    ${renderDepositBatchReview(cashReceipts)}
-    ${renderTablePanel(tableConfig().cashReceipts)}
-    ${renderRetainageLedger(retainageLedger)}
-    ${renderTablePanel(tableConfig().money)}
+    <details class="billing-detail-drawer">
+      <summary>Details / ledgers <span>${currency(gross - paid)} open risk · ${currency(retainage)} held</span></summary>
+      <div class="billing-detail-stack">
+        ${renderMapPlanWorkflowPanel(selectedProject, "Billing")}
+        ${renderPostSubmissionArDashboard(projects)}
+        ${renderArAgingPanel()}
+        ${renderMissingEvidenceInbox(scopedRows("tasks"))}
+        ${renderBillingReadinessMatrix()}
+        ${selectedProject ? renderInvoicePackageBuilder(selectedProject) : ""}
+        ${renderBillingReadinessQueue()}
+        ${renderBankDepositBatchWorkflow(cashReceipts)}
+        ${renderDepositBatchReview(cashReceipts)}
+        ${renderTablePanel(tableConfig().cashReceipts)}
+        ${renderRetainageLedger(retainageLedger)}
+        ${renderTablePanel(tableConfig().money)}
+      </div>
+    </details>
+  `;
+}
+
+function billingSliceContext(projects = scopedRows("projects"), invoices = scopedRows("invoices"), retainageLedger = scopedRows("retainageLedger")) {
+  const readiness = scopedRows("billingReadiness");
+  const submissions = scopedRows("invoiceSubmissions");
+  const ledgerRows = mapPaymentLedgerRows(projects);
+  const ready = readiness.filter(item => item.status === "Ready to Bill");
+  const blocked = readiness.filter(item => item.status !== "Ready to Bill");
+  const submitted = submissions.filter(item => item.status !== "Rejected");
+  const unpaid = ledgerRows.filter(row => Number(row.ledger?.unpaid90 || 0) > 0);
+  const retainageRows = retainageReleaseRows().filter(row => !row.isPaid);
+  const proofTasks = missingEvidenceTaskRows(scopedRows("tasks"));
+  return {
+    projects,
+    invoices,
+    readiness,
+    submissions,
+    ledgerRows,
+    retainageLedger,
+    ready,
+    blocked,
+    submitted,
+    unpaid,
+    retainageRows,
+    proofTasks
+  };
+}
+
+function renderBillingCommandCenterSlice(context) {
+  const cards = [
+    { label: "Ready to Bill", value: context.ready.length, detail: currency(sum(context.ready, "billableAmount")), status: context.ready.length ? "Ready" : "Pending", action: "Billing", focus: "Ready" },
+    { label: "Blocked by Proof", value: context.blocked.length, detail: context.proofTasks.length ? `${context.proofTasks.length} proof task(s)` : "Missing support", status: context.blocked.length ? "Needs Review" : "Ready", action: "Documents", focus: "Map evidence" },
+    { label: "Submitted to SQUAN", value: context.submitted.length, detail: `${currency(sum(context.invoices, "gross"))} invoiced`, status: context.submitted.length ? "Submitted" : "Pending", action: "Billing", focus: "Submitted" },
+    { label: "Payment / Retainage", value: context.unpaid.length + context.retainageRows.length, detail: `${currency(sum(context.unpaid.map(row => ({ amount: row.ledger.unpaid90 })), "amount"))} unpaid`, status: context.unpaid.length ? "Open" : "Tracked", action: "Billing", focus: "Payment" }
+  ];
+  return `
+    <section class="panel billing-slice-command">
+      <div class="billing-simple-head">
+        <div>
+          <span class="eyebrow">Billing</span>
+          <h2>Bill, submit, collect</h2>
+          <p>One page for what can be billed, what is blocked, what was sent, and what money is still open.</p>
+        </div>
+        <button class="primary-btn" data-workflow-action="Billing" data-workflow-id="${state.selectedProjectId || context.projects[0]?.id || ""}" data-workflow-focus="Ready">Start billing review</button>
+      </div>
+      <div class="billing-slice-cards">
+        ${cards.map(card => `
+          <button class="billing-slice-card ${statusClass(card.status)}" data-workflow-action="${card.action}" data-workflow-id="${state.selectedProjectId || context.projects[0]?.id || ""}" data-workflow-focus="${card.focus}">
+            <span>${card.label}</span>
+            <strong>${card.value}</strong>
+            <small>${card.detail}</small>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderSelectedMapBillingPanel(project, context) {
+  const readiness = context.readiness.find(item => item.project === project.id);
+  const invoice = context.invoices.find(item => item.project === project.id);
+  const submission = context.submissions.find(item => item.project === project.id || item.invoice === invoice?.id);
+  const ledger = context.ledgerRows.find(row => row.project.id === project.id);
+  const retainage = context.retainageLedger.find(item => item.project === project.id || item.invoice === invoice?.id);
+  const packageGate = billingPackageBuildGate(project);
+  const closedBilled = project.status === "Completed / Billed" || ["Paid", "Closed", "Completed / Billed"].includes(invoice?.status || "");
+  const proofStatus = readiness?.status || packageGate.status || "Not Ready";
+  const nextAction = !packageGate.ready
+    ? { label: "Review proof", action: "Documents", focus: "Map evidence", detail: lifecycleBlockerText(packageGate.blockers || [], "Proof needs review") }
+    : !submission
+      ? { label: "Submit to SQUAN", action: "Billing", focus: "SQUAN submission", detail: "Package is ready to submit." }
+      : ledger?.ledger?.unpaid90 > 0
+        ? { label: "Track payment", action: "Billing", focus: "Payment Ledger", detail: `${currency(ledger.ledger.unpaid90)} unpaid 90%.` }
+        : { label: "Track retainage", action: "Billing", focus: "10% Held Back", detail: retainage ? `${currency(retainage.heldAmount || 0)} held.` : "Create retainage row when needed." };
+  return `
+    <section class="panel selected-billing-panel">
+      <div class="panel-header">
+        <div>
+          <h2>${project.map || project.id}</h2>
+          <p>${project.scope || "Selected Map billing status"}</p>
+        </div>
+        <button class="primary-btn" data-workflow-action="${nextAction.action}" data-workflow-id="${project.id}" data-workflow-focus="${nextAction.focus}">${nextAction.label}</button>
+      </div>
+      <div class="selected-billing-grid">
+        <span>Map / NTP<strong>${project.id}</strong></span>
+        <span>Billable<strong>${currency(readiness?.billableAmount || invoice?.gross || 0)}</strong></span>
+        <span>Closed / Billed<strong>${closedBilled ? "Yes" : "No"}</strong></span>
+        <span>Proof<strong>${plainStatus(proofStatus)}</strong></span>
+        <span>SQUAN submission<strong>${plainStatus(submission?.status || "Not sent")}</strong></span>
+        <span>Payment<strong>${ledger ? currency(ledger.ledger.unpaid90 || 0) : "No invoice"}</strong></span>
+      </div>
+      <p class="readiness-note">Next: ${nextAction.detail}</p>
+    </section>
+  `;
+}
+
+function billingCodeBreakdownRows(project) {
+  if (!project) return [];
+  const production = scopedRows("productionLines").filter(line => line.project === project.id);
+  const squan = scopedRows("squanProductionLines").filter(line => line.project === project.id || line.ntp === project.id);
+  const ledger = scopedRows("billingLedger").filter(row => row.project === project.id);
+  const lineById = new Map(production.map(line => [line.id, line]));
+  const codes = uniqueList([
+    ...production.map(line => line.code),
+    ...squan.map(line => line.code),
+    ...ledger.map(row => row.code || lineById.get(row.productionLineId)?.code)
+  ]);
+  return codes.map(code => {
+    const price = productionPriceForCode(code) || {};
+    const productionRows = production.filter(line => line.code === code);
+    const squanRows = squan.filter(line => line.code === code);
+    const ledgerRows = ledger.filter(row => (row.code || lineById.get(row.productionLineId)?.code) === code);
+    const rate = Number(price.subRate || price.price || productionRows.find(line => Number(line.unitRate))?.unitRate || 0);
+    const submittedQty = sum(productionRows, "quantity");
+    const approvedQty = sum(productionRows.filter(line => line.reviewStatus === "Approved"), "quantity");
+    const billableQty = ledgerRows.reduce((total, row) => total + Number(lineById.get(row.productionLineId)?.quantity || row.quantity || 0), 0);
+    const squanQty = sum(squanRows, "quantity");
+    const priceSheetTotal = submittedQty * rate;
+    const approvedTotal = approvedQty * rate;
+    const billableTotal = Number(sum(ledgerRows, "squanBillableAmount") || billableQty * rate);
+    return {
+      code,
+      unitName: price.unitName || price.description || productionRows[0]?.unitName || "Rate/code review needed",
+      uom: price.uom || productionRows[0]?.uom || squanRows[0]?.uom || "Unit",
+      rate,
+      submittedQty,
+      approvedQty,
+      billableQty,
+      squanQty,
+      priceSheetTotal,
+      approvedTotal,
+      billableTotal,
+      status: billableQty ? "Ready to Bill" : approvedQty ? "Approved" : submittedQty ? "Submitted" : squanQty ? "Imported" : "Pending"
+    };
+  }).filter(row => row.code);
+}
+
+function renderBillingCodeBreakdownPanel(project, context) {
+  const rows = billingCodeBreakdownRows(project);
+  const invoice = context.invoices.find(item => item.project === project.id);
+  const closedBilled = project.status === "Completed / Billed" || ["Paid", "Closed", "Completed / Billed"].includes(invoice?.status || "");
+  return `
+    <section class="panel billing-code-breakdown">
+      <div class="panel-header">
+        <div>
+          <h2>Code breakdown</h2>
+          <p>Submitted code quantities totaled from the imported price sheet.</p>
+        </div>
+        <span class="status ${statusClass(closedBilled ? "Ready" : "Open")}">${closedBilled ? "Closed / Billed" : "Open Billing"}</span>
+      </div>
+      <div class="billing-code-summary">
+        <span>Codes<strong>${rows.length}</strong></span>
+        <span>Submitted qty<strong>${Number(sum(rows, "submittedQty") || 0).toLocaleString()}</strong></span>
+        <span>Approved qty<strong>${Number(sum(rows, "approvedQty") || 0).toLocaleString()}</strong></span>
+        <span>Price-sheet total<strong>${currency(sum(rows, "priceSheetTotal"))}</strong></span>
+        <span>Billable total<strong>${currency(sum(rows, "billableTotal"))}</strong></span>
+      </div>
+      <div class="table-wrap billing-code-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Unit</th>
+              <th>Submitted qty</th>
+              <th>Approved qty</th>
+              <th>SQUAN qty</th>
+              <th>Rate</th>
+              <th>Submitted total</th>
+              <th>Billable total</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                <td><strong>${escapeAttr(row.code)}</strong></td>
+                <td>${escapeAttr(row.unitName)}<br><small>${escapeAttr(row.uom)}</small></td>
+                <td>${Number(row.submittedQty || 0).toLocaleString()}</td>
+                <td>${Number(row.approvedQty || 0).toLocaleString()}</td>
+                <td>${Number(row.squanQty || 0).toLocaleString()}</td>
+                <td>${currency(row.rate || 0)}</td>
+                <td>${currency(row.priceSheetTotal || 0)}</td>
+                <td>${currency(row.billableTotal || 0)}</td>
+                <td><span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span></td>
+              </tr>
+            `).join("") || `<tr><td colspan="9">No submitted production codes for this Map yet.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderBillingFiveStepSlice(project, context) {
+  const readiness = context.readiness.find(item => item.project === project.id);
+  const invoice = context.invoices.find(item => item.project === project.id);
+  const submission = context.submissions.find(item => item.project === project.id || item.invoice === invoice?.id);
+  const ledger = context.ledgerRows.find(row => row.project.id === project.id);
+  const retainage = context.retainageLedger.find(item => item.project === project.id || item.invoice === invoice?.id);
+  const packageGate = billingPackageBuildGate(project);
+  const steps = [
+    ["1", "Review Proof", packageGate.ready || readiness?.status === "Ready to Bill" ? "Ready" : "Needs Review", packageGate.ready ? "Proof accepted." : lifecycleBlockerText(packageGate.blockers || [], "Proof needs review"), "Documents", "Map evidence"],
+    ["2", "Build Package", invoice ? "Ready" : packageGate.status, invoice ? `${invoice.id} created.` : "Create SQUAN billing package.", "Billing", "Invoice package"],
+    ["3", "Submit to SQUAN", submission ? "Submitted" : invoice ? "Pending" : "Blocked", submission ? submission.confirmationNumber || submission.invoiceNumber || "Submitted" : "Record sent amount and receipt.", "Billing", "SQUAN submission"],
+    ["4", "Track 90% Payment", ledger?.ledger?.unpaid90 > 0 ? "Open" : ledger ? "Tracked" : "Pending", ledger ? `${currency(ledger.ledger.unpaid90 || 0)} unpaid.` : "Payment ledger starts after submission.", "Billing", "Payment Ledger"],
+    ["5", "Track 10% Retainage", retainage ? retainage.status || "Tracked" : "Pending", retainage ? `${currency(retainage.heldAmount || 0)} held; release ${retainage.releaseDate || "not set"}.` : "Track held-back money after invoice.", "Billing", "10% Held Back"]
+  ];
+  return `
+    <section class="panel billing-slice-steps">
+      <div class="panel-header">
+        <div>
+          <h2>Billing steps</h2>
+          <p>Five steps only. Open details only when one step needs work.</p>
+        </div>
+        <span>${project.map || project.id}</span>
+      </div>
+      <div class="billing-five-step-grid">
+        ${steps.map(step => `
+          <button class="billing-five-step ${statusClass(step[2])}" data-workflow-action="${step[4]}" data-workflow-id="${project.id}" data-workflow-focus="${step[5]}">
+            <span>${step[0]}</span>
+            <strong>${step[1]}</strong>
+            <small>${step[3]}</small>
+            <em>${plainStatus(step[2])}</em>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderBillingQueueTabs(context) {
+  const queueGroups = [
+    ["Needs Proof", context.blocked.map(item => ({ project: item.project, title: projectLabel(item.project), detail: item.missingItems || "Proof missing", status: item.status, action: "Documents", focus: "Map evidence" }))],
+    ["Ready", context.ready.map(item => ({ project: item.project, title: projectLabel(item.project), detail: `${currency(item.billableAmount || 0)} billable`, status: "Ready", action: "Billing", focus: "Invoice package" }))],
+    ["Submitted", context.submitted.map(item => ({ project: item.project, title: projectLabel(item.project), detail: item.confirmationNumber || item.invoiceNumber || item.status || "Submitted", status: item.status || "Submitted", action: "Billing", focus: "SQUAN submission" }))],
+    ["Unpaid", context.unpaid.map(row => ({ project: row.project.id, title: row.project.map || row.project.id, detail: `${currency(row.ledger.unpaid90 || 0)} unpaid`, status: row.status || "Open", action: "Billing", focus: "Payment Ledger" }))],
+    ["Retainage", context.retainageRows.map(row => ({ project: row.project, title: row.map || row.project, detail: `${currency(row.heldAmount || 0)} held`, status: row.status || "Open", action: "Billing", focus: "10% Held Back" }))]
+  ];
+  return `
+    <section class="panel billing-queue-tabs">
+      <div class="panel-header">
+        <div>
+          <h2>Work queues</h2>
+          <p>Grouped queues replace the long billing table stack.</p>
+        </div>
+        <span>${queueGroups.reduce((total, [, rows]) => total + rows.length, 0)} item(s)</span>
+      </div>
+      <div class="billing-queue-grid">
+        ${queueGroups.map(([title, rows]) => `
+          <article>
+            <div class="card-topline">
+              <h3>${title}</h3>
+              <span>${rows.length}</span>
+            </div>
+            <div class="billing-queue-list">
+              ${rows.slice(0, 4).map(row => `
+                <button data-workflow-action="${row.action}" data-workflow-id="${row.project || ""}" data-workflow-focus="${row.focus}">
+                  <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+                  <strong>${row.title}</strong>
+                  <small>${row.detail}</small>
+                </button>
+              `).join("") || `<p class="empty-state">No items.</p>`}
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
   `;
 }
 
