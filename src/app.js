@@ -2737,6 +2737,7 @@ const state = {
   user: loadSession(),
   selectedProjectId: "PO-SQ-24018",
   selectedSquanFeatureId: "",
+  selectedSquanFeatureIds: [],
   selectedRecord: null,
   alertsOpen: false,
   commsOpen: false,
@@ -29590,7 +29591,7 @@ function squanMapFeatureRows() {
     notes: line.notes || "Feature modeled from SQUAN export until live ArcGIS is approved."
   }));
   const byId = new Map();
-  [...explicit, ...imported].forEach(item => byId.set(item.id, item));
+  [...imported, ...explicit].forEach(item => byId.set(item.id, item));
   return [...byId.values()].filter(item => item.featureCode || item.quantity || item.project);
 }
 
@@ -29617,6 +29618,7 @@ function squanMapRollups(features = squanMapFeatureRows()) {
 function renderSquanMapWorkbench() {
   const features = squanMapFeatureRows().filter(feature => !state.search || matches(feature));
   if (!state.selectedSquanFeatureId && features.length) state.selectedSquanFeatureId = features[0].id;
+  state.selectedSquanFeatureIds = (state.selectedSquanFeatureIds || []).filter(id => features.some(feature => feature.id === id));
   const selected = features.find(item => item.id === state.selectedSquanFeatureId) || features[0] || null;
   const cards = [...new Map(features.map(feature => [feature.project || feature.ntp || "Unassigned", feature])).values()];
   const layers = [...new Set(features.map(feature => feature.layerName || "Production"))].sort();
@@ -29628,7 +29630,11 @@ function renderSquanMapWorkbench() {
           <h2>SQUAN Map Workbench</h2>
           <p>Model SQUAN map behavior from exports now. Live ArcGIS feature services can plug into these same rows later.</p>
         </div>
-        <span>${features.length} feature(s)</span>
+        <div class="squan-map-actions">
+          <span>${features.length} feature(s)</span>
+          <button class="secondary-btn" data-map-feature-new="true">New feature</button>
+          <button class="primary-btn" data-map-feature-batch-daily="true" ${state.selectedSquanFeatureIds.length ? "" : "disabled"}>Create daily from selected</button>
+        </div>
       </div>
       <div class="squan-map-grid">
         <div class="squan-map-cards">
@@ -29652,11 +29658,14 @@ function renderSquanMapWorkbench() {
             <section class="squan-layer-group">
               <h4>${escapeAttr(layer)}</h4>
               ${features.filter(feature => (feature.layerName || "Production") === layer).map(feature => `
-                <button class="squan-feature-row ${selected?.id === feature.id ? "selected" : ""}" data-squan-feature="${escapeAttr(feature.id)}">
-                  <span>${escapeAttr(feature.featureCode || "No code")}</span>
-                  <strong>${Number(feature.quantity || 0).toLocaleString()} ${escapeAttr(feature.uom || "")}</strong>
-                  <small>${escapeAttr(feature.project || feature.ntp || "")} · ${escapeAttr(feature.description || "")}</small>
-                </button>
+                <article class="squan-feature-row ${selected?.id === feature.id ? "selected" : ""}">
+                  <input type="checkbox" data-squan-feature-toggle="${escapeAttr(feature.id)}" ${state.selectedSquanFeatureIds.includes(feature.id) ? "checked" : ""} aria-label="Select feature">
+                  <button data-squan-feature="${escapeAttr(feature.id)}">
+                    <span>${escapeAttr(feature.featureCode || "No code")}</span>
+                    <strong>${Number(feature.quantity || 0).toLocaleString()} ${escapeAttr(feature.uom || "")}</strong>
+                    <small>${escapeAttr(feature.project || feature.ntp || "")} · ${escapeAttr(feature.description || "")}</small>
+                  </button>
+                </article>
               `).join("")}
             </section>
           `).join("")}
@@ -29676,7 +29685,12 @@ function renderSquanMapWorkbench() {
               <div><dt>Geometry</dt><dd>${escapeAttr(selected.geometryStatus || "Placeholder")}</dd></div>
             </dl>
             <p>${escapeAttr(selected.description || selected.notes || "SQUAN feature placeholder ready for Jackson daily creation.")}</p>
-            <button class="primary-btn" data-map-feature-daily="${escapeAttr(selected.id)}">Create Jackson daily from feature</button>
+            <div class="squan-feature-actions">
+              <button class="secondary-btn" data-map-feature-edit="${escapeAttr(selected.id)}">Edit feature</button>
+              <button class="secondary-btn" data-map-feature-status="Assigned" data-squan-feature-id="${escapeAttr(selected.id)}">Assign</button>
+              <button class="secondary-btn" data-map-feature-status="Approved" data-squan-feature-id="${escapeAttr(selected.id)}">Approve</button>
+              <button class="primary-btn" data-map-feature-daily="${escapeAttr(selected.id)}">Create Jackson daily from feature</button>
+            </div>
           ` : `<div class="empty">No selected feature.</div>`}
         </div>
       </div>
@@ -29945,68 +29959,152 @@ function handleProductionDailySubmit(event) {
 }
 
 function createProductionDailyFromFeature(featureId) {
-  const feature = squanMapFeatureRows().find(item => item.id === featureId);
-  if (!feature) return;
+  createProductionDailyFromFeatures([featureId]);
+}
+
+function createProductionDailyFromFeatures(featureIds) {
+  const selectedFeatures = featureIds
+    .map(id => squanMapFeatureRows().find(item => item.id === id))
+    .filter(Boolean);
+  if (!selectedFeatures.length) return;
   const now = new Date().toISOString();
-  const project = feature.project || feature.ntp || state.selectedProjectId || "";
-  const code = feature.featureCode || "";
-  const price = productionPriceForCode(code);
-  const unitRate = Number(price?.subRate || price?.price || 0);
+  const first = selectedFeatures[0];
+  const project = first.project || first.ntp || state.selectedProjectId || "";
   const dailyId = `PD-FEATURE-${Date.now()}`;
-  const lineId = `PL-FEATURE-${Date.now()}`;
   productionCollectionUpsert("productionDailies", {
     id: dailyId,
     project,
     ntp: project,
     sourceType: "SQUAN Map Workbench",
     submittedBy: state.user?.name || "Operations",
-    workedDate: feature.workDate || isoDate(new Date()),
+    workedDate: first.workDate || isoDate(new Date()),
     status: "Draft",
-    sourceFeatureId: feature.id,
-    notes: `Draft daily created from ${feature.layerName || "SQUAN"} feature ${feature.featureCode || feature.id}.`,
-    activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Draft Jackson daily created from SQUAN map feature." }],
+    sourceFeatureIds: selectedFeatures.map(feature => feature.id),
+    notes: `Draft daily created from ${selectedFeatures.length} SQUAN map feature(s).`,
+    activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Draft Jackson daily created from selected SQUAN map feature(s)." }],
     createdAt: now,
     modifiedAt: now
   });
-  productionCollectionUpsert("productionLines", {
-    id: lineId,
-    dailyId,
-    sourceType: "SQUAN Map Workbench",
-    submittedBy: state.user?.name || "Operations",
-    project,
-    ntp: project,
-    workedDate: feature.workDate || isoDate(new Date()),
-    code,
-    quantity: Number(feature.quantity || 0),
-    uom: feature.uom || price?.uom || "Unit",
-    unitRate,
-    submittedAmount: Math.round(Number(feature.quantity || 0) * unitRate * 100) / 100,
-    sourceFeatureId: feature.id,
-    mapLayer: feature.layerName || "Production",
-    reviewStatus: "Submitted",
-    payableStatus: "Pending Review",
-    billableStatus: "Pending Review",
-    proofStatus: "Submitted",
-    notes: `Created from SQUAN map feature placeholder. Source: ${feature.source || "SQUAN export"}.`,
-    activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Production line created from selected SQUAN map feature." }],
-    createdAt: now,
-    modifiedAt: now
+  selectedFeatures.forEach((feature, index) => {
+    const code = feature.featureCode || "";
+    const price = productionPriceForCode(code);
+    const unitRate = Number(price?.subRate || price?.price || 0);
+    const lineId = `PL-FEATURE-${Date.now()}-${index + 1}`;
+    productionCollectionUpsert("productionLines", {
+      id: lineId,
+      dailyId,
+      sourceType: "SQUAN Map Workbench",
+      submittedBy: state.user?.name || "Operations",
+      project: feature.project || feature.ntp || project,
+      ntp: feature.project || feature.ntp || project,
+      workedDate: feature.workDate || first.workDate || isoDate(new Date()),
+      code,
+      quantity: Number(feature.quantity || 0),
+      uom: feature.uom || price?.uom || "Unit",
+      unitRate,
+      submittedAmount: Math.round(Number(feature.quantity || 0) * unitRate * 100) / 100,
+      sourceFeatureId: feature.id,
+      mapLayer: feature.layerName || "Production",
+      reviewStatus: "Submitted",
+      payableStatus: "Pending Review",
+      billableStatus: "Pending Review",
+      proofStatus: "Submitted",
+      notes: `Created from SQUAN map feature placeholder. Source: ${feature.source || "SQUAN export"}.`,
+      activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Production line created from selected SQUAN map feature." }],
+      createdAt: now,
+      modifiedAt: now
+    });
+    productionCollectionUpsert("fieldEvidence", {
+      id: `FE-${lineId}`,
+      project: feature.project || feature.ntp || project,
+      productionLineId: lineId,
+      source: "SQUAN Map Workbench",
+      evidenceType: "Map feature reference",
+      status: "Submitted",
+      notes: `${feature.layerName || "Layer"} ${feature.featureCode || ""}; ${Number(feature.quantity || 0).toLocaleString()} ${feature.uom || ""}; ${feature.description || ""}`,
+      activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Map feature reference linked as proof placeholder." }],
+      createdAt: now,
+      modifiedAt: now
+    });
+    updateSquanMapFeatureStatus(feature.id, "Assigned", false);
   });
-  productionCollectionUpsert("fieldEvidence", {
-    id: `FE-${lineId}`,
-    project,
-    productionLineId: lineId,
-    source: "SQUAN Map Workbench",
-    evidenceType: "Map feature reference",
-    status: "Submitted",
-    notes: `${feature.layerName || "Layer"} ${feature.featureCode || ""}; ${Number(feature.quantity || 0).toLocaleString()} ${feature.uom || ""}; ${feature.description || ""}`,
-    activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Map feature reference linked as proof placeholder." }],
-    createdAt: now,
-    modifiedAt: now
-  });
-  appendAuditLocal("production.map-feature-daily-created", { feature: feature.id, daily: dailyId, line: lineId, project, by: state.user?.name || "Operations" });
+  appendAuditLocal("production.map-feature-daily-created", { features: selectedFeatures.map(feature => feature.id), daily: dailyId, project, by: state.user?.name || "Operations" });
+  state.selectedSquanFeatureIds = [];
   persist("Jackson production daily created from SQUAN map feature");
   render();
+}
+
+function squanFeatureOverride(feature) {
+  const now = new Date().toISOString();
+  return {
+    id: feature.id,
+    sourceLineId: feature.sourceLineId || "",
+    project: feature.project || feature.ntp || state.selectedProjectId || "",
+    ntp: feature.ntp || feature.project || state.selectedProjectId || "",
+    layerName: feature.layerName || "Production",
+    featureCode: feature.featureCode || "",
+    description: feature.description || "",
+    quantity: Number(feature.quantity || 0),
+    uom: feature.uom || "Unit",
+    status: feature.status || "Planned",
+    workDate: feature.workDate || isoDate(new Date()),
+    objectId: feature.objectId || "",
+    globalId: feature.globalId || "",
+    geometryStatus: feature.geometryStatus || "Placeholder",
+    source: feature.source || "Manual SQUAN map feature",
+    notes: feature.notes || "Manual feature placeholder for SQUAN Map Workbench.",
+    activityLog: [...(feature.activityLog || []), { at: now, by: state.user?.name || "Operations", note: "SQUAN map feature saved." }],
+    createdAt: feature.createdAt || now,
+    modifiedAt: now
+  };
+}
+
+function saveSquanMapFeature(feature) {
+  const record = squanFeatureOverride(feature);
+  productionCollectionUpsert("squanMapFeatures", record);
+  return record;
+}
+
+function openSquanMapFeaturePrompt(featureId = "") {
+  const existing = squanMapFeatureRows().find(item => item.id === featureId) || {};
+  const project = prompt("Map / NTP", existing.project || existing.ntp || state.selectedProjectId || "BSP-MIC-0190");
+  if (!project) return;
+  const layerName = prompt("Layer/category", existing.layerName || "Aerial") || existing.layerName || "Production";
+  const featureCode = prompt("Feature/work code", existing.featureCode || "BSMI-003");
+  if (!featureCode) return;
+  const quantity = Number(prompt("Quantity", Number(existing.quantity || 0) || 1) || 0);
+  const uom = prompt("UOM", existing.uom || productionPriceForCode(featureCode)?.uom || "Unit") || "Unit";
+  const description = prompt("Description", existing.description || productionPriceForCode(featureCode)?.description || featureCode) || featureCode;
+  const status = prompt("Status", existing.status || "Planned") || existing.status || "Planned";
+  const id = existing.id || `FEATURE-MANUAL-${Date.now()}`;
+  const record = saveSquanMapFeature({
+    ...existing,
+    id,
+    project,
+    ntp: project,
+    layerName,
+    featureCode,
+    quantity,
+    uom,
+    description,
+    status,
+    source: existing.source || "Manual SQUAN map feature"
+  });
+  state.selectedSquanFeatureId = record.id;
+  appendAuditLocal("production.map-feature-saved", { feature: record.id, project: record.project, by: state.user?.name || "Operations" });
+  persist("SQUAN map feature saved");
+  render();
+}
+
+function updateSquanMapFeatureStatus(featureId, status, shouldRender = true) {
+  const feature = squanMapFeatureRows().find(item => item.id === featureId);
+  if (!feature) return;
+  const record = saveSquanMapFeature({ ...feature, status });
+  appendAuditLocal("production.map-feature-status", { feature: record.id, status, by: state.user?.name || "Operations" });
+  if (shouldRender) {
+    persist("SQUAN map feature status updated");
+    render();
+  }
 }
 
 function handleProductionReview(button) {
@@ -42118,9 +42216,44 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-squan-feature-toggle]").forEach(input => {
+    input.addEventListener("change", () => {
+      const id = input.dataset.squanFeatureToggle;
+      const selected = new Set(state.selectedSquanFeatureIds || []);
+      if (input.checked) selected.add(id);
+      else selected.delete(id);
+      state.selectedSquanFeatureIds = [...selected];
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-map-feature-new]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (guardAction("production")) openSquanMapFeaturePrompt();
+    });
+  });
+
+  document.querySelectorAll("[data-map-feature-edit]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (guardAction("production")) openSquanMapFeaturePrompt(button.dataset.mapFeatureEdit);
+    });
+  });
+
+  document.querySelectorAll("[data-map-feature-status]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (guardAction("production")) updateSquanMapFeatureStatus(button.dataset.squanFeatureId, button.dataset.mapFeatureStatus);
+    });
+  });
+
   document.querySelectorAll("[data-map-feature-daily]").forEach(button => {
     button.addEventListener("click", () => {
       if (guardAction("production")) createProductionDailyFromFeature(button.dataset.mapFeatureDaily);
+    });
+  });
+
+  document.querySelectorAll("[data-map-feature-batch-daily]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (guardAction("production")) createProductionDailyFromFeatures(state.selectedSquanFeatureIds || []);
     });
   });
 

@@ -158,7 +158,7 @@ Required capabilities:
 - Code and quantity rollups by Map/NTP, layer, and code.
 - Map-to-daily workflow that creates a Jackson production daily from a selected SQUAN feature placeholder.
 
-Current implementation: SQUAN Map Workbench on the Production screen. It derives feature placeholders from SQUAN daily export lines and optional `squanMapFeatures` records, displays layer/category labels, quantity placeholders, feature detail, rollups, and creates Jackson production dailies tied back to `sourceFeatureId`. Live ArcGIS remains Phase 4.
+Current implementation: SQUAN Map Workbench on the Production screen. It derives feature placeholders from SQUAN daily export lines and optional `squanMapFeatures` records, displays layer/category labels, quantity placeholders, feature detail, rollups, and creates Jackson production dailies tied back to `sourceFeatureId`. It also supports manual feature creation/editing, feature status updates, batch feature selection, and one Jackson daily from multiple selected features. Live ArcGIS remains Phase 4.
 
 ## 4E. ArcGIS Phase 4 Readiness
 
@@ -283,7 +283,7 @@ The next milestones should stay inside the MVP boundary:
 
 1. Finish Phase 1 Production: price sheet import, SQUAN daily CSV import, contractor/tech daily submission, Jackson review queue, production ledger, contractor payable, in-house cost, and SQUAN billable support.
 2. Expand Phase 2 evidence controls with real file storage for photos/as-builts and packet exports beyond CSV.
-3. Expand Phase 3 SQUAN Map Workbench with manual feature creation/editing, feature status changes, and map-to-daily batch selection.
+3. Expand Phase 3 SQUAN Map Workbench with better feature table filtering, bulk status changes, and richer quantity reconciliation by feature.
 4. Complete Phase 4 prerequisites: Esri sandbox web map ID, FeatureLayer service URL, layer IDs/names, field mappings, and approved OAuth/API-key strategy.
 5. Clean up navigation around the end-to-end Map workflow so Map setup, Production, Field Daily, Documents, Billing, Safety, and Admin approval all point back to the same source-of-truth Map/NTP.
 6. Stabilize the Billing/Admin collections workflow already built: decision evidence, SLA tasks, readiness gates, packet snapshots, and clear user-facing labels.

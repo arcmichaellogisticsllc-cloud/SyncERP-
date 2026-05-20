@@ -3595,6 +3595,15 @@ button {
   gap: 10px;
 }
 
+.squan-map-actions,
+.squan-feature-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
 .squan-map-card,
 .squan-feature-row {
   width: 100%;
@@ -3603,6 +3612,26 @@ button {
   background: #ffffff;
   color: var(--ink);
   padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+}
+
+.squan-feature-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.squan-feature-row input {
+  margin-top: 4px;
+}
+
+.squan-feature-row button {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
   text-align: left;
   display: grid;
   gap: 4px;

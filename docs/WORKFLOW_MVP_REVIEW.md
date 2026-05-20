@@ -215,7 +215,10 @@ Phase 3 has now started as an internal SQUAN Map Workbench:
 - layer and feature browser,
 - selected feature detail,
 - code and quantity rollups,
-- map-to-daily creation from selected feature placeholders.
+- manual feature creation/editing,
+- feature status updates,
+- batch feature selection,
+- map-to-daily creation from one or more selected feature placeholders.
 
 Phase 4 readiness has started, but live ArcGIS is still not an operating dependency. The current non-secret portal metadata is:
 

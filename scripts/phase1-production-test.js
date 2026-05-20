@@ -326,7 +326,8 @@ function featureLayerForCode(db, code) {
 }
 
 function squanMapFeatureRows(db) {
-  return (db.squanProductionLines || []).map((line, index) => ({
+  const explicit = (db.squanMapFeatures || []).map(item => ({ ...item, source: item.source || "SQUAN map feature placeholder" }));
+  const imported = (db.squanProductionLines || []).map((line, index) => ({
     id: `FEATURE-${line.id || index}`,
     sourceLineId: line.id,
     project: line.project || line.ntp || "Unassigned",
@@ -341,6 +342,9 @@ function squanMapFeatureRows(db) {
     geometryStatus: line.geometry ? "Stored" : "Placeholder",
     source: "SQUAN Daily Export CSV"
   }));
+  const byId = new Map();
+  [...imported, ...explicit].forEach(item => byId.set(item.id, item));
+  return [...byId.values()];
 }
 
 function squanMapRollups(db) {
@@ -372,6 +376,59 @@ function createDailyFromFeature(db, featureId) {
   const line = db.productionLines.find(item => item.id === "PL-FEATURE-1");
   line.sourceFeatureId = feature.id;
   return line;
+}
+
+function saveManualFeature(db, feature) {
+  return upsert(db, "squanMapFeatures", {
+    id: feature.id,
+    project: feature.project,
+    ntp: feature.project,
+    layerName: feature.layerName,
+    featureCode: feature.featureCode,
+    description: feature.description,
+    quantity: feature.quantity,
+    uom: feature.uom,
+    status: feature.status || "Planned",
+    source: "Manual SQUAN map feature",
+    geometryStatus: "Placeholder"
+  });
+}
+
+function updateFeatureStatus(db, featureId, status) {
+  const feature = squanMapFeatureRows(db).find(item => item.id === featureId);
+  assert(feature, `Missing feature ${featureId}`);
+  return saveManualFeature(db, { ...feature, status });
+}
+
+function createDailyFromFeatures(db, featureIds) {
+  const features = featureIds.map(id => squanMapFeatureRows(db).find(item => item.id === id)).filter(Boolean);
+  assert(features.length, "No selected features");
+  const dailyId = "PD-BATCH-1";
+  upsert(db, "productionDailies", {
+    id: dailyId,
+    project: features[0].project,
+    sourceType: "SQUAN Map Workbench",
+    submittedBy: "Operations",
+    workedDate: features[0].workDate || "2026-05-19",
+    status: "Draft",
+    sourceFeatureIds: features.map(item => item.id)
+  });
+  features.forEach((feature, index) => {
+    submitProductionDaily(db, {
+      dailyId,
+      lineId: `PL-BATCH-${index + 1}`,
+      sourceType: "SQUAN Map Workbench",
+      submittedBy: "Operations",
+      project: feature.project,
+      workedDate: feature.workDate || "2026-05-19",
+      code: feature.featureCode,
+      quantity: feature.quantity,
+      proofNote: `${feature.layerName} ${feature.featureCode} feature reference.`
+    });
+    db.productionLines.find(item => item.id === `PL-BATCH-${index + 1}`).sourceFeatureId = feature.id;
+    updateFeatureStatus(db, feature.id, "Assigned");
+  });
+  return db.productionLines.filter(item => item.dailyId === dailyId);
 }
 
 function arcgisReadinessRows(config) {
@@ -414,7 +471,8 @@ function run() {
     billingLedger: [],
     quantityReconciliation: [],
     fieldEvidence: [],
-    tasks: []
+    tasks: [],
+    squanMapFeatures: []
   };
 
   const arcgisRows = arcgisReadinessRows(db.company.arcgis);
@@ -441,6 +499,21 @@ function run() {
   assert.strictEqual(squanMapRollups(db)[0].quantity, 100);
   const featureLine = createDailyFromFeature(db, squanMapFeatureRows(db)[0].id);
   assert.strictEqual(featureLine.sourceFeatureId, "FEATURE-SPL-TEST-1");
+  saveManualFeature(db, {
+    id: "FEATURE-MANUAL-1",
+    project: "BSP-MIC-0190",
+    layerName: "Aerial",
+    featureCode: "BSMI-003",
+    description: "Manual overlash span",
+    quantity: 25,
+    uom: "Foot",
+    status: "Planned"
+  });
+  updateFeatureStatus(db, "FEATURE-MANUAL-1", "Assigned");
+  assert.strictEqual(squanMapFeatureRows(db).find(item => item.id === "FEATURE-MANUAL-1").status, "Assigned");
+  const batchLines = createDailyFromFeatures(db, ["FEATURE-SPL-TEST-1", "FEATURE-MANUAL-1"]);
+  assert.strictEqual(batchLines.length, 2);
+  assert.strictEqual(batchLines[1].sourceFeatureId, "FEATURE-MANUAL-1");
 
   submitProductionDaily(db, {
     dailyId: "PD-CON-1",
@@ -487,8 +560,8 @@ function run() {
     proofNote: "Duplicate unsupported line."
   });
 
-  assert.strictEqual(db.productionDailies.length, 5);
-  assert.strictEqual(db.fieldEvidence.length, 4);
+  assert.strictEqual(db.productionDailies.length, 6);
+  assert.strictEqual(db.fieldEvidence.length, 6);
   assert.strictEqual(db.techWorkEntries.length, 1);
   assert.strictEqual(productionLedgerRows(db).find(row => row.id === "PL-CON-1").varianceQuantity, 0);
 
