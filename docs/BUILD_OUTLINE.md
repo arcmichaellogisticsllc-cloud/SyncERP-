@@ -136,6 +136,8 @@ Required capabilities:
 
 Current implementation: `priceSheetItems`, `squanImports`, `squanProductionLines`, `productionDailies`, `productionLines`, `contractorPayables`, `techWorkEntries`, `billingLedger`, `quantityReconciliation`, and `fieldEvidence` collections; Production screen import center, contractor/tech daily form, review queue, proof checklist, production ledger, and billing package view.
 
+Sample CSV templates are provided in `samples/price-sheet-template.csv` and `samples/squan-daily-export-template.csv`.
+
 ## 4C. Evidence and Audit Control
 
 Required capabilities:
@@ -158,7 +160,7 @@ Required capabilities:
 - Code and quantity rollups by Map/NTP, layer, and code.
 - Map-to-daily workflow that creates a Jackson production daily from a selected SQUAN feature placeholder.
 
-Current implementation: SQUAN Map Workbench on the Production screen. It derives feature placeholders from SQUAN daily export lines and optional `squanMapFeatures` records, displays layer/category labels, quantity placeholders, feature detail, rollups, and creates Jackson production dailies tied back to `sourceFeatureId`. It also supports manual feature creation/editing, layer/status filtering, feature status updates, bulk status updates, batch feature selection, one Jackson daily from multiple selected features, and feature-level reconciliation against submitted, approved, and billing quantities. Live ArcGIS remains Phase 4.
+Current implementation: SQUAN Map Workbench on the Production screen. It derives feature placeholders from SQUAN daily export lines and optional `squanMapFeatures` records, displays layer/category labels, quantity placeholders, feature detail, rollups, and creates Jackson production dailies tied back to `sourceFeatureId`. It also supports manual feature creation/editing, feature-level proof, layer/status filtering, feature status updates, bulk status updates, batch feature selection, one Jackson daily from multiple selected features, and feature-level reconciliation against submitted, approved, and billing quantities. Live ArcGIS remains Phase 4.
 
 ## 4E. ArcGIS Phase 4 Readiness
 
@@ -170,7 +172,7 @@ Required capabilities before live integration:
 - Show readiness status before any live Esri service call is enabled.
 - Keep SQUAN CSV import as the operating path until service access is approved.
 
-Current implementation: Production screen shows an ArcGIS Phase 4 Readiness panel seeded with `https://jactelops.maps.arcgis.com` and portal display name `jactelops`. It includes readiness checks for portal URL, web map ID, feature service, layer mapping, field mapping, and authentication. No passwords, API keys, client secrets, tokens, or security answers are stored.
+Current implementation: Production screen shows an ArcGIS Phase 4 Readiness panel seeded with `https://jactelops.maps.arcgis.com` and portal display name `jactelops`. It includes readiness checks for portal URL, web map ID, feature service, layer mapping, field mapping, and authentication. No passwords, API keys, client secrets, tokens, or security answers are stored. See `docs/ARCGIS_PHASE4_READINESS.md`.
 
 ## 5. People and Compliance Ledger
 

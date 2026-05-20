@@ -543,6 +543,21 @@ const importFirstProductionTokens = [
   ["No secret storage warning", "Secrets are not stored in Jackson ERP"]
 ];
 
+const sampleFiles = [
+  ["Price sheet sample", "samples/price-sheet-template.csv"],
+  ["SQUAN daily sample", "samples/squan-daily-export-template.csv"],
+  ["ArcGIS readiness doc", "docs/ARCGIS_PHASE4_READINESS.md"]
+];
+
+for (const [label, file] of sampleFiles) {
+  if (!fs.existsSync(path.join(root, file))) failures.push(`Missing sample/readiness file: ${label}`);
+}
+
+const seededCollections = ["priceSheetItems", "squanImports", "squanProductionLines", "squanMapFeatures", "productionDailies", "productionLines", "fieldEvidence", "billingLedger", "quantityReconciliation"];
+for (const collection of seededCollections) {
+  if (!(db[collection] || []).length) failures.push(`Missing seeded Phase workflow collection rows: ${collection}`);
+}
+
 const buildOutline = fs.readFileSync(path.join(root, "docs", "BUILD_OUTLINE.md"), "utf8");
 const workflowReview = fs.readFileSync(path.join(root, "docs", "WORKFLOW_MVP_REVIEW.md"), "utf8");
 const dataModel = fs.readFileSync(path.join(root, "docs", "DATA_MODEL.md"), "utf8");

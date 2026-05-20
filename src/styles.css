@@ -3678,6 +3678,36 @@ button {
   padding: 12px;
 }
 
+.feature-proof-list {
+  display: grid;
+  gap: 8px;
+}
+
+.feature-proof-list article {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f8fafc;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.feature-proof-list strong,
+.feature-proof-list small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.feature-proof-list small {
+  margin-top: 2px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .squan-rollup-table {
   padding: 0 12px 12px;
 }

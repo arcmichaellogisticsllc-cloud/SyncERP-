@@ -1,0 +1,4 @@
+code,description,uom,contractor rate,aspect
+BSMI-003,Overlash Fiber,Foot,1.05,Aerial
+BSMI-015,Splice / Test Fiber Fusion per Fiber,Each,29.05,Splicing
+TS01,In-house technician labor,Hours,58,Tech Labor

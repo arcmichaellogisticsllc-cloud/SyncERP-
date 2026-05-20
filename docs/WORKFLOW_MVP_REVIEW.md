@@ -216,6 +216,7 @@ Phase 3 has now started as an internal SQUAN Map Workbench:
 - selected feature detail,
 - code and quantity rollups,
 - manual feature creation/editing,
+- feature-level proof before or after daily creation,
 - layer/status filtering,
 - feature status updates,
 - bulk feature status updates,

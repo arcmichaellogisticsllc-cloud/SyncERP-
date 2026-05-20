@@ -58,7 +58,7 @@ const seedData = {
         "notes": "Confirm retainage release clock, SQUAN acceptance date, and next release follow-up. Future retainage exposure is $21,580."
       }
     ],
-    "documentStandard": "Customer / Map / Dailies / SOT / Photos / As-builts / Invoices / Safety / Permits / 811",
+    "documentStandard": "Customer / PO / Dailies / SOT / Photos / As-builts / Invoices / Safety / Permits / 811",
     "operatingScenario": "Two completed and billed maps; one beginning-phase map",
     "arcgis": {
       "portalUrl": "https://jactelops.maps.arcgis.com",
@@ -75,6 +75,8 @@ const seedData = {
       "quantityField": "quantity",
       "statusField": "status",
       "geometryStatus": "Not imported",
+      "lastCheckedAt": "",
+      "connectionTestStatus": "Not configured",
       "notes": "Portal setup captured from ArcGIS Location Platform signup. Secrets are not stored in Jackson ERP."
     }
   },
@@ -243,7 +245,7 @@ const seedData = {
         "fieldUploadQueue",
         "customerContactLog"
       ],
-      "purpose": "Full access across company operations, money, compliance, safety, reports, and settings.",
+      "purpose": "Full access across profit, cash, compliance, safety, reporting, and setup.",
       "notes": "roles record Admin",
       "activityLog": [],
       "createdAt": "2026-05-09T12:00:00.000Z",
@@ -301,7 +303,7 @@ const seedData = {
         "safety",
         "fieldUploadQueue"
       ],
-      "purpose": "Map schedule, crew assignment, production progress, blockers, and closeout readiness.",
+      "purpose": "Map schedule, crew assignments, production progress, blockers, and closeout readiness.",
       "notes": "roles record Operations",
       "activityLog": [],
       "createdAt": "2026-05-09T12:00:00.000Z",
@@ -699,6 +701,19 @@ const seedData = {
       "createdAt": "2026-05-09T12:00:00.000Z",
       "modifiedAt": "2026-05-09T12:00:00.000Z",
       "owner": "Office Billing"
+    },
+    {
+      "id": "BR-BSP-MIC-0190",
+      "project": "BSP-MIC-0190",
+      "status": "Needs Review",
+      "billableAmount": 0,
+      "missingItems": "Proof acceptance, Jackson review, billing package",
+      "billingDeadline": "2026-06-18",
+      "daysLeft": 30,
+      "notes": "billingReadiness record BR-BSP-MIC-0190",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
     }
   ],
   "projects": [
@@ -719,6 +734,21 @@ const seedData = {
       "completed": "2026-05-01",
       "billBy": "2026-05-15",
       "docs": "Map, 811 ticket, permit JT-1182, site survey, SOT, photos, as-builts, QC closeout, invoice support package",
+      "arcgis": {
+        "mapUrl": "https://fieldmaps.arcgis.app/?itemID=jt-map-1-north-jackson",
+        "webMapId": "jt-map-1-north-jackson",
+        "layerName": "SQUAN Fiber Construction",
+        "featureIds": "UG-1200, HH-1182, SPL-018",
+        "workArea": "North Jackson underground route polygon",
+        "syncStatus": "Accepted",
+        "lastSyncedAt": "2026-05-01T17:15:00.000Z",
+        "obstaclePins": 0,
+        "gpsPoints": 42,
+        "photoRefs": "PHOTO-MAP1-001, PHOTO-MAP1-002",
+        "asBuiltStatus": "Accepted by prime",
+        "primeAcceptanceStatus": "Accepted",
+        "notes": "As-built markup and final GPS points accepted for closeout."
+      },
       "notes": "Map 1 operating note: Map, 811 ticket, permit JT-1182, site survey, SOT, photos, as-builts, QC closeout, invoice support package",
       "activityLog": [],
       "createdAt": "2026-05-09T12:00:00.000Z",
@@ -741,6 +771,21 @@ const seedData = {
       "completed": "2026-05-06",
       "billBy": "2026-05-22",
       "docs": "Map, pole attachment package, traffic plan, permits, SOT, photos, as-builts, QC closeout, invoice support package",
+      "arcgis": {
+        "mapUrl": "https://fieldmaps.arcgis.app/?itemID=jt-map-2-west-route",
+        "webMapId": "jt-map-2-west-route",
+        "layerName": "SQUAN Aerial Fiber",
+        "featureIds": "AER-2200, POLE-44-61, TC-009",
+        "workArea": "West route aerial span and pole attachment line",
+        "syncStatus": "Accepted",
+        "lastSyncedAt": "2026-05-06T18:05:00.000Z",
+        "obstaclePins": 0,
+        "gpsPoints": 35,
+        "photoRefs": "PHOTO-MAP2-001, PHOTO-MAP2-002",
+        "asBuiltStatus": "Accepted by prime",
+        "primeAcceptanceStatus": "Accepted",
+        "notes": "Aerial overlash route, pole photos, and traffic-control pins accepted."
+      },
       "notes": "Map 2 operating note: Map, pole attachment package, traffic plan, permits, SOT, photos, as-builts, QC closeout, invoice support package",
       "activityLog": [],
       "createdAt": "2026-05-09T12:00:00.000Z",
@@ -762,6 +807,21 @@ const seedData = {
       "start": "2026-05-13",
       "billBy": "2026-06-12",
       "docs": "Map received; site survey pending; permits and 811 under review; no production or billing yet",
+      "arcgis": {
+        "mapUrl": "https://fieldmaps.arcgis.app/?itemID=jt-map-3-east-starter",
+        "webMapId": "jt-map-3-east-starter",
+        "layerName": "SQUAN East Starter Intake",
+        "featureIds": "INTAKE-303, OBS-303-EAST-XING",
+        "workArea": "East starter route beginning-phase walkout",
+        "syncStatus": "Needs Review",
+        "lastSyncedAt": "2026-05-10T14:20:00.000Z",
+        "obstaclePins": 1,
+        "gpsPoints": 8,
+        "photoRefs": "PHOTO-MAP3-001",
+        "asBuiltStatus": "Not started",
+        "primeAcceptanceStatus": "Pending",
+        "notes": "Prime Field Maps route exists, but East starter crossing obstruction needs clearer pin/photo before release."
+      },
       "notes": "Map 3 operating note: Map received; site survey pending; permits and 811 under review; no production or billing yet",
       "adminApprovals": {
         "evidenceReviews": [
@@ -780,6 +840,28 @@ const seedData = {
       "activityLog": [],
       "createdAt": "2026-05-09T12:00:00.000Z",
       "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "BSP-MIC-0190",
+      "customer": "SQUAN",
+      "map": "BSP-MIC-0190",
+      "scope": "SQUAN NTP demo production import",
+      "status": "Production Import",
+      "crew": "Crew A",
+      "foreman": "Marcus Hill",
+      "startDate": "2026-05-19",
+      "billBy": "2026-06-18",
+      "estimatedRevenue": 3481,
+      "forecastCost": 2100,
+      "actualCost": 0,
+      "retainage10": 0,
+      "docs": "Seeded NTP placeholder for SQUAN import workflow.",
+      "production": "Imported SQUAN daily export and Jackson production daily demo.",
+      "requiredCerts": "JSA, PPE, traffic control as applicable",
+      "notes": "projects record BSP-MIC-0190",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
     }
   ],
   "dailies": [
@@ -1598,7 +1680,6 @@ const seedData = {
       "owner": "Operations Coordinator"
     }
   ],
-  "fieldEvidence": [],
   "photoEvidence": [
     {
       "id": "PHOTO-MAP1-TRENCH",
@@ -1920,7 +2001,7 @@ const seedData = {
       "impactHours": 0,
       "owner": "Operations",
       "status": "Closed",
-      "notes": "Map 1 fuel impact recorded in final Map cost",
+      "notes": "Map 1 fuel impact recorded in final job cost",
       "activityLog": [],
       "createdAt": "2026-04-28T12:00:00.000Z",
       "modifiedAt": "2026-04-28T12:00:00.000Z"
@@ -2043,6 +2124,210 @@ const seedData = {
       "activityLog": [],
       "createdAt": "2026-05-09T12:00:00.000Z",
       "modifiedAt": "2026-05-09T12:00:00.000Z"
+    },
+    {
+      "id": "AUD-0007",
+      "at": "2026-05-10T04:19:48.010Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "underground@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0007",
+      "activityLog": [],
+      "createdAt": "2026-05-10T04:19:48.010Z",
+      "modifiedAt": "2026-05-10T04:19:48.010Z"
+    },
+    {
+      "id": "AUD-0008",
+      "at": "2026-05-10T04:31:02.581Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0008",
+      "activityLog": [],
+      "createdAt": "2026-05-10T04:31:02.581Z",
+      "modifiedAt": "2026-05-10T04:31:02.581Z"
+    },
+    {
+      "id": "AUD-0009",
+      "at": "2026-05-14T15:41:02.359Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0009",
+      "activityLog": [],
+      "createdAt": "2026-05-14T15:41:02.359Z",
+      "modifiedAt": "2026-05-14T15:41:02.359Z"
+    },
+    {
+      "id": "AUD-0010",
+      "at": "2026-05-19T22:09:13.716Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-MAP-INTAKE"
+      },
+      "notes": "auditLog record AUD-0010",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.716Z",
+      "modifiedAt": "2026-05-19T22:09:13.716Z"
+    },
+    {
+      "id": "AUD-0011",
+      "at": "2026-05-19T22:09:13.728Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-811-PERMITS"
+      },
+      "notes": "auditLog record AUD-0011",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.728Z",
+      "modifiedAt": "2026-05-19T22:09:13.728Z"
+    },
+    {
+      "id": "AUD-0012",
+      "at": "2026-05-19T22:09:13.733Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-SAFETY-STARTER"
+      },
+      "notes": "auditLog record AUD-0012",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.733Z",
+      "modifiedAt": "2026-05-19T22:09:13.733Z"
+    },
+    {
+      "id": "AUD-0013",
+      "at": "2026-05-19T22:09:13.749Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-SAFETY-SAFETY-ITEM-NEEDS-REVIEW"
+      },
+      "notes": "auditLog record AUD-0013",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.749Z",
+      "modifiedAt": "2026-05-19T22:09:13.749Z"
+    },
+    {
+      "id": "AUD-0014",
+      "at": "2026-05-19T22:09:13.756Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-SAFETY-STARTER"
+      },
+      "notes": "auditLog record AUD-0014",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.756Z",
+      "modifiedAt": "2026-05-19T22:09:13.756Z"
+    },
+    {
+      "id": "AUD-0015",
+      "at": "2026-05-19T22:09:13.766Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-ADMIN-RELEASE"
+      },
+      "notes": "auditLog record AUD-0015",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.766Z",
+      "modifiedAt": "2026-05-19T22:09:13.766Z"
+    },
+    {
+      "id": "AUD-0016",
+      "at": "2026-05-19T22:09:13.771Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-MAP-INTAKE"
+      },
+      "notes": "auditLog record AUD-0016",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.771Z",
+      "modifiedAt": "2026-05-19T22:09:13.771Z"
+    },
+    {
+      "id": "AUD-0017",
+      "at": "2026-05-19T22:09:13.774Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-811-PERMITS"
+      },
+      "notes": "auditLog record AUD-0017",
+      "activityLog": [],
+      "createdAt": "2026-05-19T22:09:13.774Z",
+      "modifiedAt": "2026-05-19T22:09:13.774Z"
+    },
+    {
+      "id": "AUD-0018",
+      "at": "2026-05-20T00:27:39.657Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-0018",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:39.657Z",
+      "modifiedAt": "2026-05-20T00:27:39.657Z"
+    },
+    {
+      "id": "AUD-0019",
+      "at": "2026-05-20T00:27:39.683Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-0019",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:39.683Z",
+      "modifiedAt": "2026-05-20T00:27:39.683Z"
+    },
+    {
+      "id": "AUD-0020",
+      "at": "2026-05-20T00:27:48.308Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-CREW"
+      },
+      "notes": "auditLog record AUD-0020",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:48.308Z",
+      "modifiedAt": "2026-05-20T00:27:48.308Z"
+    },
+    {
+      "id": "AUD-0021",
+      "at": "2026-05-20T00:27:48.312Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-CREW"
+      },
+      "notes": "auditLog record AUD-0021",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:48.312Z",
+      "modifiedAt": "2026-05-20T00:27:48.312Z"
+    },
+    {
+      "id": "AUD-0022",
+      "at": "2026-05-20T00:27:48.317Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-BILLING-PROOF-ACCEPTED-FIELD-DAILY"
+      },
+      "notes": "auditLog record AUD-0022",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:48.317Z",
+      "modifiedAt": "2026-05-20T00:27:48.317Z"
+    },
+    {
+      "id": "AUD-0023",
+      "at": "2026-05-20T00:27:48.320Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-PO-SQ-24018-BILLING-PROOF-DAILY-EVIDENCE-PACKAGE-QA"
+      },
+      "notes": "auditLog record AUD-0023",
+      "activityLog": [],
+      "createdAt": "2026-05-20T00:27:48.320Z",
+      "modifiedAt": "2026-05-20T00:27:48.320Z"
     }
   ],
   "timeEntries": [
@@ -2255,9 +2540,9 @@ const seedData = {
       "dueDate": "2026-05-10",
       "priority": "High",
       "status": "Open",
-      "workflowArea": "Project & Map Hub",
+      "workflowArea": "Project & PO Hub",
       "notes": "Map 3 is beginning phase. Verify route, hazards, and aerial/underground transitions.",
-      "source": "Map intake checklist",
+      "source": "PO intake checklist",
       "createdAt": "2026-05-09T12:00:00.000Z",
       "modifiedAt": "2026-05-09T12:00:00.000Z",
       "activityLog": []
@@ -2514,12 +2799,387 @@ const seedData = {
       "createdAt": "2026-05-09T12:00:00.000Z",
       "modifiedAt": "2026-05-09T12:00:00.000Z",
       "activityLog": []
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-MAP-INTAKE",
+      "title": "Needs Fix: Map intake",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "Map 1: Complete the setup step, then recheck Ready for field work. Proof needed: Scope, unit schedule, customer requirements, and billing window",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Field Ready",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.673Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.673Z",
+      "modifiedAt": "2026-05-19T22:09:13.673Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-811-PERMITS",
+      "title": "Needs Fix: 811 / permits",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "Map 1: Complete the setup step, then recheck Ready for field work. Proof needed: 811 attached; permit missing",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Needs Review",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.674Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.674Z",
+      "modifiedAt": "2026-05-19T22:09:13.674Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-SAFETY-STARTER",
+      "title": "Needs Fix: Safety starter",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: 1 safety document(s) need review",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.676Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.676Z",
+      "modifiedAt": "2026-05-19T22:09:13.676Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-SAFETY-SAFETY-ITEM-NEEDS-REVIEW",
+      "title": "Needs Fix: Safety item needs review",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Safety/Compliance",
+      "role": "Safety/Compliance",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Safety & Risk",
+      "notes": "Map 1: Review the safety item, add corrective proof, then clear or return it. Proof needed: 0 incident(s), 0 obstacle(s), 4 safety doc gap(s), 0 cert block(s), 0 equipment item(s).",
+      "source": "Needs Fix",
+      "needsFixGroup": "Safety",
+      "needsFixStatus": "Blocked",
+      "needsFixAction": "Safety & Risk",
+      "needsFixFocus": "Safety fixes",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.676Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.676Z",
+      "modifiedAt": "2026-05-19T22:09:13.676Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-SAFETY-STARTER",
+      "title": "Needs Fix: Safety starter",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "Map 1: Complete the setup step, then recheck Ready for field work. Proof needed: 1 safety document(s) need review",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Needs Review",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.675Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.675Z",
+      "modifiedAt": "2026-05-19T22:09:13.675Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-ADMIN-RELEASE",
+      "title": "Needs Fix: Admin release",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: Map must be Admin released or exception-approved before field production starts.",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.675Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.675Z",
+      "modifiedAt": "2026-05-19T22:09:13.675Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-MAP-INTAKE",
+      "title": "Needs Fix: Map intake",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: Scope, unit schedule, customer requirements, and billing window",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.675Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.675Z",
+      "modifiedAt": "2026-05-19T22:09:13.675Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-811-PERMITS",
+      "title": "Needs Fix: 811 / permits",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: 811 attached; permit missing",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-19T22:09:13.675Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-19T22:09:13.675Z",
+      "modifiedAt": "2026-05-19T22:09:13.675Z"
+    },
+    {
+      "id": "TASK-DAILY-EOD-PO-SQ-24031",
+      "title": "Submit draft daily for Map 3",
+      "relatedType": "Daily",
+      "relatedId": "DLY-MAP3-INTAKE",
+      "project": "PO-SQ-24031",
+      "owner": "Operations Coordinator",
+      "role": "Operations",
+      "dueDate": "2026-05-09",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 3: DLY-MAP3-INTAKE saved May 9 at 8:00 AM. Gate blockers: Admin release, Map intake, ArcGIS Field Maps, 811 / permits, Obstacles, Equipment, Safety starter.",
+      "source": "End-of-day daily",
+      "dailyStatus": "Draft",
+      "gateStatus": "Start blocked",
+      "blockerLabels": [
+        "Admin release",
+        "Map intake",
+        "ArcGIS Field Maps",
+        "811 / permits",
+        "Obstacles",
+        "Equipment",
+        "Safety starter"
+      ],
+      "createdAt": "2026-05-20T00:27:39.661Z",
+      "modifiedAt": "2026-05-20T00:27:39.661Z",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:39.661Z",
+          "by": "System",
+          "note": "End-of-day daily task synced: Draft; Start blocked."
+        }
+      ]
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-START-WORK-CREW",
+      "title": "Needs Fix: Crew",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Safety Compliance",
+      "role": "Safety/Compliance",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "People & Compliance",
+      "notes": "Map 1: Complete the setup step, then recheck Ready for field work. Proof needed: Marcus Hill: Clear, Devon Price: Blocked, Isaiah Clark: Blocked",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Blocked",
+      "needsFixAction": "People & Compliance",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:48.301Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-20T00:27:48.301Z",
+      "modifiedAt": "2026-05-20T00:27:48.301Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-PRE-CHECK-CREW",
+      "title": "Needs Fix: Crew",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open Today’s Work and finish Pre-Check. Proof needed: Marcus Hill: Clear, Devon Price: Blocked, Isaiah Clark: Blocked",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:48.302Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-20T00:27:48.302Z",
+      "modifiedAt": "2026-05-20T00:27:48.302Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-BILLING-PROOF-ACCEPTED-FIELD-DAILY",
+      "title": "Needs Fix: Accepted field daily",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-15",
+      "priority": "Medium",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "Map 1: Open the linked workflow, fix the proof, then recheck Billing. Proof needed: Blocking: Operations acceptance, accepted Operations review, generated daily forms, daily support documents, daily photo evidence.",
+      "source": "Needs Fix",
+      "needsFixGroup": "Billing Proof",
+      "needsFixStatus": "Submitted",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Invoice package",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:48.302Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-20T00:27:48.302Z",
+      "modifiedAt": "2026-05-20T00:27:48.302Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-PO-SQ-24018-BILLING-PROOF-DAILY-EVIDENCE-PACKAGE-QA",
+      "title": "Needs Fix: Daily evidence package QA",
+      "relatedType": "Map",
+      "relatedId": "PO-SQ-24018",
+      "project": "PO-SQ-24018",
+      "owner": "Admin",
+      "role": "Admin",
+      "dueDate": "2026-05-15",
+      "priority": "Medium",
+      "status": "Open",
+      "workflowArea": "Billing",
+      "notes": "Map 1: Open the linked workflow, fix the proof, then recheck Billing. Proof needed: PKG-DLY-MAP1-FINAL needs review: Daily Report, SOT, JSA / forms, Photo evidence, Materials, QC review.",
+      "source": "Needs Fix",
+      "needsFixGroup": "Billing Proof",
+      "needsFixStatus": "Not Accepted",
+      "needsFixAction": "Billing",
+      "needsFixFocus": "Invoice package",
+      "activityLog": [
+        {
+          "at": "2026-05-20T00:27:48.303Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-20T00:27:48.303Z",
+      "modifiedAt": "2026-05-20T00:27:48.303Z"
     }
   ],
   "formSubmissions": [],
   "fieldUploadQueue": [],
   "customerContactLog": [],
   "packageSnapshots": [],
+  "packetLocks": [],
+  "alertControls": [],
+  "collectionSubmissions": [],
+  "collectionDecisionPackets": [],
   "offlineSyncQueue": [
     {
       "id": "SYNC-MAP3-PACKAGE-001",
@@ -2647,7 +3307,339 @@ const seedData = {
   "meta": {
     "dataVersion": "2026-05-10.11",
     "updatedAt": "2026-05-10T16:50:00.000Z"
-  }
+  },
+  "fieldEvidence": [
+    {
+      "id": "FE-FEATURE-DEMO-AERIAL",
+      "project": "BSP-MIC-0190",
+      "sourceFeatureId": "FEATURE-DEMO-AERIAL",
+      "source": "SQUAN Map Workbench",
+      "evidenceType": "Feature proof note",
+      "status": "Submitted",
+      "notes": "Photo/as-built proof placeholder for aerial overlash span.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    },
+    {
+      "id": "FE-PL-DEMO-TECH-001",
+      "project": "PO-SQ-24031",
+      "productionLineId": "PL-DEMO-TECH-001",
+      "sourceFeatureId": "FEATURE-DEMO-TECH",
+      "source": "Tech Daily",
+      "evidenceType": "Time and vehicle note",
+      "status": "Accepted",
+      "notes": "Accepted field note and time confirmation for in-house tech support.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    }
+  ],
+  "priceSheetItems": [
+    {
+      "id": "PRICE-BSMI-003",
+      "code": "BSMI-003",
+      "unitName": "Overlash Fiber",
+      "description": "Overlash Fiber",
+      "uom": "Foot",
+      "subRate": 1.05,
+      "aspect": "Aerial",
+      "sourceFile": "samples/price-sheet-template.csv",
+      "status": "Imported",
+      "notes": "Seeded demo price sheet item.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    },
+    {
+      "id": "PRICE-BSMI-015",
+      "code": "BSMI-015",
+      "unitName": "Splice / Test Fiber Fusion per Fiber",
+      "description": "Splice / Test Fiber Fusion per Fiber",
+      "uom": "Each",
+      "subRate": 29.05,
+      "aspect": "Splicing",
+      "sourceFile": "samples/price-sheet-template.csv",
+      "status": "Imported",
+      "notes": "Seeded demo price sheet item.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    },
+    {
+      "id": "PRICE-TS01",
+      "code": "TS01",
+      "unitName": "In-house technician labor",
+      "description": "In-house technician labor",
+      "uom": "Hours",
+      "subRate": 58,
+      "aspect": "Tech Labor",
+      "sourceFile": "samples/price-sheet-template.csv",
+      "status": "Imported",
+      "notes": "Seeded demo price sheet item.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    }
+  ],
+  "squanImports": [
+    {
+      "id": "SQUAN-IMPORT-DEMO-20260519",
+      "sourceFile": "samples/squan-daily-export-template.csv",
+      "sourceType": "SQUAN Daily Export CSV",
+      "importedAt": "2026-05-19T17:26:59.000Z",
+      "importedBy": "System seed",
+      "lineCount": 3,
+      "totalAmount": 3480.7,
+      "status": "Imported",
+      "notes": "Seeded demo import for Production workflow.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    }
+  ],
+  "squanProductionLines": [
+    {
+      "id": "SPL-DEMO-001",
+      "importId": "SQUAN-IMPORT-DEMO-20260519",
+      "project": "BSP-MIC-0190",
+      "ntp": "BSP-MIC-0190",
+      "workedDate": "2026-05-19",
+      "code": "BSMI-003",
+      "quantity": 1102,
+      "uom": "Foot",
+      "squanAmount": 1157.1,
+      "description": "Overlash fiber from SQUAN daily export",
+      "status": "Imported",
+      "source": "SQUAN Daily Export CSV",
+      "notes": "Seeded from sample SQUAN daily export template.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    },
+    {
+      "id": "SPL-DEMO-002",
+      "importId": "SQUAN-IMPORT-DEMO-20260519",
+      "project": "BSP-MIC-0190",
+      "ntp": "BSP-MIC-0190",
+      "workedDate": "2026-05-19",
+      "code": "BSMI-015",
+      "quantity": 72,
+      "uom": "Each",
+      "squanAmount": 2091.6,
+      "description": "Fusion splice support from SQUAN daily export",
+      "status": "Imported",
+      "source": "SQUAN Daily Export CSV",
+      "notes": "Seeded from sample SQUAN daily export template.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    },
+    {
+      "id": "SPL-DEMO-003",
+      "importId": "SQUAN-IMPORT-DEMO-20260519",
+      "project": "PO-SQ-24031",
+      "ntp": "PO-SQ-24031",
+      "workedDate": "2026-05-19",
+      "code": "TS01",
+      "quantity": 4,
+      "uom": "Hours",
+      "squanAmount": 232,
+      "description": "In-house technician support",
+      "status": "Imported",
+      "source": "SQUAN Daily Export CSV",
+      "notes": "Seeded from sample SQUAN daily export template.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    }
+  ],
+  "productionDailies": [
+    {
+      "id": "PD-DEMO-CON-001",
+      "project": "BSP-MIC-0190",
+      "ntp": "BSP-MIC-0190",
+      "sourceType": "Contractor Daily",
+      "submittedBy": "Jackson Sub Crew",
+      "workedDate": "2026-05-19",
+      "status": "Submitted",
+      "sourceFeatureIds": [
+        "FEATURE-DEMO-AERIAL"
+      ],
+      "notes": "Seeded contractor daily for overlash production.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    },
+    {
+      "id": "PD-DEMO-TECH-001",
+      "project": "PO-SQ-24031",
+      "ntp": "PO-SQ-24031",
+      "sourceType": "In-House Tech Daily",
+      "submittedBy": "Marcus Hill",
+      "workedDate": "2026-05-19",
+      "status": "Submitted",
+      "sourceFeatureIds": [
+        "FEATURE-DEMO-TECH"
+      ],
+      "notes": "Seeded tech daily for in-house support.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    }
+  ],
+  "productionLines": [
+    {
+      "id": "PL-DEMO-CON-001",
+      "dailyId": "PD-DEMO-CON-001",
+      "sourceType": "Contractor Daily",
+      "submittedBy": "Jackson Sub Crew",
+      "project": "BSP-MIC-0190",
+      "ntp": "BSP-MIC-0190",
+      "workedDate": "2026-05-19",
+      "code": "BSMI-003",
+      "quantity": 1102,
+      "uom": "Foot",
+      "unitRate": 1.05,
+      "submittedAmount": 1157.1,
+      "sourceFeatureId": "FEATURE-DEMO-AERIAL",
+      "mapLayer": "Aerial",
+      "reviewStatus": "Submitted",
+      "payableStatus": "Pending Review",
+      "billableStatus": "Pending Review",
+      "proofStatus": "Submitted",
+      "notes": "Seeded production line awaiting proof acceptance and review.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    },
+    {
+      "id": "PL-DEMO-TECH-001",
+      "dailyId": "PD-DEMO-TECH-001",
+      "sourceType": "In-House Tech Daily",
+      "submittedBy": "Marcus Hill",
+      "project": "PO-SQ-24031",
+      "ntp": "PO-SQ-24031",
+      "workedDate": "2026-05-19",
+      "code": "TS01",
+      "quantity": 4,
+      "uom": "Hours",
+      "unitRate": 58,
+      "submittedAmount": 232,
+      "sourceFeatureId": "FEATURE-DEMO-TECH",
+      "mapLayer": "Tech Labor",
+      "reviewStatus": "Approved",
+      "payableStatus": "Job Cost",
+      "billableStatus": "Ready to Bill",
+      "proofStatus": "Accepted",
+      "notes": "Seeded approved in-house tech support.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    }
+  ],
+  "contractorPayables": [],
+  "techWorkEntries": [],
+  "billingLedger": [
+    {
+      "id": "BILL-PL-DEMO-TECH-001",
+      "productionLineId": "PL-DEMO-TECH-001",
+      "project": "PO-SQ-24031",
+      "workedDate": "2026-05-19",
+      "code": "TS01",
+      "squanBillableAmount": 232,
+      "contractorPayableAmount": 0,
+      "inHouseCostAmount": 232,
+      "proofStatus": "Accepted",
+      "paymentStatus": "Open",
+      "billingStatus": "Ready to Bill",
+      "notes": "Seeded billing ledger row for approved in-house support.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    }
+  ],
+  "quantityReconciliation": [
+    {
+      "id": "QTY-PL-DEMO-TECH-001",
+      "productionLineId": "PL-DEMO-TECH-001",
+      "project": "PO-SQ-24031",
+      "workedDate": "2026-05-19",
+      "code": "TS01",
+      "squanExportQuantity": 4,
+      "jacksonSubmittedQuantity": 4,
+      "approvedQuantity": 4,
+      "billingQuantity": 4,
+      "varianceQuantity": 0,
+      "status": "Reconciled",
+      "notes": "Seeded reconciliation for approved in-house support.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    }
+  ],
+  "squanMapFeatures": [
+    {
+      "id": "FEATURE-DEMO-AERIAL",
+      "project": "BSP-MIC-0190",
+      "ntp": "BSP-MIC-0190",
+      "layerName": "Aerial",
+      "featureCode": "BSMI-003",
+      "description": "Overlash span from SQUAN map placeholder",
+      "quantity": 1102,
+      "uom": "Foot",
+      "status": "Planned",
+      "workDate": "2026-05-19",
+      "objectId": "",
+      "globalId": "",
+      "geometryStatus": "Placeholder",
+      "source": "Seeded SQUAN map feature",
+      "notes": "Seeded demo feature for SQUAN Map Workbench.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    },
+    {
+      "id": "FEATURE-DEMO-SPLICE",
+      "project": "BSP-MIC-0190",
+      "ntp": "BSP-MIC-0190",
+      "layerName": "Splicing",
+      "featureCode": "BSMI-015",
+      "description": "Fusion splice points from SQUAN map placeholder",
+      "quantity": 72,
+      "uom": "Each",
+      "status": "Assigned",
+      "workDate": "2026-05-19",
+      "objectId": "",
+      "globalId": "",
+      "geometryStatus": "Placeholder",
+      "source": "Seeded SQUAN map feature",
+      "notes": "Seeded demo feature for SQUAN Map Workbench.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    },
+    {
+      "id": "FEATURE-DEMO-TECH",
+      "project": "PO-SQ-24031",
+      "ntp": "PO-SQ-24031",
+      "layerName": "Tech Labor",
+      "featureCode": "TS01",
+      "description": "In-house technician support placeholder",
+      "quantity": 4,
+      "uom": "Hours",
+      "status": "Planned",
+      "workDate": "2026-05-19",
+      "objectId": "",
+      "globalId": "",
+      "geometryStatus": "Placeholder",
+      "source": "Seeded SQUAN map feature",
+      "notes": "Seeded demo feature for SQUAN Map Workbench.",
+      "activityLog": [],
+      "createdAt": "2026-05-19T17:26:59.000Z",
+      "modifiedAt": "2026-05-19T17:26:59.000Z"
+    }
+  ]
 };
 
 const navItems = [
@@ -29278,6 +30270,10 @@ function productionEvidenceForLine(lineId) {
   return (state.data.fieldEvidence || []).filter(item => item.productionLineId === lineId);
 }
 
+function featureEvidenceRows(featureId) {
+  return (state.data.fieldEvidence || []).filter(item => item.sourceFeatureId === featureId || item.linkedFeatureId === featureId);
+}
+
 function productionProofState(row) {
   const evidence = productionEvidenceForLine(row.id);
   const acceptedEvidence = evidence.filter(item => ["Accepted", "Accepted Exception"].includes(item.status));
@@ -29663,6 +30659,7 @@ function renderSquanMapWorkbench() {
   const layers = [...new Set(features.map(feature => feature.layerName || "Production"))].sort();
   const rollups = squanMapRollups(features);
   const reconciliation = squanFeatureReconciliationRows(features);
+  const selectedProof = selected ? featureEvidenceRows(selected.id) : [];
   return `
     <section class="panel production-panel squan-map-workbench">
       <div class="panel-header">
@@ -29734,8 +30731,24 @@ function renderSquanMapWorkbench() {
               <div><dt>Object ID</dt><dd>${escapeAttr(selected.objectId || "Future ArcGIS")}</dd></div>
               <div><dt>Geometry</dt><dd>${escapeAttr(selected.geometryStatus || "Placeholder")}</dd></div>
             </dl>
+            <div class="feature-proof-list">
+              <div class="section-heading">
+                <h4>Feature Proof</h4>
+                <span>${selectedProof.length}</span>
+              </div>
+              ${selectedProof.map(item => `
+                <article>
+                  <div>
+                    <strong>${escapeAttr(item.evidenceType || "Proof")}</strong>
+                    <small>${escapeAttr(item.notes || item.status || "")}</small>
+                  </div>
+                  <span class="status ${statusClass(item.status || "Submitted")}">${escapeAttr(item.status || "Submitted")}</span>
+                </article>
+              `).join("") || `<div class="empty">No feature proof attached yet.</div>`}
+            </div>
             <p>${escapeAttr(selected.description || selected.notes || "SQUAN feature placeholder ready for Jackson daily creation.")}</p>
             <div class="squan-feature-actions">
+              <button class="secondary-btn" data-map-feature-proof="${escapeAttr(selected.id)}">Add proof</button>
               <button class="secondary-btn" data-map-feature-edit="${escapeAttr(selected.id)}">Edit feature</button>
               <button class="secondary-btn" data-map-feature-status="Assigned" data-squan-feature-id="${escapeAttr(selected.id)}">Assign</button>
               <button class="secondary-btn" data-map-feature-status="Approved" data-squan-feature-id="${escapeAttr(selected.id)}">Approve</button>
@@ -30173,6 +31186,30 @@ function openSquanMapFeaturePrompt(featureId = "") {
   state.selectedSquanFeatureId = record.id;
   appendAuditLocal("production.map-feature-saved", { feature: record.id, project: record.project, by: state.user?.name || "Operations" });
   persist("SQUAN map feature saved");
+  render();
+}
+
+function addFeatureProof(featureId) {
+  const feature = squanMapFeatureRows().find(item => item.id === featureId);
+  if (!feature) return;
+  const proofNote = prompt("Proof note for this feature", `${feature.layerName || "Layer"} ${feature.featureCode || ""}: photo/as-built/SQUAN map reference.`);
+  if (!proofNote) return;
+  const now = new Date().toISOString();
+  const record = {
+    id: `FE-FEATURE-${feature.id}-${Date.now()}`.replace(/[^A-Z0-9-]/gi, "-").toUpperCase(),
+    project: feature.project || feature.ntp || state.selectedProjectId || "",
+    sourceFeatureId: feature.id,
+    source: "SQUAN Map Workbench",
+    evidenceType: "Feature proof note",
+    status: "Submitted",
+    notes: proofNote.trim(),
+    activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Feature-level proof attached." }],
+    createdAt: now,
+    modifiedAt: now
+  };
+  productionCollectionUpsert("fieldEvidence", record);
+  appendAuditLocal("production.map-feature-proof", { feature: feature.id, evidence: record.id, by: state.user?.name || "Operations" });
+  persist("Feature proof attached");
   render();
 }
 
@@ -42324,6 +43361,12 @@ function bindEvents() {
   document.querySelectorAll("[data-map-feature-edit]").forEach(button => {
     button.addEventListener("click", () => {
       if (guardAction("production")) openSquanMapFeaturePrompt(button.dataset.mapFeatureEdit);
+    });
+  });
+
+  document.querySelectorAll("[data-map-feature-proof]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (guardAction("production")) addFeatureProof(button.dataset.mapFeatureProof);
     });
   });
 

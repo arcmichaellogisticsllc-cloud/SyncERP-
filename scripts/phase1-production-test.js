@@ -455,6 +455,20 @@ function createDailyFromFeatures(db, featureIds) {
   return db.productionLines.filter(item => item.dailyId === dailyId);
 }
 
+function addFeatureProof(db, featureId, note) {
+  const feature = squanMapFeatureRows(db).find(item => item.id === featureId);
+  assert(feature, `Missing feature ${featureId}`);
+  return upsert(db, "fieldEvidence", {
+    id: `FE-FEATURE-${featureId}`,
+    project: feature.project,
+    sourceFeatureId: featureId,
+    source: "SQUAN Map Workbench",
+    evidenceType: "Feature proof note",
+    status: "Submitted",
+    notes: note
+  });
+}
+
 function arcgisReadinessRows(config) {
   return [
     ["Portal URL", config.portalUrl ? "Ready" : "Missing"],
@@ -537,6 +551,8 @@ function run() {
   assert.strictEqual(squanMapFeatureRows(db).find(item => item.id === "FEATURE-MANUAL-1").status, "Assigned");
   updateFeatureStatuses(db, ["FEATURE-SPL-TEST-1", "FEATURE-MANUAL-1"], "Approved");
   assert.strictEqual(squanMapFeatureRows(db).find(item => item.id === "FEATURE-MANUAL-1").status, "Approved");
+  addFeatureProof(db, "FEATURE-MANUAL-1", "Manual feature proof before daily creation.");
+  assert.strictEqual(db.fieldEvidence.find(item => item.sourceFeatureId === "FEATURE-MANUAL-1").status, "Submitted");
   const batchLines = createDailyFromFeatures(db, ["FEATURE-SPL-TEST-1", "FEATURE-MANUAL-1"]);
   assert.strictEqual(batchLines.length, 2);
   assert.strictEqual(batchLines[1].sourceFeatureId, "FEATURE-MANUAL-1");
@@ -590,7 +606,7 @@ function run() {
   });
 
   assert.strictEqual(db.productionDailies.length, 6);
-  assert.strictEqual(db.fieldEvidence.length, 6);
+  assert.strictEqual(db.fieldEvidence.length, 7);
   assert.strictEqual(db.techWorkEntries.length, 1);
   assert.strictEqual(productionLedgerRows(db).find(row => row.id === "PL-CON-1").varianceQuantity, 0);
 
