@@ -29792,6 +29792,7 @@ function renderProductionControl() {
         ${renderProductionImportCenter()}
         ${renderProductionDailyForm(projects, codes)}
       </div>
+      ${renderProductionDailyDetailView(rows)}
       ${renderArcgisPhase4Readiness()}
       ${renderSquanMapWorkbench()}
       ${renderProductionReviewQueue(rows)}
@@ -29859,6 +29860,24 @@ function renderProductionDailyForm(projects, codes) {
         <label>Work date
           <input id="productionWorkedDate" type="date" value="2026-05-19">
         </label>
+        <label>Daily ID
+          <input id="productionDailyExternalId" value="BSP-MIC-0197" placeholder="BSP-MIC-0197">
+        </label>
+        <label>Node / CLLI
+          <input id="productionClli" value="PTASMIXI" placeholder="PTASMIXI">
+        </label>
+        <label>Street / feeder
+          <input id="productionFeeder" value="DTAP.001.02.02" placeholder="DTAP.001.02.02">
+        </label>
+        <label>Hours
+          <input id="productionHours" type="number" step="0.25" min="0" value="0">
+        </label>
+        <label>Vehicle / equipment
+          <input id="productionVehicle" placeholder="Truck, vehicle, or equipment">
+        </label>
+        <label>Crew allocation
+          <input id="productionCrewAllocation" value="100%" placeholder="100%">
+        </label>
         <label>Code
           <select id="productionCode">
             ${codes.map(code => `<option>${escapeAttr(code)}</option>`).join("")}
@@ -29868,11 +29887,209 @@ function renderProductionDailyForm(projects, codes) {
         <label>Quantity
           <input id="productionQuantity" type="number" step="0.01" min="0" value="1">
         </label>
+        <label>OBJECTID
+          <input id="productionObjectId" placeholder="Future ArcGIS OBJECTID">
+        </label>
+        <label>GlobalID
+          <input id="productionGlobalId" placeholder="Future ArcGIS GlobalID">
+        </label>
+        <label>point_x
+          <input id="productionPointX" placeholder="Future longitude / x">
+        </label>
+        <label>point_y
+          <input id="productionPointY" placeholder="Future latitude / y">
+        </label>
+        <label>ArcGIS notes
+          <input id="productionArcgisNotes" placeholder="Feature notes, obstruction, or engineering comment">
+        </label>
         <label>Proof note
           <input id="productionProofNote" placeholder="Photos, as-built, pole tag, or SQUAN export reference">
         </label>
         <button class="primary-btn" type="submit" ${canSubmit ? "" : "disabled"}>Submit line</button>
       </form>
+    </section>
+  `;
+}
+
+function productionDailyDetailRows(rows = productionLedgerRows()) {
+  const dailies = state.data.productionDailies || [];
+  const projects = state.data.projects || [];
+  const features = squanMapFeatureRows();
+  const squanRows = state.data.squanProductionLines || [];
+  return dailies
+    .map(daily => {
+      const lines = rows.filter(line => line.dailyId === daily.id);
+      const evidence = (state.data.fieldEvidence || []).filter(item => item.productionDailyId === daily.id || lines.some(line => item.productionLineId === line.id));
+      const sourceFeatures = uniqueList([
+        ...(daily.sourceFeatureIds || []),
+        ...lines.map(line => line.sourceFeatureId).filter(Boolean)
+      ]);
+      const featureRows = sourceFeatures.map(id => features.find(feature => feature.id === id)).filter(Boolean);
+      const squanMatched = squanRows.filter(line => lines.some(prod => productionLineKey(prod) === squanLineKey(line)));
+      const project = projects.find(item => item.id === daily.project);
+      return {
+        daily,
+        project,
+        lines,
+        evidence,
+        featureRows,
+        squanMatched,
+        totalQuantity: sum(lines, "quantity"),
+        squanQuantity: sum(squanMatched, "quantity"),
+        acceptedProof: evidence.filter(item => ["Accepted", "Accepted Exception", "Submitted", "Attached"].includes(item.status)).length
+      };
+    })
+    .sort((a, b) => String(b.daily.workedDate || "").localeCompare(String(a.daily.workedDate || "")));
+}
+
+function renderProductionDailyDetailView(rows = productionLedgerRows()) {
+  const detailRows = productionDailyDetailRows(rows);
+  const selected = detailRows.find(row => row.daily.id === state.selectedProductionDailyId) || detailRows[0];
+  if (!selected) {
+    return `
+      <section class="panel production-panel production-daily-detail">
+        <div class="panel-header">
+          <div>
+            <h2>Daily Detail View</h2>
+            <p>Submit a contractor or tech daily to see the SQUAN-style header, crew, ArcGIS reference, as-builts, and history here.</p>
+          </div>
+          <span>No daily selected</span>
+        </div>
+      </section>
+    `;
+  }
+  const { daily, project, lines, evidence, featureRows, squanMatched } = selected;
+  const firstLine = lines[0] || {};
+  const firstFeature = featureRows[0] || {};
+  const codeRows = lines.map(line => {
+    const squan = squanMatched.filter(item => squanLineKey(item) === productionLineKey(line));
+    return { line, squanQuantity: sum(squan, "quantity"), squanAmount: sum(squan, "squanAmount") };
+  });
+  const history = [
+    ...(daily.activityLog || []),
+    ...lines.flatMap(line => line.activityLog || []),
+    ...evidence.flatMap(item => item.activityLog || [])
+  ].sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  return `
+    <section class="panel production-panel production-daily-detail">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Daily Detail View</span>
+          <h2>${escapeAttr(daily.externalDailyId || daily.id)}</h2>
+          <p>${escapeAttr(daily.sourceType || "Production Daily")} · ${escapeAttr(daily.submittedBy || "Submitter")} · ${formatDate(daily.workedDate)}</p>
+        </div>
+        <select data-production-daily-select aria-label="Select production daily">
+          ${detailRows.map(row => `<option value="${escapeAttr(row.daily.id)}" ${row.daily.id === daily.id ? "selected" : ""}>${escapeAttr(row.daily.externalDailyId || row.daily.id)} · ${escapeAttr(row.daily.project || "")}</option>`).join("")}
+        </select>
+      </div>
+      <div class="daily-detail-layout">
+        <div class="daily-detail-main">
+          <section class="daily-detail-card">
+            <div class="section-heading compact">
+              <h3>Header</h3>
+              <span>${escapeAttr(daily.status || "Draft")}</span>
+            </div>
+            <dl class="daily-detail-grid">
+              <div><dt>Project / NTP</dt><dd>${escapeAttr(daily.project || "")}</dd></div>
+              <div><dt>SQUAN map</dt><dd>${escapeAttr(project ? squanMapTitle(project) : daily.ntp || "")}</dd></div>
+              <div><dt>Node / CLLI</dt><dd>${escapeAttr(daily.clli || firstLine.clli || firstFeature.clli || "Pending")}</dd></div>
+              <div><dt>Street / feeder</dt><dd>${escapeAttr(daily.feeder || firstLine.feeder || firstFeature.feeder || "Pending")}</dd></div>
+              <div><dt>Tech / foreman</dt><dd>${escapeAttr(daily.tech || daily.submittedBy || "")}</dd></div>
+              <div><dt>Work date</dt><dd>${formatDate(daily.workedDate)}</dd></div>
+              <div><dt>Hours</dt><dd>${Number(daily.hours || firstLine.hours || (firstLine.code === "TS01" ? firstLine.quantity : 0) || 0).toLocaleString()}</dd></div>
+              <div><dt>Vehicle</dt><dd>${escapeAttr(daily.vehicle || "Not recorded")}</dd></div>
+              <div class="wide"><dt>Comments</dt><dd>${escapeAttr(daily.notes || firstLine.notes || "No comments recorded.")}</dd></div>
+            </dl>
+          </section>
+          <section class="daily-detail-card">
+            <div class="section-heading compact">
+              <h3>Crew / Labor</h3>
+              <span>${escapeAttr(daily.crewAllocation || "100%")}</span>
+            </div>
+            <div class="daily-crew-row">
+              <strong>${escapeAttr(daily.submittedBy || "Jackson Telcom LLC")}</strong>
+              <span>${escapeAttr(daily.sourceType || "Daily")}</span>
+              <small>${escapeAttr(daily.crewAllocation || "100%")} allocation · ${Number(daily.hours || 0).toLocaleString()} hour(s)</small>
+            </div>
+          </section>
+          <section class="daily-detail-card">
+            <div class="section-heading compact">
+              <h3>Production Codes</h3>
+              <span>${lines.length} line(s)</span>
+            </div>
+            <div class="table-wrap production-table compact">
+              <table>
+                <thead><tr><th>Code</th><th>Jackson qty</th><th>SQUAN qty</th><th>Rate</th><th>Status</th></tr></thead>
+                <tbody>
+                  ${codeRows.map(row => `
+                    <tr>
+                      <td><strong>${escapeAttr(row.line.code || "")}</strong><br><small>${escapeAttr(row.line.unitName || row.line.uom || "")}</small></td>
+                      <td>${Number(row.line.quantity || 0).toLocaleString()} ${escapeAttr(row.line.uom || "")}</td>
+                      <td>${Number(row.squanQuantity || 0).toLocaleString()}<br><small>${currency(row.squanAmount || 0)}</small></td>
+                      <td>${currency(row.line.unitRate || 0)}</td>
+                      <td><span class="status ${statusClass(row.line.status || row.line.reviewStatus)}">${escapeAttr(row.line.status || row.line.reviewStatus || "Submitted")}</span></td>
+                    </tr>
+                  `).join("") || `<tr><td colspan="5">No production lines linked.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="daily-detail-card">
+            <div class="section-heading compact">
+              <h3>As-Builts / Photos</h3>
+              <span>${evidence.length} proof item(s)</span>
+            </div>
+            <div class="daily-asbuilt-strip">
+              ${evidence.map(item => `
+                <article>
+                  <strong>${escapeAttr(item.evidenceType || "Proof")}</strong>
+                  <span>${escapeAttr(item.status || "Submitted")}</span>
+                  <small>${escapeAttr(item.notes || "No proof note.")}</small>
+                </article>
+              `).join("") || `<p class="empty-state">Attach photos, as-builts, video, SOT, or notes before approval.</p>`}
+            </div>
+          </section>
+          <section class="daily-detail-card">
+            <div class="section-heading compact">
+              <h3>Save / Submit History</h3>
+              <span>${history.length}</span>
+            </div>
+            <div class="daily-history-list">
+              ${history.map(item => `
+                <article>
+                  <strong>${formatDateTime(item.at || daily.modifiedAt || daily.createdAt)}</strong>
+                  <span>${escapeAttr(item.note || "Daily updated.")}</span>
+                  <small>${escapeAttr(item.by || daily.submittedBy || "System")}</small>
+                </article>
+              `).join("") || `<p class="empty-state">No history beyond the daily record timestamps.</p>`}
+            </div>
+          </section>
+        </div>
+        <aside class="daily-arcgis-side">
+          <div class="section-heading compact">
+            <h3>ArcGIS Feature Reference</h3>
+            <span>${featureRows.length ? "Linked" : "Placeholder"}</span>
+          </div>
+          <dl class="daily-arcgis-attributes">
+            <div><dt>OBJECTID</dt><dd>${escapeAttr(firstLine.objectId || firstFeature.objectId || "Future ArcGIS")}</dd></div>
+            <div><dt>client</dt><dd>${escapeAttr(project?.customer || "SQUAN")}</dd></div>
+            <div><dt>CLLI / node</dt><dd>${escapeAttr(firstLine.clli || daily.clli || firstFeature.clli || "Pending")}</dd></div>
+            <div><dt>Feeder / DTAP</dt><dd>${escapeAttr(firstLine.feeder || daily.feeder || firstFeature.feeder || "Pending")}</dd></div>
+            <div><dt>Foreman</dt><dd>${escapeAttr(daily.tech || daily.submittedBy || "Pending")}</dd></div>
+            <div><dt>item</dt><dd>${escapeAttr(firstLine.code || firstFeature.featureCode || "Pending")}</dd></div>
+            <div><dt>quantity</dt><dd>${Number(firstLine.quantity || firstFeature.quantity || 0).toLocaleString()}</dd></div>
+            <div><dt>GlobalID</dt><dd>${escapeAttr(firstLine.globalId || firstFeature.globalId || "Future ArcGIS")}</dd></div>
+            <div><dt>point_x</dt><dd>${escapeAttr(firstLine.pointX || firstFeature.pointX || "Pending")}</dd></div>
+            <div><dt>point_y</dt><dd>${escapeAttr(firstLine.pointY || firstFeature.pointY || "Pending")}</dd></div>
+            <div class="wide"><dt>Notes</dt><dd>${escapeAttr(firstLine.arcgisNotes || firstFeature.notes || daily.notes || "Feature notes will display here after import.")}</dd></div>
+          </dl>
+          <div class="daily-arcgis-summary">
+            <span>Jackson qty<strong>${Number(selected.totalQuantity || 0).toLocaleString()}</strong></span>
+            <span>SQUAN qty<strong>${Number(selected.squanQuantity || 0).toLocaleString()}</strong></span>
+            <span>Proof<strong>${selected.acceptedProof}/${evidence.length}</strong></span>
+          </div>
+        </aside>
+      </div>
     </section>
   `;
 }
@@ -30225,9 +30442,13 @@ function squanMapFeatureRows() {
     workDate: line.workedDate || isoDate(new Date()),
     objectId: line.objectId || "",
     globalId: line.globalId || "",
+    clli: line.clli || "",
+    feeder: line.feeder || "",
+    pointX: line.pointX || "",
+    pointY: line.pointY || "",
     geometryStatus: line.geometry ? "Stored" : "Placeholder",
     source: "SQUAN Daily Export CSV",
-    notes: line.notes || "Feature modeled from SQUAN export until live ArcGIS is approved."
+    notes: line.arcgisNotes || line.notes || "Feature modeled from SQUAN export until live ArcGIS is approved."
   }));
   const byId = new Map();
   [...imported, ...explicit].forEach(item => byId.set(item.id, item));
@@ -30574,6 +30795,13 @@ async function handleProductionCsvImport(input, importType) {
       uom: csvValue(row, ["uom", "unit"], "Unit"),
       squanAmount: amount,
       description: csvValue(row, ["description", "unit name", "item"], code),
+      objectId: csvValue(row, ["objectid", "object id", "object_id"]),
+      globalId: csvValue(row, ["globalid", "global id", "global_id"]),
+      clli: csvValue(row, ["clli", "node"]),
+      feeder: csvValue(row, ["feeder", "dtap", "street"]),
+      pointX: csvValue(row, ["point_x", "point x", "x", "longitude"]),
+      pointY: csvValue(row, ["point_y", "point y", "y", "latitude"]),
+      arcgisNotes: csvValue(row, ["notes", "arcgis notes", "comments"]),
       status: "Imported",
       notes: `Parsed from SQUAN CSV ${file.name}.`,
       activityLog: [{ at: now, by: state.user?.name || "User", note: "Imported SQUAN production line." }],
@@ -30609,8 +30837,19 @@ function handleProductionDailySubmit(event) {
   const submittedBy = document.getElementById("productionSubmittedBy")?.value?.trim() || state.user?.name || "Jackson Telcom";
   const project = document.getElementById("productionProject")?.value || state.selectedProjectId || "";
   const workedDate = document.getElementById("productionWorkedDate")?.value || isoDate(new Date());
+  const externalDailyId = document.getElementById("productionDailyExternalId")?.value?.trim() || "";
+  const clli = document.getElementById("productionClli")?.value?.trim() || "";
+  const feeder = document.getElementById("productionFeeder")?.value?.trim() || "";
+  const hours = Number(document.getElementById("productionHours")?.value || 0);
+  const vehicle = document.getElementById("productionVehicle")?.value?.trim() || "";
+  const crewAllocation = document.getElementById("productionCrewAllocation")?.value?.trim() || "100%";
   const code = document.getElementById("productionCode")?.value || "";
   const quantity = Number(document.getElementById("productionQuantity")?.value || 0);
+  const objectId = document.getElementById("productionObjectId")?.value?.trim() || "";
+  const globalId = document.getElementById("productionGlobalId")?.value?.trim() || "";
+  const pointX = document.getElementById("productionPointX")?.value?.trim() || "";
+  const pointY = document.getElementById("productionPointY")?.value?.trim() || "";
+  const arcgisNotes = document.getElementById("productionArcgisNotes")?.value?.trim() || "";
   const proofNote = document.getElementById("productionProofNote")?.value?.trim() || "";
   const price = productionPriceForCode(code);
   const unitRate = Number(price?.subRate || price?.price || 0);
@@ -30621,13 +30860,20 @@ function handleProductionDailySubmit(event) {
 
   const daily = {
     id: dailyId,
+    externalDailyId,
     project,
     ntp: project,
     sourceType,
     submittedBy,
+    tech: submittedBy,
     workedDate,
+    clli,
+    feeder,
+    hours,
+    vehicle,
+    crewAllocation,
     status: "Submitted",
-    notes: proofNote || `${sourceType} submitted for Jackson review.`,
+    notes: proofNote || arcgisNotes || `${sourceType} submitted for Jackson review.`,
     activityLog: [{ at: now, by: submittedBy, note: "Production daily submitted." }],
     createdAt: now,
     modifiedAt: now
@@ -30645,6 +30891,15 @@ function handleProductionDailySubmit(event) {
     uom: code === "TS01" ? "Hours" : price?.uom || "Units",
     unitRate,
     submittedAmount: Math.round(quantity * unitRate * 100) / 100,
+    clli,
+    feeder,
+    hours,
+    vehicle,
+    objectId,
+    globalId,
+    pointX,
+    pointY,
+    arcgisNotes,
     reviewStatus,
     payableStatus: sourceType.includes("Contractor") ? "Pending Review" : "Job Cost",
     billableStatus: "Pending Review",
@@ -30681,7 +30936,10 @@ function handleProductionDailySubmit(event) {
       source: sourceType,
       evidenceType: "Note / field proof",
       status: "Submitted",
+      productionDailyId: dailyId,
       notes: proofNote,
+      objectId,
+      globalId,
       activityLog: [{ at: now, by: submittedBy, note: "Field evidence note linked to production line." }],
       createdAt: now,
       modifiedAt: now
@@ -30707,11 +30965,18 @@ function createProductionDailyFromFeatures(featureIds) {
   const dailyId = `PD-FEATURE-${Date.now()}`;
   productionCollectionUpsert("productionDailies", {
     id: dailyId,
+    externalDailyId: `SQUAN-${dailyId}`,
     project,
     ntp: project,
     sourceType: "SQUAN Map Workbench",
     submittedBy: state.user?.name || "Operations",
+    tech: state.user?.name || "Operations",
     workedDate: first.workDate || isoDate(new Date()),
+    clli: first.clli || first.node || "",
+    feeder: first.feeder || first.street || "",
+    hours: first.featureCode === "TS01" ? Number(first.quantity || 0) : 0,
+    vehicle: "",
+    crewAllocation: "100%",
     status: "Draft",
     sourceFeatureIds: selectedFeatures.map(feature => feature.id),
     notes: `Draft daily created from ${selectedFeatures.length} SQUAN map feature(s).`,
@@ -30739,6 +31004,14 @@ function createProductionDailyFromFeatures(featureIds) {
       submittedAmount: Math.round(Number(feature.quantity || 0) * unitRate * 100) / 100,
       sourceFeatureId: feature.id,
       mapLayer: feature.layerName || "Production",
+      clli: feature.clli || feature.node || "",
+      feeder: feature.feeder || feature.street || "",
+      hours: code === "TS01" ? Number(feature.quantity || 0) : 0,
+      objectId: feature.objectId || "",
+      globalId: feature.globalId || "",
+      pointX: feature.pointX || "",
+      pointY: feature.pointY || "",
+      arcgisNotes: feature.notes || feature.description || "",
       reviewStatus: "Submitted",
       payableStatus: "Pending Review",
       billableStatus: "Pending Review",
@@ -30755,7 +31028,10 @@ function createProductionDailyFromFeatures(featureIds) {
       source: "SQUAN Map Workbench",
       evidenceType: "Map feature reference",
       status: "Submitted",
+      productionDailyId: dailyId,
       notes: `${feature.layerName || "Layer"} ${feature.featureCode || ""}; ${Number(feature.quantity || 0).toLocaleString()} ${feature.uom || ""}; ${feature.description || ""}`,
+      objectId: feature.objectId || "",
+      globalId: feature.globalId || "",
       activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Map feature reference linked as proof placeholder." }],
       createdAt: now,
       modifiedAt: now
@@ -30784,6 +31060,10 @@ function squanFeatureOverride(feature) {
     workDate: feature.workDate || isoDate(new Date()),
     objectId: feature.objectId || "",
     globalId: feature.globalId || "",
+    clli: feature.clli || "",
+    feeder: feature.feeder || "",
+    pointX: feature.pointX || "",
+    pointY: feature.pointY || "",
     geometryStatus: feature.geometryStatus || "Placeholder",
     source: feature.source || "Manual SQUAN map feature",
     notes: feature.notes || "Manual feature placeholder for SQUAN Map Workbench.",
@@ -43227,6 +43507,13 @@ function bindEvents() {
 
   const productionForm = document.getElementById("productionDailyForm");
   if (productionForm) productionForm.addEventListener("submit", handleProductionDailySubmit);
+
+  document.querySelectorAll("[data-production-daily-select]").forEach(select => {
+    select.addEventListener("change", () => {
+      state.selectedProductionDailyId = select.value;
+      render();
+    });
+  });
 
   const squanProductionImport = document.getElementById("squanProductionImport");
   if (squanProductionImport) {

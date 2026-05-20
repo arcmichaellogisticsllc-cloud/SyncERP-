@@ -3535,6 +3535,123 @@ button {
   margin-top: 12px;
 }
 
+.production-daily-detail {
+  margin-top: 12px;
+}
+
+.daily-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.daily-detail-main {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.daily-detail-card,
+.daily-arcgis-side {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 12px;
+  min-width: 0;
+}
+
+.daily-detail-grid,
+.daily-arcgis-attributes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.daily-detail-grid div,
+.daily-arcgis-attributes div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 8px;
+  min-width: 0;
+}
+
+.daily-detail-grid .wide,
+.daily-arcgis-attributes .wide {
+  grid-column: 1 / -1;
+}
+
+.daily-detail-grid dt,
+.daily-arcgis-attributes dt {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.daily-detail-grid dd,
+.daily-arcgis-attributes dd {
+  margin: 0;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.daily-crew-row,
+.daily-asbuilt-strip article,
+.daily-history-list article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.daily-crew-row span,
+.daily-crew-row small,
+.daily-asbuilt-strip span,
+.daily-asbuilt-strip small,
+.daily-history-list span,
+.daily-history-list small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.daily-asbuilt-strip,
+.daily-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.daily-arcgis-side {
+  align-self: start;
+  background: #f5faf8;
+}
+
+.daily-arcgis-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.daily-arcgis-summary span {
+  border: 1px solid #cfe3dc;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.daily-arcgis-summary strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
 .squan-map-workbench {
   margin-top: 12px;
 }
@@ -13353,6 +13470,9 @@ tbody tr:hover {
   .map-plan-steps,
   .workflow-action-plan,
   .production-proof-groups,
+  .daily-detail-layout,
+  .daily-detail-grid,
+  .daily-arcgis-attributes,
   .arcgis-readiness-grid,
   .squan-map-grid,
   .workflow-path-card-grid,
@@ -13806,6 +13926,10 @@ tbody tr:hover {
   .map-plan-steps,
   .workflow-action-plan,
   .production-proof-groups,
+  .daily-detail-layout,
+  .daily-detail-grid,
+  .daily-arcgis-attributes,
+  .daily-arcgis-summary,
   .arcgis-readiness-grid,
   .arcgis-plan-display,
   .squan-map-grid,
