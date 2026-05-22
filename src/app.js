@@ -3762,12 +3762,47 @@ const state = {
   createdReminders: [],
   documentFilter: "All Files",
   taskFilter: "My open tasks",
+  taskSortMode: "Due",
+  taskViewMode: "List",
   mapFilter: "All",
   mapEvidenceFilter: "All Evidence",
   mapOwnerView: "My View",
   workflowFocus: "",
   reportExceptionFilter: "Selected Map",
   reportPrintScope: "Full Report Set",
+  reportMode: "Daily Production",
+  productionMode: "Command",
+  selectedDailyReportId: "",
+  selectedProductionDailyId: "",
+  selectedBillingPackageKey: "",
+  selectedSettlementId: "",
+  settlementFilters: {
+    contractor: "All",
+    status: "All",
+    project: "All",
+    payment: "All"
+  },
+  productionAdminFilters: {
+    responsible: "All",
+    project: "All",
+    code: "All",
+    proof: "All",
+    billing: "All",
+    review: "All"
+  },
+  productionDraftLines: [],
+  dailyReportFilters: {
+    search: "",
+    dateType: "Worked",
+    startDate: "2026-03-20",
+    endDate: "",
+    status: "All",
+    client: "All",
+    workType: "All",
+    employeeType: "All",
+    origin: "All",
+    hideArchived: false
+  },
   evidenceReviewFilter: "Action Needed",
   cashScenario: localStorage.getItem("jackson-syncerp-cash-scenario") || "baseline",
   apiOnline: false,
@@ -3818,6 +3853,7 @@ function normalizeDataShape(data) {
     "cashReceipts", "cashDepositBatches", "collectionSubmissions", "collectionDecisionPackets", "billingTaskCloseouts",
     "packageSnapshots", "contractRules", "costBlockers", "squanScores", "costCodes", "unitPrices", "priceSheetItems",
     "squanImports", "squanProductionLines", "squanMapFeatures", "productionDailies", "productionLines", "contractorPayables",
+    "contractorAgreements", "contractorSettlements", "contractorSettlementDeductions", "contractorSettlementPayments",
     "techWorkEntries", "billingLedger", "quantityReconciliation", "projectUnits"
   ];
   arrayCollections.forEach(key => {
@@ -3826,6 +3862,7 @@ function normalizeDataShape(data) {
   data.company = data.company || structuredClone(seedData.company || {});
   data.meta = { ...(data.meta || {}), dataVersion: seedData?.meta?.dataVersion };
   ensureProductionDefaults(data);
+  ensureRealDailySamples(data);
   return data;
 }
 
@@ -4091,11 +4128,14 @@ async function submitDailyWorkflow(payload) {
 }
 
 function currency(value) {
+  const amount = Number(value || 0);
+  const cents = Math.round(Math.abs(amount) * 100) % 100;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 0
-  }).format(value);
+    minimumFractionDigits: cents ? 2 : 0,
+    maximumFractionDigits: 2
+  }).format(amount);
 }
 
 function escapeAttr(value = "") {
@@ -4104,6 +4144,11 @@ function escapeAttr(value = "") {
     .replaceAll("\"", "&quot;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function selectorEscape(value = "") {
+  if (window.CSS?.escape) return window.CSS.escape(String(value));
+  return String(value).replace(/["\\]/g, "\\$&");
 }
 
 function daysUntil(dateText) {
@@ -4136,8 +4181,8 @@ function margin(project) {
 
 function statusClass(status) {
   const normal = String(status).toLowerCase();
-  if (["active", "clear", "clear to start", "complete", "completed", "completed / billed", "current", "available", "allocated", "paid", "paid 90% / retainage held", "released / paid", "billed", "closed", "ready", "ready to bill", "ready to submit", "billing ready", "accepted", "admin approved", "viewable", "reviewed", "attached", "field ready", "field verified", "passed", "tracked", "submitted", "submitted to squan", "finalized", "locked", "proof attached", "deposit verified", "verified", "ready to verify", "a"].includes(normal)) return "ok";
-  if (["beginning phase", "at risk", "due soon", "expiring", "open", "reopened", "pay-when-paid logged", "pay-when-paid hold", "short-paid", "disputed", "dispute escalated", "write-off review", "not ready", "needs review", "needs approval", "needs correction", "task created", "pending", "pending review", "pending bank proof", "pending verification", "proof attached / variance review", "held", "projected", "monitor", "7 days left", "3 days left", "scheduled", "ready for admin", "ready for release"].includes(normal)) return "warn";
+  if (["active", "clear", "clear to start", "complete", "completed", "completed / billed", "current", "available", "allocated", "paid", "paid 90% / retainage held", "released / paid", "billed", "closed", "ready", "ready to bill", "ready to submit", "billing ready", "accepted", "admin approved", "viewable", "reviewed", "attached", "field ready", "field verified", "passed", "tracked", "submitted", "submitted to squan", "finalized", "locked", "proof attached", "deposit verified", "verified", "ready to verify", "operational ready", "a"].includes(normal)) return "ok";
+  if (["beginning phase", "at risk", "due soon", "expiring", "open", "reopened", "pay-when-paid logged", "pay-when-paid hold", "short-paid", "disputed", "dispute escalated", "write-off review", "not ready", "needs cleanup", "needs review", "needs approval", "needs correction", "task created", "pending", "pending review", "pending bank proof", "pending verification", "proof attached / variance review", "held", "projected", "monitor", "7 days left", "3 days left", "scheduled", "ready for admin", "ready for release", "ready for review"].includes(normal)) return "warn";
   if (["blocked", "missing", "unavailable", "past due", "overdue / forfeiture risk", "rejected", "rejected by squan", "chargeback received", "rework required", "billing blocker", "closeout blocker", "escalated"].includes(normal)) return "bad";
   return "info";
 }
@@ -4252,8 +4297,86 @@ function matches(record) {
 }
 
 function render() {
-  document.getElementById("app").innerHTML = appTemplate();
+  const app = document.getElementById("app");
+  app.innerHTML = appTemplate();
+  applyDisplayTerminology(app);
+  ensureDisplayTerminologyObserver(app);
   bindEvents();
+}
+
+function displayTerminology(value = "") {
+  return String(value)
+    .replaceAll("SQUAN/Brightspeed", "Prime/Brightspeed")
+    .replaceAll("SQUAN / Brightspeed", "Prime / Brightspeed")
+    .replaceAll("SQUAN Tracker", "Customer Tracker")
+    .replaceAll("SQUAN tracker", "customer tracker")
+    .replaceAll("outside SQUAN Tracker", "outside customer tracker")
+    .replaceAll("SQUAN operating system", "Operating system")
+    .replaceAll("SQUAN map", "customer map")
+    .replaceAll("SQUAN Map", "Customer Map")
+    .replaceAll("SQUAN maps", "customer maps")
+    .replaceAll("SQUAN Maps", "Customer Maps")
+    .replaceAll("SQUAN package", "customer package")
+    .replaceAll("SQUAN Package", "Customer Package")
+    .replaceAll("SQUAN packet", "customer packet")
+    .replaceAll("SQUAN Packet", "Customer Packet")
+    .replaceAll("SQUAN billing", "customer billing")
+    .replaceAll("SQUAN Billing", "Customer Billing")
+    .replaceAll("SQUAN submission", "customer submission")
+    .replaceAll("SQUAN Submission", "Customer Submission")
+    .replaceAll("SQUAN response", "customer response")
+    .replaceAll("SQUAN Response", "Customer Response")
+    .replaceAll("SQUAN import", "prime import")
+    .replaceAll("SQUAN export", "prime export")
+    .replaceAll("SQUAN score", "customer score")
+    .replaceAll("SQUAN supplied", "customer supplied")
+    .replaceAll("SQUAN-supplied", "customer-supplied")
+    .replaceAll("SQUAN amount", "customer amount")
+    .replaceAll("SQUAN value", "customer value")
+    .replaceAll("SQUAN paid", "customer paid")
+    .replaceAll("SQUAN submitted", "customer submitted")
+    .replaceAll("SQUAN quantity", "customer quantity")
+    .replaceAll("SQUAN qty", "customer qty")
+    .replaceAll("Bill SQUAN", "Bill customer")
+    .replaceAll("Submitted to SQUAN", "Submitted to Customer")
+    .replaceAll("Approved by SQUAN", "Approved by Customer")
+    .replaceAll("Rejected by SQUAN", "Rejected by Customer")
+    .replaceAll("Pending SQUAN Review", "Pending Customer Review")
+    .replaceAll("Paid by SQUAN", "Paid by Customer")
+    .replaceAll("SQUAN", "Customer");
+}
+
+function applyDisplayTerminology(root) {
+  if (!root) return;
+  const skipTags = new Set(["SCRIPT", "STYLE", "OPTION", "INPUT", "TEXTAREA"]);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent || skipTags.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
+      return /SQUAN/i.test(node.nodeValue || "") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    }
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(node => {
+    node.nodeValue = displayTerminology(node.nodeValue);
+  });
+}
+
+function ensureDisplayTerminologyObserver(root) {
+  if (!root || window.__displayTerminologyObserver) return;
+  window.__displayTerminologyObserver = new MutationObserver(mutations => {
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          if (/SQUAN/i.test(node.nodeValue || "")) node.nodeValue = displayTerminology(node.nodeValue);
+          return;
+        }
+        if (node.nodeType === Node.ELEMENT_NODE) applyDisplayTerminology(node);
+      });
+    });
+  });
+  window.__displayTerminologyObserver.observe(root, { childList: true, subtree: true });
 }
 
 function appTemplate() {
@@ -4279,7 +4402,7 @@ function appTemplate() {
           <div class="brand-mark">JT</div>
           <div>
             <strong>Jackson Telcom ERP</strong>
-            <span>SQUAN operating system</span>
+            <span>Production billing system</span>
           </div>
         </div>
         <div class="sidebar-section">Workspace</div>
@@ -4311,16 +4434,18 @@ function appTemplate() {
             </button>
             <span class="api-pill ${state.apiOnline ? "online" : "offline"}">${state.apiOnline ? "Server" : "Local"}</span>
             <span class="save-chip" title="${state.saveMessage}">
-              <strong>${state.apiOnline ? "Server synced" : "Local draft"}</strong>
-              <span>${state.lastSavedAt ? `Saved ${formatShortDateTime(state.lastSavedAt)}` : "Not saved yet"}</span>
+              <strong>${state.apiOnline ? "Synced" : "Local"}</strong>
+              <span>${state.lastSavedAt ? formatShortDateTime(state.lastSavedAt) : "Not saved"}</span>
             </span>
             <div class="user-chip">
-              <strong>${state.user.name}</strong>
-              <span>${state.user.role}</span>
+              <span>
+                <strong>${state.user.name}</strong>
+                <small>${state.user.role}</small>
+              </span>
+              <button type="button" id="signOut">Sign out</button>
             </div>
-            <button class="secondary-btn" id="syncNow">Sync server</button>
+            <button class="secondary-btn" id="syncNow">Sync</button>
             ${canCreateRecord ? `<button class="primary-btn" id="newRecord">${newButtonLabel()}</button>` : ""}
-            <button class="secondary-btn" id="signOut">Sign out</button>
           </div>
         </header>
         ${renderWorkflowContextBar()}
@@ -4385,12 +4510,12 @@ function renderWorkflowContextBar() {
     <section class="workflow-context-bar" aria-label="Workflow path">
       ${workflowContextSteps().map((step, index) => {
         const active = step.views.includes(state.view);
+        const targetView = workflowTarget(step.action, projectId);
         return `
-          <button class="${active ? "active" : ""}" data-workflow-action="${step.action}" data-workflow-id="${projectId}" data-workflow-focus="${step.focus}" ${step.action === "Reports" ? `data-report-scope="Executive Report"` : ""}>
+          <a class="${active ? "active" : ""}" href="#${targetView}" title="${escapeAttr(`${step.label}: ${step.detail}`)}" data-view="${targetView}" data-workflow-action="${step.action}" data-workflow-target="${targetView}" data-workflow-id="${projectId}" data-workflow-focus="${step.focus}" ${step.action === "Reports" ? `data-report-scope="Executive Report"` : ""}>
             <span>${index + 1}</span>
             <strong>${step.label}</strong>
-            <small>${step.detail}</small>
-          </button>
+          </a>
         `;
       }).join("")}
     </section>
@@ -4407,8 +4532,16 @@ function renderCommunicationsBar() {
   const announcements = communicationAnnouncements();
   const reminders = communicationReminders();
   const tab = state.commsTab;
+  const tabCounts = {
+    Unread: unread.length,
+    Channels: channels.length,
+    Contacts: contacts.length,
+    Announcements: announcements.length,
+    Reminders: reminders.filter(item => item.status !== "Done").length
+  };
+  const totalCount = Object.values(tabCounts).reduce((total, count) => total + count, 0);
   return `
-    <section class="comms-bar ${state.commsOpen ? "open" : ""}">
+    <section class="comms-bar ${state.commsOpen ? "open" : "collapsed"}">
       <div class="comms-panel">
         ${tab === "Unread" ? renderUnreadChats(unread) : ""}
         ${tab === "Channels" ? renderChatChannels(channels, messages) : ""}
@@ -4417,16 +4550,13 @@ function renderCommunicationsBar() {
         ${tab === "Reminders" ? renderReminders(reminders) : ""}
       </div>
       <div class="comms-tabs">
-        ${["Unread", "Channels", "Contacts", "Announcements", "Reminders"].map(label => {
-          const count = label === "Unread" ? unread.length : label === "Channels" ? channels.length : label === "Contacts" ? contacts.length : label === "Announcements" ? announcements.length : reminders.filter(item => item.status !== "Done").length;
-          return `
-            <button class="${tab === label ? "active" : ""}" data-comms-tab="${label}">
-              <span>${label}</span>
-              ${count ? `<strong>${count}</strong>` : ""}
-            </button>
-          `;
-        }).join("")}
-        <button class="comms-toggle" id="toggleComms">${state.commsOpen ? "Close" : "Chat"}</button>
+        ${state.commsOpen ? ["Unread", "Channels", "Contacts", "Announcements", "Reminders"].map(label => `
+          <button class="${tab === label ? "active" : ""}" data-comms-tab="${label}">
+            <span>${label}</span>
+            ${tabCounts[label] ? `<strong>${tabCounts[label]}</strong>` : ""}
+          </button>
+        `).join("") : ""}
+        <button class="comms-toggle" id="toggleComms">${state.commsOpen ? "Close" : `<span>Chat</span>${totalCount ? `<strong>${totalCount}</strong>` : ""}`}</button>
       </div>
     </section>
   `;
@@ -4838,8 +4968,9 @@ function renderDataVersionNotice() {
   const status = stale
     ? "Local data refreshed"
     : state.apiOnline
-      ? "Server connection active"
+      ? "Synced"
       : "Local browser draft";
+  const savedAt = state.lastSavedAt || state.lastSyncedAt;
   const detail = stale
     ? "Your browser copy was moved to the latest schema. Reset clears local demo changes; Sync server reloads the persisted server dataset."
     : state.apiOnline
@@ -4849,9 +4980,13 @@ function renderDataVersionNotice() {
     <section class="data-notice ${state.apiOnline ? "online" : "offline"} ${stale ? "stale" : ""}">
       <div>
         <strong>${status}</strong>
-        <span>${detail}</span>
+        <span>${savedAt ? `Saved ${formatShortDateTime(savedAt)}` : "No saved timestamp"}</span>
       </div>
-      <small>${state.saveMessage}${state.lastSavedAt ? ` · saved ${formatShortDateTime(state.lastSavedAt)}` : ""}</small>
+      <details>
+        <summary>Details</summary>
+        <p>${detail}</p>
+        <small>${state.saveMessage}${state.lastSavedAt ? ` · saved ${formatShortDateTime(state.lastSavedAt)}` : ""}</small>
+      </details>
     </section>
   `;
 }
@@ -4865,7 +5000,7 @@ function loginTemplate() {
             <div class="brand-mark">JT</div>
             <div>
               <span class="eyebrow">Jackson Telcom ERP</span>
-              <strong>SQUAN operating system</strong>
+              <strong>Production billing system</strong>
             </div>
           </div>
         </div>
@@ -4921,7 +5056,7 @@ function canManageSafety() {
 }
 
 function canManageBilling() {
-  return ["Admin", "Billing", "Operations"].includes(state.role);
+  return ["Admin", "Billing"].includes(state.role);
 }
 
 function canManagePackets() {
@@ -4958,6 +5093,81 @@ function canUseAction(actionKey) {
     users: canManageAdmin(),
     exceptions: ["Admin", "Operations", "Safety/Compliance"].includes(state.role)
   }[actionKey] ?? true;
+}
+
+const roleActionMatrix = {
+  "daily.submit": ["Foreman", "Admin"],
+  "daily.correct": ["Foreman", "Admin"],
+  "daily.review": ["Admin", "Operations"],
+  "daily.accept": ["Admin", "Operations"],
+  "daily.return": ["Admin", "Operations"],
+  "billing.package.prepare": ["Admin", "Billing"],
+  "billing.package.preview": ["Admin", "Billing", "Operations"],
+  "billing.package.export": ["Admin", "Billing"],
+  "billing.package.record-submission": ["Admin", "Billing"],
+  "billing.package.response": ["Admin", "Billing"],
+  "billing.package.correction": ["Admin", "Billing"],
+  "billing.package.payment": ["Admin", "Billing"],
+  "billing.package.holdback": ["Admin", "Billing"],
+  "billing.package.contractor-payment": ["Admin", "Billing"],
+  "billing.package.override": ["Admin", "Billing"],
+  "settlement.view": ["Admin", "Billing", "Operations", "Foreman"],
+  "settlement.rate.view": ["Admin", "Billing"],
+  "settlement.manage": ["Admin", "Billing"],
+  "settlement.deduction": ["Admin", "Billing"],
+  "settlement.payment": ["Admin", "Billing"],
+  "settlement.export": ["Admin", "Billing"],
+  "agreement.manage": ["Admin", "Billing"],
+  "operational.cleanup": ["Admin", "Operations", "Billing"],
+  "operational.cleanup.task": ["Admin", "Operations", "Billing"],
+  "owner.exceptions": ["Admin"]
+};
+
+function canPerform(actionKey) {
+  const allowed = roleActionMatrix[actionKey];
+  return !allowed || allowed.includes(state.role);
+}
+
+function actionPermissionLabel(actionKey) {
+  const allowed = roleActionMatrix[actionKey] || [];
+  return allowed.length ? allowed.join(" or ") : "authorized users";
+}
+
+function guardRoleAction(actionKey, detail = {}) {
+  if (canPerform(actionKey)) return true;
+  const message = `Only ${actionPermissionLabel(actionKey)} can perform this action.`;
+  alert(message);
+  appendAuditLocal("permission.blocked-action", {
+    actionKey,
+    role: state.role,
+    user: state.user?.name || "",
+    ...detail
+  });
+  return false;
+}
+
+function billingPackageActionPermission(action) {
+  return {
+    "prepare-squan-package": "billing.package.prepare",
+    "submit-squan": "billing.package.record-submission",
+    "record-squan-response": "billing.package.response",
+    "reject-squan": "billing.package.response",
+    "create-squan-correction": "billing.package.correction",
+    "record-squan-package-payment": "billing.package.payment",
+    "record-squan-holdback": "billing.package.holdback",
+    "record-contractor-package-payment": "billing.package.contractor-payment"
+  }[action] || "billing.package.preview";
+}
+
+function renderBillingPackageActionButton(row, action, label, { primary = false, enabled = true } = {}) {
+  if (!canPerform(billingPackageActionPermission(action))) return "";
+  return `<button class="${primary ? "primary-btn" : "secondary-btn"}" data-billing-action="${action}" data-project-id="${escapeAttr(row.projectId)}" data-billing-package-key="${escapeAttr(row.key)}" ${enabled ? "" : "disabled"}>${label}</button>`;
+}
+
+function renderBillingPackageExportLink(row, label = "Export record CSV") {
+  if (!canPerform("billing.package.export")) return "";
+  const fileName = billingPackageExportFileName(row);
+  return `<a class="secondary-btn" href="/api/reports/squan-tracker-record.csv?key=${encodeURIComponent(row.key)}" download="${escapeAttr(fileName)}" target="_blank" rel="noreferrer">${label}</a>`;
 }
 
 function guardAction(actionKey) {
@@ -5917,19 +6127,19 @@ function pageTitle() {
 
 function pageSubtitle() {
   return {
-    dashboard: "Start with the next decision, then drill into field-to-billing only when a count needs attention.",
-    tasks: "Admin and Operations review items that block field movement, proof, billing, or audit.",
-    documents: "Photos, as-builts, SOT, forms, maps, and support proof tied to a Map and daily.",
-    projects: "ArcGIS stays display-first here: engineers own the working plan, Jackson tracks readiness, proof, billing, and audit.",
-    field: "Field crews capture the daily, crew, production, proof, safety notes, and submit for review.",
-    production: "SQUAN-style daily capture: header, crew, codes, ArcGIS reference, proof, review, payable, and billable status.",
-    time: "Crew hours, approvals, payroll status, and job cost time.",
-    people: "Crew members, roles, training cards, and items that stop a person from working.",
-    equipment: "Trucks, bucket lifts, tools, inspections, and items that stop equipment from being used.",
-    money: "Closed/billed status, code breakdown, submitted quantities, price-sheet totals, SQUAN submission, and payment tracking.",
-    risk: "Fix safety problems, review hazards, close safety actions, and keep the score healthy.",
-    reports: "Audit trail from field daily to production line, Billing ledger, quantity reconciliation, and packet export.",
-    settings: "Workflow setup, users, price sheet rules, ArcGIS display settings, and operating controls."
+    dashboard: "Role queue and next actions",
+    tasks: "Blockers and approvals",
+    documents: "Proof and support files",
+    projects: "Map reference and readiness",
+    field: "Crew daily entry",
+    production: "Codes, quantities, proof",
+    time: "Hours and approvals",
+    people: "Crew readiness",
+    equipment: "Equipment readiness",
+    money: "Packages, payments, settlements",
+    risk: "Safety queue",
+    reports: "Reports and exports",
+    settings: "Admin controls"
   }[state.view];
 }
 
@@ -5970,8 +6180,918 @@ function renderView() {
 }
 
 function renderRoleHome() {
-  if (state.role === "Foreman") return renderForemanHome();
-  return renderSimpleRoleHome(state.role);
+  if (state.role === "Admin") return renderAdminHome();
+  const operational = renderOperationalRoleDashboard(state.role);
+  const completion = ["Operations", "Billing"].includes(state.role) ? renderOperationalCompletionPanel() : "";
+  if (state.role === "Foreman") return `${operational}${renderForemanHome()}`;
+  return `${operational}${completion}${renderSimpleRoleHome(state.role)}`;
+}
+
+function renderAdminHome() {
+  const project = selectedMapContext();
+  const items = operationalRoleWorkItems("Admin");
+  const stats = operationalRoleStats(items);
+  const blockers = actionableBlockerItems(items);
+  const readiness = operationalDataReadiness();
+  const checklist = operationalCompletionChecklist(readiness);
+  const completion = operationalCompletionStatus(checklist);
+  const packageRows = billingPackageWorkflowRows(scopedRows("projects"));
+  const productionRows = productionLedgerRows();
+  const todayKey = isoDate(today);
+  const todayDailies = scopedRows("productionDailies").filter(daily => daily.workedDate === todayKey || daily.submittedAt?.slice(0, 10) === todayKey);
+  return `
+    <section class="admin-overview-home" data-admin-overview-home>
+      ${renderAdminOverviewHero(project, stats, blockers, todayDailies, packageRows)}
+      <div class="admin-overview-grid">
+        ${renderAdminOperationalReadinessOverview(checklist, completion)}
+        ${renderAdminCrewOverview(todayDailies, productionRows)}
+        ${renderAdminBillingPulse(packageRows)}
+        ${renderAdminNotificationFeed(blockers)}
+      </div>
+      ${renderAdminNextBestActions(blockers, packageRows, project)}
+    </section>
+  `;
+}
+
+function renderAdminOverviewHero(project, stats, blockers, todayDailies, packageRows) {
+  const readyPackages = packageRows.filter(row => ["Ready for Package Prep", "Ready to Submit"].includes(row.status));
+  return `
+    <section class="panel admin-overview-hero">
+      <div>
+        <span class="eyebrow">Admin home</span>
+        <h2>Today at a glance</h2>
+        <p>High-level control for blockers, crews, readiness, billing movement, and notifications. Open a work tab only when a record needs action.</p>
+      </div>
+      <div class="admin-overview-date">
+        <strong>${formatDate(isoDate(today))}</strong>
+        <span>${state.apiOnline ? "Server synced" : "Local mode"} · ${state.lastSavedAt ? formatShortDateTime(state.lastSavedAt) : "Not saved"}</span>
+      </div>
+      <div class="admin-snapshot-grid">
+        ${metric("Needs action", stats.action, `${blockers.length} blocker${blockers.length === 1 ? "" : "s"} flagged`)}
+        ${metric("Submitted today", todayDailies.length, "Daily production")}
+        ${metric("Ready packages", readyPackages.length, `${currency(sum(readyPackages, "billableAmount"))} ready`)}
+        ${metric("Selected map", project?.id || "None", project ? project.map || "Active context" : "Choose a map")}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminOperationalReadinessOverview(checklist = [], completion = { complete: 0, required: 0 }) {
+  const gaps = checklist.filter(item => !item.complete);
+  const ready = checklist.filter(item => item.complete);
+  const visible = [...gaps.slice(0, 3), ...ready.slice(0, Math.max(0, 4 - gaps.slice(0, 3).length))];
+  return `
+    <section class="panel admin-overview-panel">
+      <div class="panel-header compact">
+        <div>
+          <span class="eyebrow">Operational readiness</span>
+          <h3>${completion.complete}/${completion.required} ready</h3>
+          <p>${gaps.length ? `${gaps.length} gap${gaps.length === 1 ? "" : "s"} before go-live confidence.` : "Workflow readiness is clear."}</p>
+        </div>
+        <button class="secondary-btn mini-btn" data-admin-readiness-open>Review</button>
+      </div>
+      <div class="admin-readiness-list">
+        ${visible.map(item => `
+          <button class="${item.complete ? "ok" : "needs-work"}" data-admin-readiness-open>
+            <span>${item.complete ? "Ready" : "Gap"}</span>
+            <strong>${escapeAttr(item.label)}</strong>
+            <small>${escapeAttr(item.owner || "Admin")}</small>
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminCrewOverview(todayDailies = [], productionRows = []) {
+  const people = scopedRows("people");
+  const foremen = people.filter(person => /foreman/i.test(person.role || ""));
+  const submittedBy = new Set(todayDailies.map(daily => daily.submittedBy || daily.foreman).filter(Boolean));
+  const crewIssues = people.filter(person => ["Blocked", "Expiring", "Needs Review"].includes(person.status || person.compliance || ""));
+  const activeCrews = [...new Set(people.map(person => person.crew).filter(Boolean))].length;
+  const acceptedProof = productionRows.filter(row => productionProofState(row) === "Accepted").length;
+  const proofTotal = productionRows.length;
+  return `
+    <section class="panel admin-overview-panel">
+      <div class="panel-header compact">
+        <div>
+          <span class="eyebrow">Crew overview</span>
+          <h3>${activeCrews} crew${activeCrews === 1 ? "" : "s"} visible</h3>
+          <p>${submittedBy.size} submitter${submittedBy.size === 1 ? "" : "s"} sent daily production today.</p>
+        </div>
+        <button class="secondary-btn mini-btn" data-workflow-action="People & Compliance" data-workflow-focus="Crew overview">Crew</button>
+      </div>
+      <div class="admin-crew-strip">
+        ${metric("Foremen", foremen.length, "Can submit dailies")}
+        ${metric("Crew alerts", crewIssues.length, "Certs / blockers")}
+        ${metric("Proof accepted", `${acceptedProof}/${proofTotal}`, "Production support")}
+      </div>
+      <div class="admin-feed-list compact">
+        ${(todayDailies.length ? todayDailies.slice(0, 3) : foremen.slice(0, 3)).map(row => {
+          const isDaily = Boolean(row.workedDate || row.submittedAt);
+          return `
+            <button data-workflow-action="${isDaily ? "Production" : "People & Compliance"}" data-workflow-id="${escapeAttr(row.project || state.selectedProjectId || "")}" data-workflow-focus="${isDaily ? "Admin review" : "Crew overview"}">
+              <strong>${escapeAttr(isDaily ? row.submittedBy || row.foreman || "Daily submitter" : row.name)}</strong>
+              <small>${escapeAttr(isDaily ? `${row.project || "No map"} · ${formatDate(row.workedDate || row.submittedAt?.slice(0, 10))}` : `${row.role || "Crew"} · ${row.status || row.compliance || "Active"}`)}</small>
+            </button>
+          `;
+        }).join("") || `<p class="empty-state">No crew activity to show.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminBillingPulse(packageRows = []) {
+  const ready = packageRows.filter(row => ["Ready for Package Prep", "Ready to Submit"].includes(row.status));
+  const submitted = packageRows.filter(row => /Submitted|Approved|Paid|Closed/i.test(row.status || ""));
+  const blocked = packageRows.filter(row => row.blockers?.length || /Needs Review|Rejected|Hold/i.test(row.status || ""));
+  return `
+    <section class="panel admin-overview-panel">
+      <div class="panel-header compact">
+        <div>
+          <span class="eyebrow">Billing pulse</span>
+          <h3>${currency(sum(ready, "billableAmount"))}</h3>
+          <p>${ready.length} package${ready.length === 1 ? "" : "s"} ready for billing handoff.</p>
+        </div>
+        <button class="secondary-btn mini-btn" data-workflow-action="Billing" data-workflow-focus="Daily packages">Billing</button>
+      </div>
+      <div class="admin-billing-pulse">
+        ${metric("Ready", ready.length, "Package queue")}
+        ${metric("Submitted", submitted.length, "Awaiting response")}
+        ${metric("Blocked", blocked.length, "Needs review")}
+      </div>
+      <div class="admin-feed-list compact">
+        ${(ready.length ? ready : packageRows).slice(0, 3).map(row => `
+          <button data-workflow-action="Billing" data-workflow-id="${escapeAttr(row.projectId || row.project?.id || "")}" data-workflow-focus="Daily packages">
+            <strong>${escapeAttr(row.projectId || row.project?.id || "Package")}</strong>
+            <small>${escapeAttr(row.code || "Code")} · ${currency(row.billableAmount || 0)} · ${plainStatus(row.status || "Open")}</small>
+          </button>
+        `).join("") || `<p class="empty-state">No billing packages are ready yet.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminNotificationFeed(blockers = []) {
+  const visible = blockers.slice(0, 5);
+  return `
+    <section class="panel admin-overview-panel">
+      <div class="panel-header compact">
+        <div>
+          <span class="eyebrow">Notifications</span>
+          <h3>${blockers.length} flagged</h3>
+          <p>Short alerts only. Open the source tab to fix the record.</p>
+        </div>
+        <button class="secondary-btn mini-btn" data-workflow-action="Tasks" data-workflow-focus="Admin decision">All</button>
+      </div>
+      <div class="admin-feed-list">
+        ${visible.map(item => `
+          <button class="${statusClass(item.status)}" data-workflow-action="${escapeAttr(item.fixAction || item.action)}" data-workflow-id="${escapeAttr(item.project)}" data-workflow-focus="${escapeAttr(item.fixFocus || item.focus)}" data-blocker-id="${escapeAttr(item.id)}">
+            <strong>${escapeAttr(item.title)}</strong>
+            <small>${escapeAttr(item.project || "No map")} · ${escapeAttr(item.owner || "Unassigned")}</small>
+          </button>
+        `).join("") || `<p class="empty-state">No notifications need Admin attention.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminNextBestActions(blockers = [], packageRows = [], project = selectedMapContext()) {
+  const readyPackage = packageRows.find(row => ["Ready for Package Prep", "Ready to Submit"].includes(row.status));
+  const actions = [
+    blockers[0] ? {
+      label: "Open highest blocker",
+      title: blockers[0].title,
+      detail: blockers[0].blockerReasons?.slice(0, 2).join("; ") || blockers[0].detail,
+      action: blockers[0].fixAction || blockers[0].action,
+      project: blockers[0].project,
+      focus: blockers[0].fixFocus || blockers[0].focus,
+      primary: true
+    } : null,
+    readyPackage ? {
+      label: "Review billing handoff",
+      title: `${readyPackage.projectId} ${readyPackage.code}`,
+      detail: `${currency(readyPackage.billableAmount || 0)} ready for package handling.`,
+      action: "Billing",
+      project: readyPackage.projectId,
+      focus: "Daily packages"
+    } : null,
+    project ? {
+      label: "Open selected map",
+      title: project.id,
+      detail: project.map || "Selected operating context.",
+      action: "Project & Map Hub",
+      project: project.id,
+      focus: "Map detail"
+    } : null,
+    {
+      label: "Review reports",
+      title: "Operational reporting",
+      detail: "Readiness, production, billing, and audit exports.",
+      action: "Reports",
+      project: project?.id || state.selectedProjectId || "",
+      focus: "Executive Report",
+      reportScope: "Executive Report"
+    }
+  ].filter(Boolean).slice(0, 4);
+  return `
+    <section class="panel admin-next-actions">
+      <div class="panel-header compact">
+        <div>
+          <span class="eyebrow">Next best actions</span>
+          <h3>Route from Home, work in the right tab</h3>
+          <p>Home stays high-level. These buttons move you to the workflow that owns the fix.</p>
+        </div>
+      </div>
+      <div class="admin-next-action-grid">
+        ${actions.map(item => `
+          <article>
+            <div>
+              <span class="eyebrow">${escapeAttr(item.label)}</span>
+              <strong>${escapeAttr(item.title)}</strong>
+              <small>${escapeAttr(item.detail || "")}</small>
+            </div>
+            <button class="${item.primary ? "primary-btn" : "secondary-btn"}" data-workflow-action="${escapeAttr(item.action)}" data-workflow-id="${escapeAttr(item.project || "")}" data-workflow-focus="${escapeAttr(item.focus || "")}" ${item.reportScope ? `data-report-scope="${escapeAttr(item.reportScope)}"` : ""}>Open</button>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminCommandHome(project = selectedMapContext()) {
+  const items = operationalRoleWorkItems("Admin");
+  const stats = operationalRoleStats(items);
+  const blockers = actionableBlockerItems(items);
+  const primary = blockers[0] || items.find(item => item.canAct) || items[0];
+  const productionToday = scopedRows("productionDailies").filter(daily => daily.workedDate === isoDate(today) || daily.submittedAt?.slice(0, 10) === isoDate(today));
+  const packageRows = billingPackageWorkflowRows(scopedRows("projects"));
+  const readyPackages = packageRows.filter(row => ["Ready for Package Prep", "Ready to Submit"].includes(row.status));
+  return `
+    <section class="panel admin-command-home" data-admin-command-home>
+      <div class="admin-command-hero">
+        <div>
+          <span class="eyebrow">Dashboard</span>
+          <h2>Welcome, ${escapeAttr((state.user?.name || "Admin").split(" ")[0])}</h2>
+          <p>Start with daily billing, blocker fixes, and owner decisions. Details open only when you choose a workflow.</p>
+        </div>
+        <div class="admin-command-date">
+          <strong>${formatDate(isoDate(today))}</strong>
+          <span>${state.apiOnline ? "Server synced" : "Local mode"} · ${state.lastSavedAt ? formatShortDateTime(state.lastSavedAt) : "Not saved"}</span>
+        </div>
+      </div>
+      <div class="admin-command-shell">
+        <div class="admin-command-main-panel">
+          <div class="weekly-summary-grid">
+            ${metric("Needs action", stats.action, "Role-visible fixes")}
+            ${metric("Blockers flagged", blockers.length, "Click into workflow")}
+            ${metric("Daily submitted today", productionToday.length, "Foreman inputs")}
+            ${metric("Ready for billing", readyPackages.length, "Package queue")}
+          </div>
+          <div class="admin-action-card">
+            <div>
+              <span class="eyebrow">What would you like to do today?</span>
+              <h3>${primary ? escapeAttr(primary.title) : "No action needed"}</h3>
+              <p>${primary ? escapeAttr(primary.detail || primary.source || "") : "The Admin command queue is clear."}</p>
+            </div>
+            <div class="admin-action-card-buttons">
+              ${primary ? `<button class="primary-btn" data-workflow-action="${escapeAttr(primary.fixAction || primary.action)}" data-workflow-id="${escapeAttr(primary.project)}" data-workflow-focus="${escapeAttr(primary.fixFocus || primary.focus)}" data-blocker-id="${escapeAttr(primary.id)}">${primary.blockers ? "Open fix" : "Open next action"}</button>` : ""}
+              <button class="secondary-btn" data-workflow-action="Tasks" data-workflow-id="${escapeAttr(project?.id || state.selectedProjectId || "")}" data-workflow-focus="Admin decision">Review queue</button>
+              <button class="secondary-btn" data-workflow-action="Billing" data-workflow-id="${escapeAttr(project?.id || state.selectedProjectId || "")}" data-workflow-focus="Ready to submit">Billing</button>
+            </div>
+          </div>
+        </div>
+        <aside class="admin-notification-panel">
+          <div class="section-heading">
+            <div>
+              <h3>Notifications</h3>
+              <p>Flagged blockers with direct fix routes.</p>
+            </div>
+            <span class="status ${statusClass(blockers.length ? "Needs Review" : "Ready")}">${blockers.length}</span>
+          </div>
+          ${renderAdminBlockerList(blockers)}
+        </aside>
+      </div>
+    </section>
+  `;
+}
+
+function actionableBlockerItems(items = []) {
+  return items
+    .filter(item => Number(item.blockers || 0) > 0 || ["Blocked", "Returned", "Needs Review", "Needs Approval", "Rejected by SQUAN"].includes(item.status))
+    .map(item => {
+      const reasons = item.blockerReasons?.length ? item.blockerReasons : [item.detail || item.title || "Workflow needs attention"];
+      return {
+        ...item,
+        blockerReasons: reasons,
+        fixAction: item.fixAction || item.action || "Tasks",
+        fixFocus: item.fixFocus || item.focus || item.source || "Fix blocker"
+      };
+    })
+    .sort((a, b) => a.dueBucket.rank - b.dueBucket.rank || priorityRank(a.priority) - priorityRank(b.priority));
+}
+
+function renderAdminBlockerList(blockers = []) {
+  if (!blockers.length) return `<p class="empty-state">No flagged blockers need Admin attention.</p>`;
+  return `
+    <div class="admin-blocker-list">
+      ${blockers.slice(0, 6).map(item => `
+        <article class="${statusClass(item.status)}">
+          <div>
+            <span class="status ${statusClass(item.status)}">${escapeAttr(adminQueueBadgeLabel(item))}</span>
+            <strong>${escapeAttr(item.title)}</strong>
+            <small>${escapeAttr(item.project || "No Map")} · ${escapeAttr(item.owner || "Unassigned")} · ${escapeAttr(item.source || "Workflow")}</small>
+            <p>${escapeAttr(item.blockerReasons.slice(0, 2).join("; "))}</p>
+          </div>
+          <button class="secondary-btn mini-btn" data-workflow-action="${escapeAttr(item.fixAction || item.action)}" data-workflow-id="${escapeAttr(item.project)}" data-workflow-focus="${escapeAttr(item.fixFocus || item.focus)}" data-blocker-id="${escapeAttr(item.id)}">Open fix</button>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderAdminReadinessCommand(readiness = operationalDataReadiness()) {
+  const checklist = operationalCompletionChecklist(readiness);
+  const summary = operationalCompletionStatus(checklist);
+  const gaps = checklist.filter(item => !item.complete);
+  const gapPreview = gaps.slice(0, 3).map(item => item.label).join(", ");
+  return `
+    <section class="panel admin-command-card">
+      <div>
+        <span class="eyebrow">Operational readiness</span>
+        <h2>${summary.complete}/${summary.required} ready</h2>
+        <p>${gaps.length ? `${gaps.length} gap${gaps.length === 1 ? "" : "s"} remain: ${gapPreview}${gaps.length > 3 ? "..." : ""}` : "Core workflow readiness is clear."}</p>
+      </div>
+      <div class="admin-command-card-actions">
+        <button class="secondary-btn" data-admin-readiness-open>Review readiness</button>
+        <a class="secondary-btn" href="/api/reports/operational-readiness.csv" target="_blank" rel="noreferrer">Export CSV</a>
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminSelectedMapCommand(project) {
+  const stats = mapPlanWorkflowStats(project);
+  const billingReady = stats.billing.filter(row => ["Ready to Bill", "Submitted", "Billed"].includes(row.billingStatus || row.status)).length;
+  const status = stats.variance ? "Needs Review" : stats.production.length ? "Open" : project.status || "Pending";
+  return `
+    <section class="panel admin-command-card">
+      <div>
+        <span class="eyebrow">Selected map</span>
+        <h2>${escapeAttr(project.id)}</h2>
+        <p>${escapeAttr(squanMapTitle(project))} · ${stats.production.length} daily line(s), ${billingReady}/${stats.billing.length} billing row(s) ready.</p>
+      </div>
+      <div class="admin-command-card-meta">
+        <span class="status ${statusClass(status)}">${plainStatus(status)}</span>
+      </div>
+      <div class="admin-command-card-actions">
+        <button class="secondary-btn" data-workflow-action="Project & Map Hub" data-workflow-id="${project.id}" data-workflow-focus="Map detail">Open Map</button>
+        <button class="secondary-btn" data-workflow-action="Billing" data-workflow-id="${project.id}" data-workflow-focus="Billing ledger">Open Billing</button>
+        <button class="secondary-btn" data-workflow-action="Reports" data-workflow-id="${project.id}" data-workflow-focus="Packet Readiness">Reports</button>
+      </div>
+    </section>
+  `;
+}
+
+function operationalRoleProfile(role = state.role) {
+  return {
+    Admin: {
+      eyebrow: "Admin command",
+      title: "Owner decisions and exceptions",
+      detail: "Start with approvals, money risk, permission-sensitive blockers, and items no one else can close.",
+      empty: "No owner decisions need action right now."
+    },
+    Operations: {
+      eyebrow: "Operations command",
+      title: "Release Maps and review production",
+      detail: "Work map release, daily review, proof blockers, production quantity/code issues, and safety blockers.",
+      empty: "No Operations blockers are waiting right now."
+    },
+    Billing: {
+      eyebrow: "Billing command",
+      title: "Submit, collect, and settle",
+      detail: "Work ready SQUAN packages, manual Tracker records, payment/holdback follow-up, and contractor settlements.",
+      empty: "No Billing actions are waiting right now."
+    },
+    Foreman: {
+      eyebrow: "Foreman command",
+      title: "Today’s field work",
+      detail: "Start the day, enter SQUAN codes and quantities, upload proof, submit the daily, and fix returned items.",
+      empty: "Nothing is returned or waiting on you right now."
+    },
+    "Crew Member": {
+      eyebrow: "Crew command",
+      title: "Assignment, safety, proof, and time",
+      detail: "See today’s Map, acknowledge safety, report issues, and confirm time.",
+      empty: "No crew actions need attention right now."
+    },
+    "Safety/Compliance": {
+      eyebrow: "Safety command",
+      title: "Safety blockers and compliance review",
+      detail: "Clear hazards, training/equipment issues, and safety evidence before work or closeout moves.",
+      empty: "No safety blockers need review right now."
+    }
+  }[role] || {
+    eyebrow: "Operational command",
+    title: "Next actions",
+    detail: "Role-specific work queue.",
+    empty: "No actions need attention right now."
+  };
+}
+
+function daysBetween(startDate = isoDate(today), endDate = isoDate(today)) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  return Math.round((end - start) / 86400000);
+}
+
+function operationalDueBucket(dueDate = "") {
+  if (!dueDate) return { label: "No due date", rank: 4, status: "Pending" };
+  const days = daysBetween(isoDate(today), dueDate);
+  if (days < 0) return { label: "Overdue", rank: 0, status: "Blocked" };
+  if (days === 0) return { label: "Due today", rank: 1, status: "Needs Review" };
+  if (days <= 7) return { label: "Due this week", rank: 2, status: "Open" };
+  return { label: `Due ${formatDate(dueDate)}`, rank: 3, status: "Pending" };
+}
+
+function operationalWorkItem({ id, title, detail, role, owner, project, dueDate, status, priority = "Medium", action, focus = "", reportScope = "", canAct = true, source = "", blockers = 0, blockerReasons = [], fixAction = "", fixFocus = "" }) {
+  const target = workflowTarget(action || "Tasks", project || state.selectedProjectId || "");
+  return {
+    id,
+    title,
+    detail,
+    role,
+    owner: owner || role || "Unassigned",
+    project: project || state.selectedProjectId || "",
+    dueDate,
+    status: status || "Open",
+    priority,
+    action: action || "Tasks",
+    focus,
+    reportScope,
+    target,
+    canAct: canAct && canView(target),
+    source,
+    blockers,
+    blockerReasons,
+    fixAction: fixAction || action || "Tasks",
+    fixFocus: fixFocus || focus || source || ""
+  };
+}
+
+function operationalRoleWorkItems(role = state.role) {
+  const projects = scopedRows("projects");
+  const tasks = scopedRows("tasks").filter(task => task.status !== "Closed");
+  const packageRows = billingPackageWorkflowRows(projects);
+  const settlementRows = typeof contractorSettlementRows === "function" ? contractorSettlementRows(packageRows) : [];
+  const productionLines = scopedRows("productionLines");
+  const dailies = scopedRows("productionDailies");
+  const safetyRows = scopedRows("safety").filter(item => item.status !== "Closed");
+  const items = [];
+  const add = item => {
+    if (!item?.title) return;
+    const due = operationalDueBucket(item.dueDate);
+    items.push({ ...operationalWorkItem(item), dueBucket: due });
+  };
+
+  projects.forEach(project => {
+    const release = releaseGateReview(project);
+    if (["Admin", "Operations"].includes(role) && release?.ready && !release.released) {
+      add({
+        id: `release-${project.id}`,
+        title: "Release Map for field work",
+        detail: `${project.map || project.id} is ready for owner release.`,
+        role: "Admin",
+        owner: "Admin",
+        project: project.id,
+        dueDate: project.start || isoDate(today),
+        status: "Needs Approval",
+        priority: "High",
+        action: "Project & Map Hub",
+        focus: "Release gate",
+        source: "Map release"
+      });
+    }
+    if (["Admin", "Operations", "Foreman"].includes(role) && release?.blockers?.length) {
+      add({
+        id: `release-blockers-${project.id}`,
+        title: "Clear Map release blockers",
+        detail: `${release.blockers.length} blocker(s): ${release.blockers.map(item => item.label).slice(0, 3).join(", ")}`,
+        role: role === "Foreman" ? "Foreman" : "Operations",
+        owner: role === "Foreman" ? roleConfig.Foreman.person : "Operations",
+        project: project.id,
+        dueDate: project.start || isoDate(today),
+        status: "Blocked",
+        priority: "High",
+        action: role === "Foreman" ? "Field Operations" : "Project & Map Hub",
+        focus: "Release gate",
+        source: "Map readiness",
+        blockers: release.blockers.length,
+        blockerReasons: release.blockers.map(item => item.label),
+        fixAction: role === "Foreman" ? "Field Operations" : "Project & Map Hub",
+        fixFocus: "Release gate"
+      });
+    }
+  });
+
+  dailies.filter(daily => ["Submitted", "Corrected", "Pending Review"].includes(daily.status || "")).forEach(daily => {
+    if (["Admin", "Operations"].includes(role)) add({
+      id: `daily-review-${daily.id}`,
+      title: "Review submitted daily",
+      detail: `${daily.submittedBy || daily.foreman || "Foreman"} submitted ${daily.externalDailyId || daily.id}.`,
+      role: "Operations",
+      owner: "Operations",
+      project: daily.project,
+      dueDate: daily.workedDate || isoDate(today),
+      status: "Needs Review",
+      priority: "High",
+      action: "Production",
+      focus: "Review",
+      source: "Daily Capture"
+    });
+  });
+
+  dailies.filter(daily => ["Returned", "Needs Correction"].includes(daily.status || "")).forEach(daily => {
+    const ownerName = daily.submittedBy || daily.foreman || roleConfig.Foreman.person;
+    if (["Admin", "Operations"].includes(role) || (role === "Foreman" && ownerName === (state.user?.name || roleConfig.Foreman.person))) add({
+      id: `daily-returned-${daily.id}`,
+      title: "Fix returned daily",
+      detail: `${daily.externalDailyId || daily.id} needs correction before proof or billing can move.`,
+      role: "Foreman",
+      owner: ownerName,
+      project: daily.project,
+      dueDate: addDays(daily.workedDate || isoDate(today), 1),
+      status: "Returned",
+      priority: "High",
+      action: "Production",
+      focus: "Submit Daily",
+      source: "Daily Capture",
+      blockers: 1,
+      blockerReasons: ["Returned daily needs correction before billing can move."],
+      fixAction: "Production",
+      fixFocus: "Returned daily correction"
+    });
+  });
+
+  productionLines.filter(line => productionProofState(line) !== "Accepted").forEach(line => {
+    if (["Admin", "Operations"].includes(role)) add({
+      id: `proof-${line.id}`,
+      title: "Production proof not accepted",
+      detail: `${line.code || "Code"} on ${line.project || "Map"} needs accepted proof before billing.`,
+      role: "Operations",
+      owner: "Operations",
+      project: line.project,
+      dueDate: line.workedDate || isoDate(today),
+      status: productionProofState(line),
+      priority: "Medium",
+      action: "Production",
+      focus: "Proof Review",
+      source: "Proof",
+      blockers: 1,
+      blockerReasons: [`${line.code || "Production line"} proof is ${productionProofState(line)}.`],
+      fixAction: "Production",
+      fixFocus: "Proof Review"
+    });
+  });
+
+  packageRows.forEach(row => {
+    if (["Admin", "Billing"].includes(role) && row.blockers?.length) add({
+      id: `package-blockers-${row.key}`,
+      title: "Billing package blocked",
+      detail: `${row.projectId} package needs ${row.blockers.length} fix(es) before SQUAN submission.`,
+      role: "Billing",
+      owner: "Billing",
+      project: row.projectId,
+      dueDate: row.workedDate || isoDate(today),
+      status: "Blocked",
+      priority: "High",
+      action: "Billing",
+      focus: "Package readiness",
+      source: "SQUAN package",
+      blockers: row.blockers.length,
+      blockerReasons: row.blockers,
+      fixAction: "Billing",
+      fixFocus: "Package readiness"
+    });
+    if (["Admin", "Billing"].includes(role) && row.status === "Ready for Package Prep") add({
+      id: `package-prep-${row.key}`,
+      title: "Prepare SQUAN billing package",
+      detail: `${row.projectId} ${row.code} ${formatDate(row.workedDate)} is ready for package prep.`,
+      role: "Billing",
+      owner: "Billing",
+      project: row.projectId,
+      dueDate: row.workedDate,
+      status: "Ready",
+      priority: "High",
+      action: "Billing",
+      focus: "Daily packages",
+      source: "SQUAN package"
+    });
+    if (["Admin", "Billing"].includes(role) && row.status === "Ready to Submit") add({
+      id: `manual-tracker-${row.key}`,
+      title: "Record manual SQUAN Tracker submission",
+      detail: `${currency(row.billableAmount)} ready for manual outside SQUAN Tracker entry.`,
+      role: "Billing",
+      owner: "Billing",
+      project: row.projectId,
+      dueDate: isoDate(today),
+      status: "Ready to Submit",
+      priority: "High",
+      action: "Billing",
+      focus: "SQUAN Tracker submission",
+      source: "SQUAN Tracker"
+    });
+    const summary = billingPackagePaymentSummary(row);
+    if (["Admin", "Billing"].includes(role) && row.submission && (summary.squanVariance > 0 || summary.holdback > 0)) add({
+      id: `payment-${row.key}`,
+      title: summary.holdback > 0 ? "Follow SQUAN reserve / holdback" : "Record SQUAN payment response",
+      detail: `${row.projectId} has ${currency(summary.squanVariance)} open variance and ${currency(summary.holdback)} held.`,
+      role: "Billing",
+      owner: "Billing",
+      project: row.projectId,
+      dueDate: row.submission.followUpDate || addDays(isoDate(today), 3),
+      status: summary.holdback > 0 ? "Holdback" : "Open",
+      priority: "High",
+      action: "Billing",
+      focus: "Payment / holdback",
+      source: "Payment"
+    });
+  });
+
+  settlementRows.forEach(row => {
+    const isOwn = row.contractor === (state.user?.name || roleConfig.Foreman.person);
+    if (["Admin", "Billing"].includes(role) && ["Draft", "Under Review"].includes(row.status)) add({
+      id: `settlement-review-${row.id}`,
+      title: "Review contractor settlement",
+      detail: `${row.contractor}: ${currency(row.netDue)} net after ${currency(row.deductionTotal)} deductions.`,
+      role: "Billing",
+      owner: "Billing",
+      project: row.projectId,
+      dueDate: row.workedDate,
+      status: row.status,
+      priority: "Medium",
+      action: "Billing",
+      focus: "Contractor settlements",
+      source: "Settlement"
+    });
+    if (["Admin", "Billing"].includes(role) && Number(row.balance || 0) > 0 && ["Issued", "Partially Paid"].includes(row.status)) add({
+      id: `settlement-pay-${row.id}`,
+      title: "Pay contractor settlement",
+      detail: `${row.contractor}: ${currency(row.balance)} open settlement balance.`,
+      role: "Billing",
+      owner: "Billing",
+      project: row.projectId,
+      dueDate: isoDate(today),
+      status: "Open",
+      priority: "High",
+      action: "Billing",
+      focus: "Contractor settlements",
+      source: "Settlement payment"
+    });
+    if (role === "Foreman" && isOwn && ["Issued", "Partially Paid", "Paid"].includes(row.status)) add({
+      id: `own-settlement-${row.id}`,
+      title: "Review issued settlement",
+      detail: `${row.projectId} settlement is ${row.status}.`,
+      role: "Foreman",
+      owner: row.contractor,
+      project: row.projectId,
+      dueDate: row.issuedAt?.slice(0, 10) || row.workedDate,
+      status: row.status,
+      priority: "Low",
+      action: "Production",
+      focus: "Contractor settlements",
+      source: "Settlement"
+    });
+  });
+
+  safetyRows.forEach(row => {
+    if (["Admin", "Operations", "Safety/Compliance", "Foreman"].includes(role)) add({
+      id: `safety-${row.id}`,
+      title: row.issue || row.title || "Safety item needs attention",
+      detail: `${row.project || "No Map"} · ${row.status || "Open"}`,
+      role: row.role || "Safety/Compliance",
+      owner: row.owner || "Safety/Compliance",
+      project: row.project || state.selectedProjectId,
+      dueDate: row.due || row.dueDate || isoDate(today),
+      status: row.status || "Open",
+      priority: row.severity || "Medium",
+      action: "Safety & Risk",
+      focus: "Safety",
+      source: "Safety",
+      blockers: ["Blocked", "Open", "Needs Review"].includes(row.status || "Open") ? 1 : 0,
+      blockerReasons: [row.correctiveAction || row.notes || row.issue || "Safety item requires review."],
+      fixAction: "Safety & Risk",
+      fixFocus: "Safety"
+    });
+  });
+
+  tasks.forEach(task => {
+    const taskRole = task.role || needsFixRoleForAction(task.workflowArea || task.action || "");
+    const isOwnForemanTask = role === "Foreman" && (task.owner === (state.user?.name || roleConfig.Foreman.person) || taskRole === "Foreman");
+    if (taskRole === role || task.owner === state.user?.name || (role === "Admin" && task.role === "Admin") || isOwnForemanTask) add({
+      id: `task-${task.id}`,
+      title: task.title || "Open task",
+      detail: task.description || task.notes || task.workflowArea || "Assigned task",
+      role: taskRole,
+      owner: task.owner || taskRole,
+      project: task.project || state.selectedProjectId,
+      dueDate: task.due || task.dueDate || "",
+      status: task.status || "Open",
+      priority: task.priority || "Medium",
+      action: task.workflowArea || "Tasks",
+      focus: task.title || "Task",
+      source: "Task",
+      blockers: /block|fix|missing|correct|review/i.test(`${task.title || ""} ${task.description || ""}`) ? 1 : 0,
+      blockerReasons: [task.description || task.notes || task.title || "Task requires review."],
+      fixAction: task.workflowArea || "Tasks",
+      fixFocus: task.title || "Task"
+    });
+  });
+
+  return items
+    .filter(item => {
+      if (role === "Foreman") return item.role === "Foreman" || item.owner === (state.user?.name || roleConfig.Foreman.person);
+      if (role === "Billing") return ["Billing", "Admin"].includes(item.role) || item.action === "Billing";
+      if (role === "Operations") return ["Operations", "Foreman", "Safety/Compliance"].includes(item.role) || ["Production", "Project & Map Hub"].includes(item.action);
+      if (role === "Safety/Compliance") return item.role === "Safety/Compliance" || item.action === "Safety & Risk";
+      if (role === "Crew Member") return item.role === "Crew Member";
+      return true;
+    })
+    .filter(item => canView(item.target))
+    .sort((a, b) => a.dueBucket.rank - b.dueBucket.rank || priorityRank(a.priority) - priorityRank(b.priority) || String(a.dueDate || "").localeCompare(String(b.dueDate || "")))
+    .slice(0, 12);
+}
+
+function priorityRank(priority = "") {
+  return { Critical: 0, High: 1, Medium: 2, Low: 3 }[priority] ?? 2;
+}
+
+function operationalRoleStats(items = []) {
+  return {
+    action: items.filter(item => item.canAct).length,
+    blocked: items.filter(item => ["Blocked", "Returned", "Needs Review", "Needs Approval"].includes(item.status) || item.blockers > 0).length,
+    overdue: items.filter(item => item.dueBucket?.rank === 0).length,
+    waiting: items.filter(item => !item.canAct).length
+  };
+}
+
+function renderOperationalRoleDashboard(role = state.role) {
+  const profile = operationalRoleProfile(role);
+  const items = operationalRoleWorkItems(role);
+  const stats = operationalRoleStats(items);
+  const primary = items.find(item => item.canAct) || items[0];
+  return `
+    <section class="panel operational-role-dashboard" data-operational-role-dashboard="${escapeAttr(role)}">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">${escapeAttr(profile.eyebrow)}</span>
+          <h2>${escapeAttr(profile.title)}</h2>
+          <p>${escapeAttr(profile.detail)}</p>
+        </div>
+        ${primary ? `<button class="primary-btn" data-workflow-action="${escapeAttr(primary.action)}" data-workflow-id="${escapeAttr(primary.project)}" data-workflow-focus="${escapeAttr(primary.focus)}" ${primary.reportScope ? `data-report-scope="${escapeAttr(primary.reportScope)}"` : ""}>Open next action</button>` : ""}
+      </div>
+      <div class="workflow-count-strip">
+        ${metric("Needs my action", stats.action, "Role-visible buttons")}
+        ${metric("Blocked / review", stats.blocked, "Needs decision")}
+        ${metric("Overdue", stats.overdue, "Past due")}
+        ${metric("Waiting", stats.waiting, "Visible read-only")}
+      </div>
+      ${renderOperationalGroupedQueue(items, profile, role)}
+    </section>
+  `;
+}
+
+function renderOperationalGroupedQueue(items = [], profile = operationalRoleProfile(), role = state.role) {
+  const queueItems = role === "Admin" ? compactAdminQueueItems(items) : items;
+  const groups = role === "Admin" ? adminOperationalQueueGroups(queueItems) : [
+    { label: "Overdue", rows: queueItems.filter(item => item.dueBucket?.rank === 0) },
+    { label: "Due today", rows: queueItems.filter(item => item.dueBucket?.rank === 1) },
+    { label: "Due this week", rows: queueItems.filter(item => item.dueBucket?.rank === 2) },
+    { label: "Ready / waiting", rows: queueItems.filter(item => (item.dueBucket?.rank ?? 9) > 2) }
+  ].filter(group => group.rows.length);
+  if (!groups.length) return `<p class="empty-state">${escapeAttr(profile.empty)}</p>`;
+  return `
+    <div class="admin-action-queue" data-operational-work-queue>
+      ${groups.map(group => `
+        <section class="admin-queue-group">
+          <div class="admin-queue-group-head">
+            <h3>${escapeAttr(group.label)}</h3>
+            <span>${group.rows.length}</span>
+          </div>
+          <div class="admin-queue-list">
+            ${group.rows.map(renderOperationalQueueRow).join("")}
+          </div>
+        </section>
+      `).join("")}
+    </div>
+  `;
+}
+
+function compactAdminQueueItems(items = []) {
+  const releaseRows = items.filter(item => item.title === "Clear Map release blockers");
+  const releaseGroups = Object.values(releaseRows.reduce((groups, item) => {
+    const key = `${adminQueueBadgeLabel(item)}|${plainStatus(item.status)}|${item.owner}|${item.action}`;
+    groups[key] = groups[key] || [];
+    groups[key].push(item);
+    return groups;
+  }, {}));
+  const groupedReleaseRows = releaseGroups.map(group => {
+    if (group.length === 1) return normalizeAdminQueueItem(group[0]);
+    const blockers = group.reduce((total, item) => total + Number(item.blockers || 0), 0);
+    const projects = group.map(item => item.project).filter(Boolean);
+    const first = group[0];
+    return normalizeAdminQueueItem({
+      ...first,
+      id: `release-group-${adminQueueBadgeLabel(first)}-${first.status}-${projects.join("-")}`,
+      title: "Map release blocked",
+      detail: `${projects.length} maps · ${blockers} blockers · ${projects.slice(0, 4).join(", ")}${projects.length > 4 ? "..." : ""}`,
+      project: projects[0] || first.project,
+      source: "Map readiness",
+      blockers,
+      focus: first.focus || "Release gate"
+    });
+  });
+  const releaseIds = new Set(releaseRows.map(item => item.id));
+  return [
+    ...groupedReleaseRows,
+    ...items.filter(item => !releaseIds.has(item.id)).map(normalizeAdminQueueItem)
+  ].sort((a, b) => a.dueBucket.rank - b.dueBucket.rank || priorityRank(a.priority) - priorityRank(b.priority) || String(a.title || "").localeCompare(String(b.title || "")));
+}
+
+function normalizeAdminQueueItem(item) {
+  const titleMap = {
+    "Clear Map release blockers": "Map release blocked",
+    "Review submitted daily": "Daily review needed",
+    "Production proof not accepted": "Proof review needed",
+    "Prepare SQUAN billing package": "Billing package ready",
+    "Needs Fix: Daily evidence package QA": "Daily evidence QA"
+  };
+  return {
+    ...item,
+    title: titleMap[item.title] || item.title
+  };
+}
+
+function adminOperationalQueueGroups(items = []) {
+  const assigned = new Set();
+  const take = predicate => items.filter(item => {
+    if (assigned.has(item.id) || !predicate(item)) return false;
+    assigned.add(item.id);
+    return true;
+  });
+  const needsActionStatuses = ["Blocked", "Returned", "Needs Approval", "Needs Review", "Rejected by SQUAN"];
+  const isReady = item => ["Ready", "Ready to Submit", "Ready for Package Prep", "Approved"].includes(item.status);
+  const isPending = item => item.canAct === false || ["Pending", "Open", "Holdback", "Under Review", "Draft"].includes(item.status);
+  return [
+    { label: "Overdue", rows: take(item => item.dueBucket?.rank === 0) },
+    { label: "Needs Action", rows: take(item => needsActionStatuses.includes(item.status) || Number(item.blockers || 0) > 0 || item.role === "Admin" || item.owner === "Admin") },
+    { label: "Open", rows: take(item => item.canAct && !isReady(item) && !isPending(item)) },
+    { label: "Pending", rows: take(isPending) },
+    { label: "Ready", rows: take(isReady) }
+  ].filter(group => group.rows.length);
+}
+
+function adminQueueBadgeLabel(item) {
+  if (state.role !== "Admin") return item.dueBucket?.label || "No due date";
+  if (item.dueBucket?.rank === 0) return "Overdue";
+  if (["Blocked", "Returned", "Needs Approval", "Needs Review", "Rejected by SQUAN"].includes(item.status) || Number(item.blockers || 0) > 0) return "Needs Action";
+  if (["Ready", "Ready to Submit", "Ready for Package Prep", "Approved"].includes(item.status)) return "Ready";
+  if (item.canAct === false || ["Pending", "Holdback", "Under Review", "Draft"].includes(item.status)) return "Pending";
+  return "Open";
+}
+
+function renderOperationalQueueRow(item) {
+  const blockerText = Number(item.blockers || 0)
+    ? `${Number(item.blockers || 0)} blocker${Number(item.blockers || 0) === 1 ? "" : "s"}`
+    : "No blockers";
+  const primaryStatus = adminQueueBadgeLabel(item);
+  const secondaryStatus = plainStatus(item.status);
+  const showSecondary = secondaryStatus && secondaryStatus !== primaryStatus && !(primaryStatus === "Open" && secondaryStatus === "Open");
+  const hasBlocker = Number(item.blockers || 0) > 0 || ["Blocked", "Returned", "Needs Review", "Needs Approval", "Rejected by SQUAN"].includes(item.status);
+  const action = hasBlocker ? item.fixAction || item.action : item.action;
+  const focus = hasBlocker ? item.fixFocus || item.focus : item.focus;
+  return `
+    <article class="admin-queue-row ${statusClass(item.status)}">
+      <div class="admin-queue-priority">
+        <span class="status ${statusClass(item.dueBucket?.status)}">${escapeAttr(primaryStatus)}</span>
+        ${showSecondary ? `<span class="status ${statusClass(item.status)}">${escapeAttr(secondaryStatus)}</span>` : ""}
+      </div>
+      <div class="admin-queue-main">
+        <strong>${escapeAttr(item.title)}</strong>
+        <small>${escapeAttr(item.detail || "")}</small>
+      </div>
+      <div class="admin-queue-meta">
+        <span>${escapeAttr(item.project || "No Map")}</span>
+        <span>${escapeAttr(item.owner || "Unassigned")}</span>
+        <span>${escapeAttr(item.source || "Workflow")}</span>
+        <span>${blockerText}</span>
+      </div>
+      <div class="admin-queue-actions">
+        ${item.canAct ? `<button class="secondary-btn mini-btn" data-workflow-action="${escapeAttr(action)}" data-workflow-id="${escapeAttr(item.project)}" data-workflow-focus="${escapeAttr(focus)}" ${hasBlocker ? `data-blocker-id="${escapeAttr(item.id)}"` : ""} ${item.reportScope ? `data-report-scope="${escapeAttr(item.reportScope)}"` : ""}>${hasBlocker ? "Open fix" : "Open"}</button>` : `<span class="status info">Read only</span>`}
+      </div>
+    </article>
+  `;
 }
 
 function renderWorkflowPathHome(role = state.role) {
@@ -6829,18 +7949,52 @@ function roleHomeProfile(role = state.role) {
 function renderSimpleRoleHome(role = state.role) {
   const profile = roleHomeProfile(role);
   const projectId = profile.project?.id || state.selectedProjectId || "";
+  const workflowCards = homeWorkflowCards(profile);
+  const primaryStatus = profile.project?.status || profile.status || "Select Map";
   return `
-    ${renderMapPlanWorkflowPanel(profile.project, "Home")}
-    <section class="simple-home panel">
-      <div class="simple-home-main">
+    <section class="home-command-hero panel">
+      <div class="home-command-main">
         <div>
           <span class="eyebrow">${role}</span>
           <h2>${profile.title}</h2>
           <p>${roleHomePlainLanguage(role)}</p>
         </div>
+        <div class="home-command-status">
+          <span class="status ${statusClass(primaryStatus)}">${plainStatus(primaryStatus)}</span>
+          <strong>${profile.mapLabel}</strong>
+          <small>${profile.project?.scope || "Select a Map to focus the workflow"}</small>
+        </div>
+      </div>
+      <div class="home-command-actions">
+        <button class="primary-btn" data-workflow-action="${profile.primary.workflow}" data-workflow-id="${projectId}" data-workflow-focus="${profile.primary.focus}">${profile.primary.label}</button>
+        <button class="secondary-btn" data-workflow-action="Project & Map Hub" data-workflow-id="${projectId}" data-workflow-focus="Map detail">Open Map</button>
+        ${canView("reports") ? `<button class="secondary-btn" data-workflow-action="Reports" data-workflow-id="${projectId}" data-report-scope="Executive Report">Reports</button>` : ""}
+      </div>
+    </section>
+    ${renderRoleWorkflowTighteningPanel(role, profile.project)}
+    <section class="home-workflow-band">
+      ${workflowCards.map(card => `
+        <button class="home-workflow-card ${statusClass(card.status)}" data-workflow-action="${card.action}" data-workflow-id="${projectId}" data-workflow-focus="${card.focus}">
+          <span>${card.index}</span>
+          <div>
+            <strong>${card.label}</strong>
+            <small>${card.detail}</small>
+          </div>
+          <em>${plainStatus(card.status)}</em>
+        </button>
+      `).join("")}
+    </section>
+    ${renderMapPlanWorkflowPanel(profile.project, "Home")}
+    <section class="simple-home panel enhanced-owner-decisions">
+      <div class="simple-home-main">
+        <div>
+          <span class="eyebrow">${role === "Admin" ? "Admin" : "Today"}</span>
+          <h2>${role === "Admin" ? "Owner decisions today" : "Today’s focus"}</h2>
+          <p>${role === "Admin" ? "Use Home for the few calls that need a decision. Open details only when the count needs attention." : "The cards below keep the selected workflow focused."}</p>
+        </div>
         <button class="primary-btn" data-workflow-action="${profile.primary.workflow}" data-workflow-id="${projectId}" data-workflow-focus="${profile.primary.focus}">${profile.primary.label}</button>
       </div>
-      <div class="simple-status-strip">
+      <div class="simple-status-strip decision-strip">
         ${profile.cards.map(card => `
           <article>
             <span>${card.label}</span>
@@ -6860,6 +8014,176 @@ function renderSimpleRoleHome(role = state.role) {
           ${canView("documents") ? `<button class="secondary-btn" data-workflow-action="Documents" data-workflow-id="${projectId}" data-workflow-focus="Map evidence">Documents</button>` : ""}
           ${canView("reports") ? `<button class="secondary-btn" data-workflow-action="Reports" data-workflow-id="${projectId}" data-workflow-focus="${role === "Billing" ? "Billing Packet" : "Executive"}">Reports</button>` : ""}
         </div>
+      </div>
+    </section>
+  `;
+}
+
+function workflowPackageRowsForProject(project) {
+  if (!project) return [];
+  return billingPackageWorkflowRows([project]);
+}
+
+function roleWorkflowCounts(role, project) {
+  const dailies = workflowDailyRowsForProject(project);
+  const packageRows = workflowPackageRowsForProject(project);
+  const tasks = (state.data.tasks || []).filter(item => !project || item.project === project.id).filter(item => item.status !== "Closed");
+  const proofMissing = (state.data.productionLines || []).filter(line => (!project || line.project === project.id) && productionProofState(line) !== "Accepted");
+  const submitted = packageRows.filter(row => row.submission);
+  const waitingPayment = packageRows.filter(row => {
+    const summary = billingPackagePaymentSummary(row);
+    return row.submission && (summary.squanVariance > 0 || summary.contractorOpen > 0);
+  });
+  return {
+    drafts: dailies.filter(row => row.status === "Draft").length,
+    corrections: dailies.filter(row => ["Returned", "Needs Correction"].includes(row.status)).length,
+    awaitingAdmin: dailies.filter(row => ["Submitted", "Corrected", "Pending Review"].includes(row.status)).length,
+    approved: dailies.filter(row => ["Accepted", "Used for Billing", "Approved"].includes(row.status)).length,
+    proofMissing: proofMissing.length,
+    readyToSubmit: packageRows.filter(row => row.status === "Ready to Submit").length,
+    blockedPackage: packageRows.filter(row => row.blockers?.length).length,
+    waitingSquan: submitted.filter(row => ["Submitted to SQUAN", "Pending SQUAN Review", "Acknowledged / payment pending", "Approved by SQUAN", "Partially approved by SQUAN"].includes(row.status)).length,
+    paymentPending: waitingPayment.length,
+    roleTasks: tasks.filter(task => !role || task.role === role || task.owner === state.user?.name || task.owner === roleConfig[role]?.person).length,
+    exceptions: tasks.length + proofMissing.length + packageRows.filter(row => row.blockers?.length || row.status === "Rejected by SQUAN").length
+  };
+}
+
+function renderRoleWorkflowTighteningPanel(role = state.role, project = selectedMapContext()) {
+  const counts = roleWorkflowCounts(role, project);
+  const config = {
+    Foreman: {
+      title: "Foreman workflow",
+      detail: "Fast daily submit, correction response, proof, and status visibility.",
+      primary: ["Field Operations", "Daily closeout", "Today’s Daily"],
+      counts: [
+        ["Drafts", counts.drafts, "Not sent"],
+        ["Needs correction", counts.corrections, "Foreman owns"],
+        ["Awaiting review", counts.awaitingAdmin, "Office decision"],
+        ["Approved", counts.approved, "Can feed billing"]
+      ]
+    },
+    "Crew Member": {
+      title: "Crew workflow",
+      detail: "Daily assignment, safety acknowledgement, photo/hazard notes, and time confirmation.",
+      primary: ["Field Operations", "Daily start", "My work today"],
+      counts: [
+        ["Drafts", counts.drafts, "Daily not sent"],
+        ["Awaiting review", counts.awaitingAdmin, "Office decision"],
+        ["Needs correction", counts.corrections, "Field fix"],
+        ["Tasks", counts.roleTasks, "Assigned work"]
+      ]
+    },
+    Admin: {
+      title: "Admin workflow",
+      detail: "Daily review, owner decisions, proof blockers, and SQUAN exposure.",
+      primary: ["Tasks", "Admin decision", "Review queue"],
+      counts: [
+        ["Awaiting admin", counts.awaitingAdmin, "Daily decisions"],
+        ["Proof blockers", counts.proofMissing, "Need accepted proof"],
+        ["Package blockers", counts.blockedPackage, "Before SQUAN"],
+        ["Exceptions", counts.exceptions, "Needs owner visibility"]
+      ]
+    },
+    Operations: {
+      title: "Operations workflow",
+      detail: "Release Maps, review dailies, return corrections, and clear handoff blockers.",
+      primary: ["Project & Map Hub", "Release gate", "Map readiness"],
+      counts: [
+        ["Awaiting review", counts.awaitingAdmin, "Daily decisions"],
+        ["Corrections", counts.corrections, "Returned to Foreman"],
+        ["Proof blockers", counts.proofMissing, "Need support"],
+        ["Tasks", counts.roleTasks, "Open Operations"]
+      ]
+    },
+    Billing: {
+      title: "Billing workflow",
+      detail: "What to submit today, what is blocked, what SQUAN has, and what is still unpaid.",
+      primary: ["Billing", "Ready", "Submit queue"],
+      counts: [
+        ["Ready to submit", counts.readyToSubmit, "SQUAN package"],
+        ["Blocked", counts.blockedPackage, "Owner assigned"],
+        ["Waiting SQUAN", counts.waitingSquan, "Customer response"],
+        ["Payment pending", counts.paymentPending, "SQUAN or contractor"]
+      ]
+    },
+    "Safety/Compliance": {
+      title: "Safety workflow",
+      detail: "Safety blockers, correction proof, training/equipment risk, and audit support.",
+      primary: ["Safety & Risk", "Safety", "Safety queue"],
+      counts: [
+        ["Proof blockers", counts.proofMissing, "Safety/proof"],
+        ["Corrections", counts.corrections, "Returned items"],
+        ["Tasks", counts.roleTasks, "Open safety"],
+        ["Exceptions", counts.exceptions, "Visible risk"]
+      ]
+    }
+  }[role] || {
+    title: "Owner exception workflow",
+    detail: "Money at risk, SQUAN status, unpaid work, holdback, and blockers only.",
+    primary: ["Billing", "Cash forecast", "Money risk"],
+    counts: [
+      ["Ready to submit", counts.readyToSubmit, "Unbilled value"],
+      ["Waiting SQUAN", counts.waitingSquan, "Customer response"],
+      ["Payment pending", counts.paymentPending, "Cash exposure"],
+      ["Exceptions", counts.exceptions, "Needs attention"]
+    ]
+  };
+  return `
+    <section class="panel role-tightening-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Workflow by user</span>
+          <h2>${config.title}</h2>
+          <p>${config.detail}</p>
+        </div>
+        <button class="primary-btn" data-workflow-action="${config.primary[0]}" data-workflow-id="${project?.id || ""}" data-workflow-focus="${config.primary[1]}">${config.primary[2]}</button>
+      </div>
+      <div class="workflow-count-strip">
+        ${config.counts.map(([label, value, detail]) => metric(label, value, detail)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function homeWorkflowCards(profile) {
+  const project = profile.project;
+  const stats = project ? mapPlanWorkflowStats(project) : null;
+  const billingReady = stats?.billing?.filter(row => ["Ready to Bill", "Submitted", "Billed"].includes(row.billingStatus || row.status)).length || 0;
+  const proofReady = stats ? `${stats.proofReady}/${stats.evidence.length}` : "0/0";
+  return [
+    { index: 1, label: "Maps", detail: project ? `${project.map || project.id} selected` : "Select map context", status: project?.status || "Pending", action: "Project & Map Hub", focus: "ArcGIS plan" },
+    { index: 2, label: "Daily Capture", detail: `${stats?.production.length || 0} production line(s)`, status: stats?.production.length ? "Submitted" : "Pending", action: "Production", focus: "Daily Capture" },
+    { index: 3, label: "Review", detail: `${proofReady} proof accepted`, status: stats?.evidence.length ? "Needs Review" : "Missing", action: "Documents", focus: "Proof review" },
+    { index: 4, label: "Billing", detail: `${billingReady}/${stats?.billing.length || 0} ledger row(s)`, status: billingReady ? "Ready to Bill" : "Pending", action: "Billing", focus: "Billing ledger" },
+    { index: 5, label: "Audit", detail: "Reports + packets", status: "Ready", action: "Reports", focus: "Packet Readiness" }
+  ];
+}
+
+function renderAdminWorkflowSummary(project = selectedMapContext()) {
+  const profile = roleHomeProfile("Admin");
+  const cards = homeWorkflowCards(profile);
+  return `
+    <section class="panel admin-workflow-summary">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Workflow by user</span>
+          <h2>Admin workflow</h2>
+          <p>Daily review, owner decisions, proof blockers, billing exposure, and audit readiness.</p>
+        </div>
+        <button class="primary-btn" data-workflow-action="Tasks" data-workflow-id="${project?.id || state.selectedProjectId || ""}" data-workflow-focus="Admin decision">Review queue</button>
+      </div>
+      <div class="home-workflow-band compact">
+        ${cards.map(card => `
+          <button class="home-workflow-card ${statusClass(card.status)}" data-workflow-action="${card.action}" data-workflow-id="${project?.id || state.selectedProjectId || ""}" data-workflow-focus="${card.focus}">
+            <span>${card.index}</span>
+            <div>
+              <strong>${card.label}</strong>
+              <small>${card.detail}</small>
+            </div>
+            <em>${plainStatus(card.status)}</em>
+          </button>
+        `).join("")}
       </div>
     </section>
   `;
@@ -10862,8 +12186,10 @@ function renderForemanToday() {
         </div>
       </div>
     </section>
+    ${project ? renderRoleWorkflowTighteningPanel("Foreman", project) : ""}
     ${focused || `
       ${project ? renderForemanSimpleDailyFlow(context) : ""}
+      ${project ? renderForemanMyDailiesPanel(project) : ""}
       ${project ? renderReturnedDailyCorrectionQueue(project) : ""}
       ${project ? renderFieldCaptureCorrectionQueue(project) : ""}
       ${project ? renderFieldEvidenceCorrectionQueue(project) : ""}
@@ -11042,6 +12368,9 @@ function renderForemanHome() {
       </div>
     </section>
 
+    ${project ? renderRoleWorkflowTighteningPanel("Foreman", project) : ""}
+    ${project ? renderForemanMyDailiesPanel(project) : ""}
+
     <section class="foreman-home-grid">
       <section class="panel foreman-home-card">
         <div class="panel-header">
@@ -11110,6 +12439,113 @@ function renderForemanHome() {
             <button class="secondary-btn" data-needs-fix-details="${row.id}" data-project-id="${project.id}" data-path-key="fix-problems">Details</button>
           </article>
         `).join("") : `<p class="empty-state">Nothing is waiting on another role.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function workflowDailyRowsForProject(project) {
+  if (!project) return [];
+  const productionDailies = (state.data.productionDailies || []).filter(item => item.project === project.id);
+  const fieldDailies = (state.data.dailies || []).filter(item => item.project === project.id);
+  const projectLines = (state.data.productionLines || []).filter(item => item.project === project.id);
+  return [
+    ...fieldDailies.map(daily => {
+      const linkedProduction = productionDailies.find(item => item.sourceDailyId === daily.id || item.externalDailyId === daily.id);
+      const lines = linkedProduction ? projectLines.filter(line => line.dailyId === linkedProduction.id || line.sourceDailyId === daily.id) : [];
+      return {
+        id: daily.id,
+        source: "Field daily",
+        project,
+        daily,
+        productionDaily: linkedProduction || null,
+        lines,
+        foreman: daily.foreman || linkedProduction?.submittedBy || "Foreman",
+        workedDate: daily.date || linkedProduction?.workedDate || "",
+        status: dailyAcceptanceStatus(daily),
+        correctionReason: daily.supervisorReview?.status === "Returned" ? daily.supervisorReview?.note || "Correction requested." : "",
+        packaged: lines.some(line => line.billingPackageLock),
+        submittedToSquan: lines.some(line => line.billingPackageLock?.submission),
+        billableReady: lines.filter(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)).length,
+        proofAccepted: lines.filter(line => productionProofState(line) === "Accepted").length
+      };
+    }),
+    ...productionDailies
+      .filter(daily => !fieldDailies.some(item => item.id === daily.sourceDailyId || item.id === daily.externalDailyId))
+      .map(daily => {
+        const lines = projectLines.filter(line => line.dailyId === daily.id);
+        return {
+          id: daily.externalDailyId || daily.id,
+          source: daily.sourceType || "Production daily",
+          project,
+          daily: null,
+          productionDaily: daily,
+          lines,
+          foreman: daily.submittedBy || daily.tech || "Foreman",
+          workedDate: daily.workedDate || "",
+          status: daily.status || "Submitted",
+          correctionReason: "",
+          packaged: lines.some(line => line.billingPackageLock),
+          submittedToSquan: lines.some(line => line.billingPackageLock?.submission),
+          billableReady: lines.filter(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)).length,
+          proofAccepted: lines.filter(line => productionProofState(line) === "Accepted").length
+        };
+      })
+  ].sort((a, b) => String(b.workedDate || "").localeCompare(String(a.workedDate || "")) || String(b.id).localeCompare(String(a.id)));
+}
+
+function renderForemanMyDailiesPanel(project) {
+  const rows = workflowDailyRowsForProject(project);
+  const myRows = state.role === "Foreman"
+    ? rows.filter(row => row.foreman === state.user?.name || row.foreman === roleConfig.Foreman.person || !row.foreman)
+    : rows;
+  const counts = {
+    draft: myRows.filter(row => row.status === "Draft").length,
+    submitted: myRows.filter(row => ["Submitted", "Corrected", "Pending Review"].includes(row.status)).length,
+    correction: myRows.filter(row => ["Returned", "Needs Correction"].includes(row.status)).length,
+    approved: myRows.filter(row => ["Accepted", "Used for Billing", "Approved"].includes(row.status)).length,
+    packaged: myRows.filter(row => row.packaged).length,
+    squan: myRows.filter(row => row.submittedToSquan).length
+  };
+  return `
+    <section class="panel foreman-my-dailies">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">My Dailies</span>
+          <h2>Submission status and corrections</h2>
+          <p>Foreman sees only the daily status needed to know whether Office accepted it, returned it, packaged it, or sent it to SQUAN.</p>
+        </div>
+        <button class="primary-btn" data-workflow-action="Field Operations" data-workflow-id="${project.id}" data-workflow-focus="Daily closeout">Open daily</button>
+      </div>
+      <div class="workflow-count-strip">
+        ${metric("Drafts", counts.draft, "Not sent")}
+        ${metric("Awaiting review", counts.submitted, "Office review")}
+        ${metric("Needs correction", counts.correction, "Foreman owns")}
+        ${metric("Approved", counts.approved, "Can feed billing")}
+        ${metric("Packaged", counts.packaged, "Billing locked")}
+        ${metric("Sent to SQUAN", counts.squan, "Customer submitted")}
+      </div>
+      <div class="foreman-my-daily-list">
+        ${myRows.slice(0, 8).map(row => `
+          <article class="${statusClass(row.status)}">
+            <div>
+              <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
+              <strong>${escapeAttr(row.id)}</strong>
+              <small>${formatDate(row.workedDate)} · ${escapeAttr(row.foreman)} · ${row.lines.length} code line(s)</small>
+              ${row.correctionReason ? `<small>Correction: ${escapeAttr(row.correctionReason)}</small>` : ""}
+            </div>
+            <div class="daily-mini-state">
+              <span>${row.proofAccepted}/${row.lines.length} proof</span>
+              <span>${row.billableReady}/${row.lines.length} billable</span>
+              <span>${row.packaged ? "Packaged" : "Not packaged"}</span>
+            </div>
+            <div class="daily-row-actions">
+              ${row.daily ? `<button class="secondary-btn" data-daily-review-open="${escapeAttr(row.daily.id)}">Preview</button>` : ""}
+              ${row.productionDaily ? `<button class="secondary-btn" data-production-daily-open="${escapeAttr(row.productionDaily.id)}">Production</button>` : ""}
+              <button class="${row.correctionReason ? "primary-btn" : "secondary-btn"}" data-workflow-action="Field Operations" data-workflow-id="${project.id}" data-workflow-focus="${row.correctionReason ? "Returned daily correction" : "Daily closeout"}">${row.correctionReason ? "Correct" : "Open"}</button>
+            </div>
+          </article>
+        `).join("") || `<p class="empty-state">No dailies are assigned to this Foreman yet. Start with New Daily.</p>`}
       </div>
     </section>
   `;
@@ -16436,7 +17872,7 @@ function preparedPackageSnapshotPayload(project, invoice, retainage, gate) {
   return {
     project: project.id,
     map: project.map || project.id,
-    customer: project.customer || "SQUAN",
+    customer: project.customer || "Customer",
     invoice: invoice.id,
     retainage: retainage.id,
     gross: acceptedPacket.gross || amounts.gross,
@@ -18598,7 +20034,7 @@ function renderMapPaymentLedgerRow(row) {
     <article class="${statusClass(row.ledger.closeBillingStatus === "Closed" ? "Tracked" : row.status)}">
       <div>
         <strong>${row.project.map || row.project.id}</strong>
-        <small>${row.project.id} · ${row.project.customer || "SQUAN"}</small>
+        <small>${row.project.id} · ${row.project.customer || "Customer"}</small>
         <span class="status ${statusClass(row.status)}">${plainStatus(row.status)}</span>
       </div>
       <div>
@@ -19366,6 +20802,13 @@ function renderSafetyWorkHome(project, audit) {
   const pendingCaptures = project
     ? fieldCaptureReviewRows(project).filter(item => !["Accepted", "Closed"].includes(item.status)).length
     : 0;
+  const nextAction = row.status === "Clear"
+    ? { title: "Verify score and report readiness", detail: `${audit.score} pts; no open Map safety blocker is first in line.`, action: "Reports", focus: "Safety Audit", label: "Open report" }
+    : row.incidents.length
+      ? { title: "Close the open safety fix", detail: `${row.incidents.length} incident/Form 12 item(s) need a decision.`, action: "Safety & Risk", focus: "Form 12", label: "Review fix" }
+      : row.obstacles.length || pendingCaptures
+        ? { title: "Review field proof and obstacles", detail: `${row.obstacles.length} obstacle(s), ${pendingCaptures} photo/note item(s) need review.`, action: "Safety & Risk", focus: "Field capture review", label: "Review proof" }
+        : { title: "Clear crew or equipment blocker", detail: `${row.expiringCerts.length} crew item(s), ${row.equipmentRisk.length} equipment item(s) need attention.`, action: row.expiringCerts.length ? "People & Compliance" : "Equipment", focus: "Compliance", label: "Open blocker" };
   return `
     ${renderMapPlanWorkflowPanel(project, "Safety")}
     <section class="panel safety-simple-home">
@@ -19400,6 +20843,14 @@ function renderSafetyWorkHome(project, audit) {
           <strong>${audit.score} pts</strong>
           <small>${audit.rating} rating estimate</small>
         </article>
+      </div>
+      <div class="safety-next-action">
+        <div>
+          <span class="eyebrow">Next best action</span>
+          <strong>${escapeAttr(nextAction.title)}</strong>
+          <small>${escapeAttr(nextAction.detail)}</small>
+        </div>
+        <button class="primary-btn" data-workflow-action="${nextAction.action}" data-workflow-id="${project?.id || ""}" data-workflow-focus="${nextAction.focus}">${nextAction.label}</button>
       </div>
     </section>
   `;
@@ -20251,7 +21702,7 @@ function renderAdminSettings() {
   return `
     ${renderRoleScreenNotice("people", selectedProject)}
     <section class="metrics">
-      ${metric("Company", company.name || "Jackson Telcom", company.primaryCustomer ? `Primary customer: ${company.primaryCustomer}` : "Company profile")}
+      ${metric("Company", company.name || "Jackson Telcom", "Company profile")}
       ${metric("Contract rules", rules.length, "Customer-driven workflow controls")}
       ${metric("Users / roles", `${users.length} / ${roles.length}`, "Access and module permissions")}
       ${metric("Audit events", audit.length, "Logins, workflow submits, record changes")}
@@ -20265,7 +21716,7 @@ function renderAdminSettings() {
     <section class="settings-grid">
       ${renderSettingsPanel("Company Profile", [
         ["Company", company.name],
-        ["Primary customer", company.primaryCustomer],
+        ["Customer label", "Customer"],
         ["Default burden", `${company.defaultBurdenPercent || 0}%`],
         ["Document standard", company.documentStandard],
         ["Operating scenario", company.operatingScenario]
@@ -20335,6 +21786,9 @@ function renderAdminSettings() {
 
 function renderDataControlCenter() {
   const counts = workflowRecordCounts();
+  const company = state.data.company || {};
+  const readiness = operationalDataReadiness();
+  const goLiveMode = company.goLiveMode || "Demo Mode";
   const collections = [
     ["Maps", "projects"],
     ["Tasks", "tasks"],
@@ -20351,7 +21805,7 @@ function renderDataControlCenter() {
     <section class="panel data-control-center">
       <div class="panel-header">
         <h2>Data controls</h2>
-        <span>${state.apiOnline ? "Server API active" : "Local browser draft"}</span>
+        <span>${state.apiOnline ? "Server API active" : "Local browser draft"} · ${escapeAttr(goLiveMode)}</span>
       </div>
       <div class="data-control-grid">
         <article class="data-control-card primary">
@@ -20371,6 +21825,41 @@ function renderDataControlCenter() {
             <button class="secondary-btn danger-action" data-data-action="reset-local">Reset local demo data</button>
             <button class="secondary-btn" data-data-action="clear-stale" ${stale ? "" : "disabled"}>Clear schema notice</button>
           </div>
+        </article>
+        <article class="data-control-card">
+          <span class="eyebrow">Go-live mode</span>
+          <h3>${escapeAttr(goLiveMode)}</h3>
+          <p>Live Mode is blocked until operational readiness is clean. MAMP should be treated as the local MySQL persistence bridge, while this app continues to run on Node.</p>
+          <label class="compact-field">
+            <span>Mode</span>
+            <select id="goLiveModeSelect">
+              ${["Demo Mode", "Review Mode", "Live Mode"].map(mode => `<option value="${mode}" ${goLiveMode === mode ? "selected" : ""}>${mode}</option>`).join("")}
+            </select>
+          </label>
+          <div class="data-control-actions">
+            <button class="primary-btn" data-data-action="save-go-live-mode">Save mode</button>
+            <span class="status ${readiness.status === "Operational Ready" ? "ok" : "warn"}">${escapeAttr(readiness.status)}</span>
+          </div>
+        </article>
+        <article class="data-control-card">
+          <span class="eyebrow">Backup / restore</span>
+          <h3>${formatShortDateTime(company.lastBackupAt) || "No backup recorded"}</h3>
+          <p>Download a full JSON backup before real data changes. Restore validates shape and requires explicit confirmation.</p>
+          <input id="restoreBackupFile" type="file" accept="application/json,.json">
+          <div class="data-control-actions">
+            <button class="secondary-btn" data-data-action="download-server-backup">Download server backup</button>
+            <button class="secondary-btn danger-action" data-data-action="restore-backup">Validate + restore</button>
+          </div>
+        </article>
+        <article class="data-control-card">
+          <span class="eyebrow">MAMP / MySQL path</span>
+          <h3>Node now, MAMP MySQL next</h3>
+          <p>Current runtime is Node. MAMP Apache/PHP does not host this app directly; use MAMP for MySQL when we migrate persistence from JSON.</p>
+          <dl class="data-control-counts">
+            <div><dt>Now</dt><dd>JSON + backups</dd></div>
+            <div><dt>Next</dt><dd>MySQL schema</dd></div>
+            <div><dt>Later</dt><dd>Hosted DB</dd></div>
+          </dl>
         </article>
         <article class="data-control-card">
           <span class="eyebrow">Generated workflow records</span>
@@ -21698,41 +23187,567 @@ function renderReports() {
   const projects = scopedRows("projects");
   const selectedProject = projects.find(project => project.id === state.selectedProjectId) || projects[0];
   const exceptionProjects = reportExceptionProjects(projects, selectedProject);
+  const mode = state.reportMode || "Daily Production";
+  const readiness = operationalDataReadiness();
   return `
-    <section class="report-toolbar" data-print-scope="${printScopeSlug(state.reportPrintScope)}">
-      <button class="primary-btn" data-print-report>Print / Save PDF</button>
-      <a class="secondary-btn" href="/api/reports/executive" target="_blank" rel="noreferrer">Download executive data</a>
-      <a class="secondary-btn" href="/api/reports/audit-package" target="_blank" rel="noreferrer">Download safety packet data</a>
-      <a class="secondary-btn" href="/api/reports/billing-package?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Download SQUAN billing packet</a>
-      <a class="secondary-btn" href="/api/reports/daily-package-intake?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Daily package JSON</a>
-      <a class="secondary-btn" href="/api/reports/daily-package-intake.csv?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Daily package CSV</a>
-      <a class="secondary-btn" href="/api/reports/completed-forms?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Completed forms JSON</a>
-      <a class="secondary-btn" href="/api/reports/completed-forms.csv?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Completed forms CSV</a>
-      <a class="secondary-btn" href="/api/reports/billing-task-closeouts?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Billing closeouts</a>
-      <a class="secondary-btn" href="/api/reports/billing-task-closeouts.csv?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Billing closeout CSV</a>
-      <a class="secondary-btn" href="/api/reports/financial-closeouts?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Financial closeouts</a>
-      <a class="secondary-btn" href="/api/reports/financial-closeouts.csv?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Financial closeout CSV</a>
-      <a class="secondary-btn" href="/api/reports/closeout-readiness-breaches?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Readiness SLA breaches</a>
-      <a class="secondary-btn" href="/api/reports/closeout-readiness-breaches.csv?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Readiness breach CSV</a>
-      <a class="secondary-btn" href="/api/reports/exception-report?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Download exception report</a>
-      <a class="secondary-btn" href="/api/reports/collections-packet" target="_blank" rel="noreferrer">Download collections packet</a>
-      <a class="secondary-btn" href="/api/reports/collections-packet.csv" target="_blank" rel="noreferrer">Collections CSV</a>
-      <a class="secondary-btn" href="/api/reports/collections-decisions" target="_blank" rel="noreferrer">Download decision audit</a>
-      <a class="secondary-btn" href="/api/reports/collections-decisions.csv" target="_blank" rel="noreferrer">Decision CSV</a>
-      <a class="secondary-btn" href="/api/reports/field-capture-audit?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Download field capture audit</a>
-      <a class="secondary-btn" href="/api/reports/field-capture-audit.csv?project=${encodeURIComponent(selectedProject?.id || "")}" target="_blank" rel="noreferrer">Field capture CSV</a>
-      <a class="secondary-btn" href="/api/reports/cash-forecast?scenario=${encodeURIComponent(state.cashScenario || "baseline")}" target="_blank" rel="noreferrer">Download cash forecast</a>
-      <a class="secondary-btn" href="/api/reports/cash-forecast.csv?scenario=${encodeURIComponent(state.cashScenario || "baseline")}" target="_blank" rel="noreferrer">Cash forecast CSV</a>
-      <a class="secondary-btn" href="/api/reports/packet-locks?project=${encodeURIComponent(selectedProject?.id || "")}&scope=${encodeURIComponent(state.reportPrintScope || "")}" target="_blank" rel="noreferrer">Download packet lock report</a>
-      <a class="secondary-btn" href="/api/reports/packet-locks.csv?project=${encodeURIComponent(selectedProject?.id || "")}&scope=${encodeURIComponent(state.reportPrintScope || "")}" target="_blank" rel="noreferrer">Packet lock CSV</a>
+    ${renderDataModeBanner(readiness, "Reports")}
+    ${renderReportsModeTabs(mode)}
+    ${mode === "Daily Production" ? `
+      ${renderDailyProductionReportPage(projects)}
+    ` : mode === "Audit / Exports" ? `
+      ${renderDataReadinessDashboard(readiness)}
+      ${renderReportMapSelector(projects, selectedProject)}
+      ${renderReportExportTools(selectedProject)}
+      ${renderBillingPackageLifecycleReport()}
+      ${renderBillingPackageExceptionsReport()}
+      ${renderDailyProductionAuditReport(projects)}
+      ${renderPacketLockAuditDashboard(projects)}
+      ${renderCsvExportLinks()}
+    ` : `
+      ${renderReportMapSelector(projects, selectedProject)}
+      ${renderReportPacketPriorityQueue(projects, selectedProject)}
+      ${renderReportPacketCommandCenter(selectedProject)}
+      ${renderReportPacketWorkflowDrillIns(selectedProject)}
+      ${renderMapPlanWorkflowPanel(selectedProject, "Reports")}
+      ${renderReportFocusedDetail(selectedProject, projects, exceptionProjects) || renderReportSelectedPacketLane(selectedProject, projects)}
+    `}
+  `;
+}
+
+function renderReportsModeTabs(mode) {
+  const tabs = ["Daily Production", "Packet Readiness", "Audit / Exports"];
+  return `
+    <section class="report-mode-tabs no-print">
+      ${tabs.map(tab => `
+        <button class="${mode === tab ? "active" : ""}" data-report-mode="${tab}">
+          <strong>${tab}</strong>
+          <span>${tab === "Daily Production" ? "Find daily, review billables" : tab === "Packet Readiness" ? "Final packet blockers" : "CSV / PDF support"}</span>
+        </button>
+      `).join("")}
     </section>
-    ${renderReportMapSelector(projects, selectedProject)}
-    ${renderMapPlanWorkflowPanel(selectedProject, "Reports")}
-    ${renderReportPacketCommandCenter(selectedProject)}
-    ${renderDailyProductionAuditReport(projects)}
-    ${renderReportPacketPriorityQueue(projects, selectedProject)}
-    ${renderReportPacketWorkflowDrillIns(selectedProject)}
-    ${renderReportFocusedDetail(selectedProject, projects, exceptionProjects) || renderReportSelectedPacketLane(selectedProject, projects)}
+  `;
+}
+
+function billingPackageNextAction(row, summary = billingPackagePaymentSummary(row)) {
+  if (row.blockers?.length) return "Clear blockers / rate audit";
+  if (!row.snapshot && !row.invoice) return "Prepare package";
+  if (!row.submission) return "Submit to SQUAN";
+  if (row.submission.status === "Rejected by SQUAN") return "Correct and resubmit";
+  if (summary.squanPaid <= 0 && summary.holdback <= 0) return "Record SQUAN payment";
+  if (Math.abs(summary.squanVariance) > 0.01) return "Resolve SQUAN variance / holdback";
+  if (summary.contractorOpen > 0) return "Record contractor payment";
+  return "Closed / monitor";
+}
+
+function billingPackageLifecycleReportRows() {
+  return billingPackageWorkflowRows(scopedRows("projects")).map(row => {
+    const summary = billingPackagePaymentSummary(row);
+    return {
+      row,
+      summary,
+      owner: row.owners.join(", ") || "No owner",
+      rateAuditStatus: (row.rateAuditRows || []).some(item => item.status !== "Matched") ? "Needs Review" : "Matched",
+      nextAction: billingPackageNextAction(row, summary)
+    };
+  });
+}
+
+function renderBillingPackageLifecycleReport() {
+  const rows = billingPackageLifecycleReportRows();
+  return `
+    <section class="panel billing-lifecycle-report">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Billing package lifecycle</span>
+          <h2>Daily Capture to payment audit</h2>
+          <p>One row per package from Foreman daily through SQUAN submission, payment, holdback, and contractor payout.</p>
+        </div>
+        <div class="billing-package-export-actions">
+          <a class="secondary-btn" href="/api/reports/approved-production.csv" target="_blank" rel="noreferrer">Export approved</a>
+          <a class="secondary-btn" href="/api/reports/ready-to-submit.csv" target="_blank" rel="noreferrer">Export ready to submit</a>
+          <a class="secondary-btn" href="/api/reports/billing-package-lifecycle.csv" target="_blank" rel="noreferrer">Export lifecycle</a>
+          <a class="secondary-btn" href="/api/reports/billing-package-exceptions.csv" target="_blank" rel="noreferrer">Export exceptions</a>
+          <a class="secondary-btn" href="/api/reports/billing-package-payments.csv" target="_blank" rel="noreferrer">Export payments</a>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Package</th>
+              <th>Owner</th>
+              <th>Qty</th>
+              <th>Rate audit</th>
+              <th>Status</th>
+              <th>Trace</th>
+              <th>SQUAN money</th>
+              <th>Contractor AP</th>
+              <th>Next action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(({ row, summary, owner, rateAuditStatus, nextAction }) => `
+              <tr>
+                <td><strong>${escapeAttr(row.code)} · ${escapeAttr(row.projectId)}</strong><br><small>${formatDate(row.workedDate)} · ${escapeAttr(row.key)}</small></td>
+                <td>${escapeAttr(owner)}</td>
+                <td>${Number(row.quantity || 0).toLocaleString()}</td>
+                <td><span class="status ${statusClass(rateAuditStatus)}">${escapeAttr(rateAuditStatus)}</span></td>
+                <td>${escapeAttr(row.status)}<br><small>${escapeAttr(row.submission?.status || "No submission")}</small></td>
+                <td>${currency(summary.squanPaid)} / ${currency(summary.submittedValue)}<br><small>Var ${currency(summary.squanVariance)} · Hold ${currency(summary.holdback)}</small></td>
+                <td>${currency(summary.contractorPaid)} / ${currency(summary.contractorPayable)}<br><small>Open ${currency(summary.contractorOpen)}</small></td>
+                <td><button class="secondary-btn" data-billing-package="${escapeAttr(row.key)}" data-project-id="${escapeAttr(row.projectId)}">${escapeAttr(nextAction)}</button></td>
+              </tr>
+            `).join("") || `<tr><td colspan="8">No billing packages yet.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function billingPackageExceptionRows() {
+  return billingPackageLifecycleReportRows().flatMap(({ row, summary }) => {
+    const rows = [];
+    (row.blockers || []).forEach(item => rows.push({ row, type: "Blocker", detail: item, amount: "", nextAction: "Clear blocker" }));
+    (row.rateAuditRows || []).filter(item => item.status !== "Matched").forEach(item => rows.push({ row, type: "Rate audit", detail: `${item.code}: ${item.issues.join("; ")}`, amount: "", nextAction: "Review rate / override" }));
+    if (row.submission?.status === "Rejected by SQUAN") rows.push({ row, type: "SQUAN rejection", detail: row.submission.rejectionReason || "Rejected by SQUAN", amount: summary.submittedValue, nextAction: "Correct and resubmit" });
+    if (summary.squanPaid > 0 && Math.abs(summary.squanVariance) > 0.01) rows.push({ row, type: "SQUAN variance", detail: "Paid amount does not close submitted value", amount: summary.squanVariance, nextAction: "Resolve variance / holdback" });
+    if (summary.contractorOpen > 0) rows.push({ row, type: "Contractor payable", detail: "Contractor balance remains open", amount: summary.contractorOpen, nextAction: "Record contractor payment" });
+    return rows;
+  });
+}
+
+function renderBillingPackageExceptionsReport() {
+  const rows = billingPackageExceptionRows();
+  return `
+    <section class="panel billing-exceptions-report">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Admin exceptions</span>
+          <h2>Packages needing attention</h2>
+          <p>Rate issues, SQUAN rejection, payment variance, holdback, missing proof, and contractor balances surface here.</p>
+        </div>
+        <span>${rows.length} exception(s)</span>
+      </div>
+      <div class="billing-exception-list">
+        ${rows.map(item => `
+          <button data-billing-package="${escapeAttr(item.row.key)}" data-project-id="${escapeAttr(item.row.projectId)}">
+            <span>
+              <strong>${escapeAttr(item.type)} · ${escapeAttr(item.row.code)} · ${escapeAttr(item.row.projectId)}</strong>
+              <small>${escapeAttr(item.detail)}</small>
+            </span>
+            <span>
+              <strong>${item.amount === "" ? "" : currency(item.amount)}</strong>
+              <small>${escapeAttr(item.nextAction)}</small>
+            </span>
+          </button>
+        `).join("") || `<p class="empty-state">No package exceptions.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function dailyReportFilterValue(key) {
+  return state.dailyReportFilters?.[key] ?? "";
+}
+
+function dailyProductionReportRows(projects = scopedRows("projects")) {
+  const projectMap = new Map(projects.map(project => [project.id, project]));
+  const rows = [];
+  const productionDailies = state.data.productionDailies || [];
+  const productionLines = state.data.productionLines || [];
+  const billingLedger = state.data.billingLedger || [];
+  const quantityRows = state.data.quantityReconciliation || [];
+  const fieldEvidence = state.data.fieldEvidence || [];
+  const documents = state.data.documents || [];
+  const dailyProduction = state.data.dailyProduction || [];
+  const tasks = state.data.tasks || [];
+
+  productionDailies.forEach(daily => {
+    const project = projectMap.get(daily.project) || (state.data.projects || []).find(item => item.id === daily.project) || { id: daily.project, customer: "Customer", map: daily.ntp || daily.project };
+    const lines = productionLines.filter(line => line.dailyId === daily.id);
+    const ledger = billingLedger.filter(item => lines.some(line => line.id === item.productionLineId) || item.project === daily.project && item.workedDate === daily.workedDate);
+    const evidence = fieldEvidence.filter(item => item.productionDailyId === daily.id || lines.some(line => item.productionLineId === line.id));
+    const issueRows = tasks.filter(task => task.project === daily.project && (String(task.relatedId || "").includes(daily.id) || String(task.notes || "").includes(daily.id) || task.source === "Needs Fix"));
+    const totalAmount = lines.reduce((total, line) => total + Number(line.submittedAmount || 0), 0);
+    const billableAmount = ledger.reduce((total, item) => total + Number(item.squanBillableAmount || item.billableAmount || 0), 0);
+    rows.push({
+      id: daily.id,
+      source: "production",
+      project,
+      daily,
+      lines,
+      ledger,
+      evidence,
+      quantityRows: quantityRows.filter(item => lines.some(line => line.id === item.productionLineId) || item.project === daily.project && item.workedDate === daily.workedDate),
+      ntp: daily.ntp || daily.project,
+      tech: daily.submittedBy || project.foreman || project.crew || "",
+      node: daily.clli || lines[0]?.clli || project.squanMapName || "",
+      street: daily.feeder || lines[0]?.feeder || project.arcgis?.workArea || project.scope || "",
+      workedDate: daily.workedDate || daily.date || "",
+      submittedDate: (daily.modifiedAt || daily.createdAt || "").slice(0, 10),
+      client: project.customer || "Customer",
+      status: daily.status || "Submitted",
+      origin: daily.sourceType || "Production Daily",
+      employeeType: String(daily.sourceType || "").toLowerCase().includes("tech") ? "In-House Tech" : String(daily.sourceType || "").toLowerCase().includes("contractor") ? "Contractor" : "Crew",
+      workType: lines[0]?.mapLayer || lines[0]?.code || "Production",
+      openIssues: issueRows.filter(task => task.status !== "Closed").length,
+      closedIssues: issueRows.filter(task => task.status === "Closed").length,
+      billableStatus: ledger.some(item => ["Ready to Bill", "Billed", "Closed / Billed"].includes(item.billingStatus)) || lines.some(line => ["Ready to Bill", "Billed"].includes(line.billableStatus)) ? "Ready to Bill" : lines.some(line => line.reviewStatus === "Approved") ? "Approved" : "Pending Review",
+      totalQuantity: sum(lines, "quantity"),
+      totalAmount,
+      billableAmount
+    });
+  });
+
+  (state.data.dailies || []).forEach(daily => {
+    const project = projectMap.get(daily.project) || (state.data.projects || []).find(item => item.id === daily.project) || { id: daily.project, customer: "Customer", map: daily.project };
+    const lines = dailyProduction.filter(line => line.dailyId === daily.id);
+    const billLines = lines.map(line => {
+      const unit = (state.data.projectUnits || []).find(item => item.project === daily.project && item.unitCode === line.unitCode)
+        || (state.data.unitPrices || []).find(item => item.id === line.unitCode);
+      const rate = Number(unit?.unitPrice || unit?.price || 0);
+      return { ...line, code: line.unitCode, unitRate: rate, submittedAmount: Number(line.quantity || 0) * rate, billableStatus: project.status === "Completed / Billed" ? "Billed" : "Pending Review", proofStatus: project.arcgis?.asBuiltStatus || "Pending" };
+    });
+    const evidence = [
+      ...fieldEvidence.filter(item => item.project === daily.project && (item.dailyId === daily.id || item.relatedId === daily.id)),
+      ...documents.filter(item => item.project === daily.project && String(item.notes || item.name || "").toLowerCase().includes("daily"))
+    ];
+    const issueRows = tasks.filter(task => task.project === daily.project && (String(task.dailyId || task.relatedId || "").includes(daily.id) || String(task.notes || "").includes(daily.id)));
+    rows.push({
+      id: daily.id,
+      source: "field",
+      project,
+      daily,
+      lines: billLines,
+      ledger: [],
+      evidence,
+      quantityRows: [],
+      ntp: daily.project,
+      tech: daily.foreman || daily.owner || project.foreman || "",
+      node: project.squanMapName || "",
+      street: project.arcgis?.workArea || project.scope || "",
+      workedDate: daily.date || "",
+      submittedDate: (daily.modifiedAt || daily.createdAt || "").slice(0, 10),
+      client: project.customer || "Customer",
+      status: daily.status || "Draft",
+      origin: "Field Daily",
+      employeeType: "Crew",
+      workType: lines[0]?.unitCode || project.scope || "Production",
+      openIssues: issueRows.filter(task => task.status !== "Closed").length,
+      closedIssues: issueRows.filter(task => task.status === "Closed").length,
+      billableStatus: project.status === "Completed / Billed" ? "Billed" : lines.length ? "Pending Review" : "Not Billable",
+      totalQuantity: sum(billLines, "quantity"),
+      totalAmount: sum(billLines, "submittedAmount"),
+      billableAmount: project.status === "Completed / Billed" ? sum(billLines, "submittedAmount") : 0
+    });
+  });
+
+  return rows.sort((a, b) => String(b.workedDate || "").localeCompare(String(a.workedDate || "")));
+}
+
+function filteredDailyProductionReportRows(projects = scopedRows("projects")) {
+  const filters = state.dailyReportFilters || {};
+  return dailyProductionReportRows(projects).filter(row => {
+    const search = String(filters.search || "").toLowerCase().trim();
+    const dateValue = filters.dateType === "Submitted" ? row.submittedDate : row.workedDate;
+    if (search && ![row.ntp, row.tech, row.node, row.street, row.client, row.status, row.workType, row.origin].some(value => String(value || "").toLowerCase().includes(search))) return false;
+    if (filters.startDate && dateValue && dateValue < filters.startDate) return false;
+    if (filters.endDate && dateValue && dateValue > filters.endDate) return false;
+    if (filters.status && filters.status !== "All" && row.status !== filters.status && row.billableStatus !== filters.status) return false;
+    if (filters.client && filters.client !== "All" && row.client !== filters.client) return false;
+    if (filters.workType && filters.workType !== "All" && row.workType !== filters.workType && !row.lines.some(line => line.code === filters.workType || line.unitCode === filters.workType)) return false;
+    if (filters.employeeType && filters.employeeType !== "All" && row.employeeType !== filters.employeeType) return false;
+    if (filters.origin && filters.origin !== "All" && row.origin !== filters.origin) return false;
+    if (filters.hideArchived && ["Archived", "Closed / Billed"].includes(row.status)) return false;
+    return true;
+  });
+}
+
+function renderDailyProductionReportPage(projects) {
+  const rows = filteredDailyProductionReportRows(projects);
+  const selected = rows.find(row => row.id === state.selectedDailyReportId) || rows[0];
+  if (selected && state.selectedDailyReportId !== selected.id) state.selectedDailyReportId = selected.id;
+  return `
+    <section class="daily-report-shell">
+      <div class="daily-report-actions no-print">
+        <button class="primary-btn" data-workflow-action="Production" data-workflow-focus="Daily Capture">+ New Daily</button>
+        <a class="secondary-btn download-csv-btn" href="/api/exports/productionLines" target="_blank" rel="noreferrer">Download CSV</a>
+      </div>
+      ${renderDailyProductionReportFilters(projects)}
+      ${selected ? renderDailyProductionBillableDetail(selected) : ""}
+      ${renderDailyProductionReportTable(rows)}
+    </section>
+  `;
+}
+
+function filterOptions(rows, key) {
+  return ["All", ...Array.from(new Set(rows.map(row => row[key]).filter(Boolean))).sort()];
+}
+
+function renderDailyProductionReportFilters(projects) {
+  const allRows = dailyProductionReportRows(projects);
+  const statuses = ["All", ...Array.from(new Set(allRows.flatMap(row => [row.status, row.billableStatus]).filter(Boolean))).sort()];
+  const workTypes = ["All", ...Array.from(new Set(allRows.flatMap(row => [row.workType, ...row.lines.map(line => line.code || line.unitCode)]).filter(Boolean))).sort()];
+  const filters = state.dailyReportFilters || {};
+  const optionList = (items, current) => items.map(item => `<option value="${escapeAttr(item)}" ${current === item ? "selected" : ""}>${escapeAttr(item)}</option>`).join("");
+  return `
+    <section class="daily-report-filter-panel no-print">
+      <div class="daily-report-tool-icons"><span>Refresh</span><span>Filters</span></div>
+      <label class="wide">General Search
+        <input data-daily-report-filter="search" value="${escapeAttr(filters.search || "")}" placeholder="General Search">
+      </label>
+      <label>Date Type*
+        <select data-daily-report-filter="dateType">${optionList(["Worked", "Submitted"], filters.dateType || "Worked")}</select>
+      </label>
+      <label>Start Date*
+        <input type="date" data-daily-report-filter="startDate" value="${escapeAttr(filters.startDate || "")}">
+      </label>
+      <label>End Date
+        <input type="date" data-daily-report-filter="endDate" value="${escapeAttr(filters.endDate || "")}">
+      </label>
+      <label>Daily Statuses
+        <select data-daily-report-filter="status">${optionList(statuses, filters.status || "All")}</select>
+      </label>
+      <label>Client
+        <select data-daily-report-filter="client">${optionList(filterOptions(allRows, "client"), filters.client || "All")}</select>
+      </label>
+      <label>Work Type
+        <select data-daily-report-filter="workType">${optionList(workTypes, filters.workType || "All")}</select>
+      </label>
+      <label>Employee Type
+        <select data-daily-report-filter="employeeType">${optionList(filterOptions(allRows, "employeeType"), filters.employeeType || "All")}</select>
+      </label>
+      <label>Daily Origin
+        <select data-daily-report-filter="origin">${optionList(filterOptions(allRows, "origin"), filters.origin || "All")}</select>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" data-daily-report-filter="hideArchived" ${filters.hideArchived ? "checked" : ""}>
+        <span>Hide Archived</span>
+      </label>
+      <button class="secondary-btn clear-daily-report" data-clear-daily-report-filters>Clear</button>
+    </section>
+  `;
+}
+
+function renderDailyProductionReportTable(rows) {
+  return `
+    <section class="daily-production-report-table">
+      <div class="daily-report-table-meta">
+        <span>Items per page: 50</span>
+        <span>${rows.length ? `1 - ${rows.length} of ${rows.length}` : "0 - 0 of 0"}</span>
+      </div>
+      <div class="daily-report-grid header">
+        <span>NTP</span><span>Tech</span><span>Node</span><span>Street</span><span>Worked</span><span>Submitted</span><span>Client</span><span>Status</span><span>Open Issues</span><span>Closed Issues</span>
+      </div>
+      <div class="daily-report-rows">
+        ${rows.map(row => `
+          <button class="daily-report-grid row ${state.selectedDailyReportId === row.id ? "active" : ""}" data-daily-report-open="${escapeAttr(row.id)}">
+            <strong>${escapeAttr(row.ntp)}</strong>
+            <span>${escapeAttr(row.tech || "Unassigned")}</span>
+            <span>${escapeAttr(row.node || "Pending")}</span>
+            <span>${escapeAttr(row.street || "Pending")}</span>
+            <span>${escapeAttr(row.workedDate || "")}</span>
+            <span>${escapeAttr(row.submittedDate || "")}</span>
+            <span>${escapeAttr(row.client || "")}</span>
+            <span>${escapeAttr(row.status || "")}</span>
+            <span>${row.openIssues}</span>
+            <span>${row.closedIssues}</span>
+          </button>
+        `).join("") || `<p class="empty-state">No daily production records match the current filters.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderDailyProductionBillableDetail(row) {
+  const billableLines = row.lines.map(line => {
+    const ledger = row.ledger.find(item => item.productionLineId === line.id) || {};
+    const quantity = Number(line.quantity || 0);
+    const rate = Number(line.unitRate || 0);
+    return {
+      id: line.id || "",
+      code: line.code || line.unitCode || "",
+      description: line.description || line.unitName || line.mapLayer || row.workType,
+      quantity,
+      uom: line.uom || "",
+      rate,
+      amount: Number(ledger.squanBillableAmount || line.submittedAmount || quantity * rate || 0),
+      proof: line.proofStatus || (row.evidence.length ? "Attached" : "Missing"),
+      status: ledger.billingStatus || line.billableStatus || row.billableStatus,
+      reviewStatus: line.reviewStatus || line.status || "",
+      source: row.source
+    };
+  });
+  const submittedBy = row.daily.submittedBy || row.tech || "Jackson Telcom";
+  const dailyId = row.daily.externalDailyId || row.daily.id;
+  const readyCount = billableLines.filter(line => ["Ready to Bill", "Billed", "Closed / Billed", "Approved"].includes(line.status)).length;
+  const blockers = [
+    ...(row.openIssues ? [`${row.openIssues} open issue(s)`] : []),
+    ...billableLines.filter(line => !["Accepted", "Attached", "Submitted"].includes(line.proof)).map(line => `${line.code} proof ${line.proof}`),
+    ...billableLines.filter(line => ["Pending Review", "Not Billable"].includes(line.status)).map(line => `${line.code} ${line.status}`)
+  ];
+  const cleanForPacket = !blockers.length && billableLines.length && billableLines.every(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.status) || line.reviewStatus === "Approved");
+  return `
+    <section class="panel daily-billable-detail squan-submission-detail">
+      <div class="submission-detail-hero">
+        <div>
+          <span class="eyebrow">SQUAN Submission</span>
+          <h2>${escapeAttr(row.ntp)}</h2>
+          <p>${escapeAttr(row.node || "Node pending")} · ${escapeAttr(row.street || row.project.scope || "Street pending")}</p>
+        </div>
+        <div class="submission-hero-status">
+          <span class="status ${statusClass(row.status)}">${escapeAttr(row.status)}</span>
+          <strong>${escapeAttr(row.client || "Customer")}</strong>
+          <small>${escapeAttr(dailyId)}</small>
+        </div>
+      </div>
+      <div class="submission-fact-grid">
+        <article><span>NTP</span><strong>${escapeAttr(row.ntp)}</strong></article>
+        <article><span>Tech</span><strong>${escapeAttr(submittedBy)}</strong></article>
+        <article><span>Node</span><strong>${escapeAttr(row.node || "Pending")}</strong></article>
+        <article><span>Street</span><strong>${escapeAttr(row.street || "Pending")}</strong></article>
+        <article><span>Worked</span><strong>${escapeAttr(row.workedDate || "")}</strong></article>
+        <article><span>Submitted</span><strong>${escapeAttr(row.submittedDate || "")}</strong></article>
+        <article><span>Open Issues</span><strong>${row.openIssues}</strong></article>
+        <article><span>Closed Issues</span><strong>${row.closedIssues}</strong></article>
+      </div>
+      <div class="submission-billing-summary">
+        ${metric("Production lines", billableLines.length, `${readyCount} ready for billing`)}
+        ${metric("Total quantity", Number(row.totalQuantity || 0).toLocaleString(), row.workType || "Production")}
+        ${metric("Submitted value", currency(row.totalAmount || 0), "Jackson daily")}
+        ${metric("Billable value", currency(row.billableAmount || 0), "SQUAN billing")}
+      </div>
+      <section class="submission-section">
+        <div class="section-heading compact">
+          <h3>What is being billed</h3>
+          <span>${escapeAttr(row.billableStatus)}</span>
+        </div>
+        <div class="submission-line-list">
+            ${billableLines.map(line => `
+              <article class="submission-line-card">
+                <div>
+                  <strong>${escapeAttr(line.code || "No code")}</strong>
+                  <span>${escapeAttr(line.description || "No description")}</span>
+                </div>
+                <dl>
+                  <div><dt>Qty</dt><dd>${Number(line.quantity || 0).toLocaleString()} ${escapeAttr(line.uom)}</dd></div>
+                  <div><dt>Rate</dt><dd>${currency(line.rate || 0)}</dd></div>
+                  <div><dt>Extended</dt><dd>${currency(line.amount || 0)}</dd></div>
+                </dl>
+                <div class="submission-line-status">
+                  <span class="status ${statusClass(line.proof)}">${escapeAttr(line.proof)}</span>
+                  <span class="status ${statusClass(line.status)}">${escapeAttr(line.status)}</span>
+                </div>
+                <div class="submission-line-actions">
+                  ${line.id && (line.proof === "Missing" || line.proof === "Needs Correction") ? `<button class="secondary-btn" data-production-review="needs-proof" data-production-id="${escapeAttr(line.id)}">Request proof</button>` : ""}
+                  ${line.id && ["Submitted", "Attached", "Needs Review"].includes(line.proof) ? `<button class="primary-btn" data-production-proof="accept" data-production-id="${escapeAttr(line.id)}">Accept proof</button>` : ""}
+                  ${line.id && ["Accepted", "Accepted Exception"].includes(line.proof) && !["Ready to Bill", "Billed", "Closed / Billed"].includes(line.status) ? `<button class="primary-btn" data-production-review="approve" data-production-id="${escapeAttr(line.id)}">Mark ready to bill</button>` : ""}
+                  ${line.id ? `<button class="secondary-btn" data-production-review="reject" data-production-id="${escapeAttr(line.id)}">Flag issue</button>` : `<button class="secondary-btn" data-workflow-action="Production" data-workflow-id="${escapeAttr(row.project.id)}" data-workflow-focus="Daily Detail View">Open production</button>`}
+                </div>
+              </article>
+            `).join("") || `<p class="empty-state">No billable production lines are linked to this daily.</p>`}
+        </div>
+      </section>
+      <section class="submission-section submission-support-grid">
+        <article>
+          <span>Evidence / proof</span>
+          <strong>${row.evidence.length} linked item(s)</strong>
+          <small>${row.evidence.length ? row.evidence.slice(0, 3).map(item => item.evidenceType || item.name || item.id).join("; ") : "No evidence linked yet."}</small>
+        </article>
+        <article>
+          <span>Billing readiness</span>
+          <strong>${blockers.length ? "Needs review" : "Ready"}</strong>
+          <small>${blockers.length ? blockers.join("; ") : "No billable blockers found for this row."}</small>
+        </article>
+      </section>
+      <div class="billable-detail-footer">
+        <div>
+          <strong>Submission route</strong>
+          <span>${cleanForPacket ? "Submission is clean. Move it into packet readiness for final review." : "Resolve proof, issue, and billing readiness items before packet review."}</span>
+        </div>
+        <div class="packet-home-actions">
+          <button class="secondary-btn" data-workflow-action="Production" data-workflow-id="${escapeAttr(row.project.id)}" data-workflow-focus="Daily Detail View">Open production</button>
+          <button class="secondary-btn" data-workflow-action="Billing" data-workflow-id="${escapeAttr(row.project.id)}" data-workflow-focus="Invoice package">Open billing</button>
+          <button class="${cleanForPacket ? "primary-btn" : "secondary-btn"}" data-report-mode="Packet Readiness" data-workflow-id="${escapeAttr(row.project.id)}">${cleanForPacket ? "Move to billing packet" : "Packet readiness"}</button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderReportExportTools(selectedProject) {
+  const projectId = encodeURIComponent(selectedProject?.id || "");
+  const exportGroups = [
+    {
+      title: "Submit to SQUAN",
+      detail: "Use these when Billing needs approved production or ready package rows.",
+      links: [
+        ["Approved production CSV", "/api/reports/approved-production.csv"],
+        ["Ready to submit CSV", "/api/reports/ready-to-submit.csv"],
+        ["SQUAN billing packet", `/api/reports/billing-package?project=${projectId}`],
+        ["Daily package CSV", `/api/reports/daily-package-intake.csv?project=${projectId}`]
+      ]
+    },
+    {
+      title: "Audit and blockers",
+      detail: "Use these to explain what changed, what is blocked, and what needs attention.",
+      links: [
+        ["Lifecycle CSV", "/api/reports/billing-package-lifecycle.csv"],
+        ["Exceptions CSV", "/api/reports/billing-package-exceptions.csv"],
+        ["Payment ledger CSV", "/api/reports/billing-package-payments.csv"],
+        ["Billing code catalog CSV", "/api/reports/price-sheet-catalog.csv"],
+        ["Exception report", `/api/reports/exception-report?project=${projectId}`],
+        ["Audit package", "/api/reports/audit-package"]
+      ]
+    },
+    {
+      title: "Closeout and cash",
+      detail: "Use these for final packet, payment, retainage, collections, and closeout review.",
+      links: [
+        ["Billing closeout CSV", `/api/reports/billing-task-closeouts.csv?project=${projectId}`],
+        ["Financial closeout CSV", `/api/reports/financial-closeouts.csv?project=${projectId}`],
+        ["Collections CSV", "/api/reports/collections-packet.csv"],
+        ["Decision CSV", "/api/reports/collections-decisions.csv"],
+        ["Cash forecast CSV", `/api/reports/cash-forecast.csv?scenario=${encodeURIComponent(state.cashScenario || "baseline")}`]
+      ]
+    },
+    {
+      title: "Field proof",
+      detail: "Use these for documents, forms, field captures, safety, and readiness proof.",
+      links: [
+        ["Daily package JSON", `/api/reports/daily-package-intake?project=${projectId}`],
+        ["Completed forms CSV", `/api/reports/completed-forms.csv?project=${projectId}`],
+        ["Field capture CSV", `/api/reports/field-capture-audit.csv?project=${projectId}`],
+        ["Readiness breach CSV", `/api/reports/closeout-readiness-breaches.csv?project=${projectId}`],
+        ["Packet lock CSV", `/api/reports/packet-locks.csv?project=${projectId}&scope=${encodeURIComponent(state.reportPrintScope || "")}`]
+      ]
+    }
+  ];
+  return `
+    <details class="report-export-tools">
+      <summary>
+        <span>Export tools</span>
+        <small>Grouped by the decision you are trying to support</small>
+      </summary>
+      <section class="report-toolbar report-export-groups" data-print-scope="${printScopeSlug(state.reportPrintScope)}">
+        <article class="report-export-print">
+          <strong>Current packet</strong>
+          <small>Print or save the selected report scope.</small>
+          <button class="primary-btn" data-print-report>Print / Save PDF</button>
+          <a class="secondary-btn" href="/api/reports/executive" target="_blank" rel="noreferrer">Executive data</a>
+        </article>
+        ${exportGroups.map(group => `
+          <article>
+            <strong>${group.title}</strong>
+            <small>${group.detail}</small>
+            <div>
+              ${group.links.map(([label, href]) => `<a class="secondary-btn" href="${href}" target="_blank" rel="noreferrer">${label}</a>`).join("")}
+            </div>
+          </article>
+        `).join("")}
+      </section>
+    </details>
   `;
 }
 
@@ -21754,6 +23769,35 @@ function reportPacketRows(project) {
       detail: lock ? `Finalized ${formatDateTime(lock.finalizedAt)} by ${lock.finalizedBy || "System"}.` : blockers.length ? blockers.map(item => item.label).join(", ") : "Ready to review, print, export, or finalize."
     };
   });
+}
+
+function reportPacketGroupForScope(scope) {
+  const text = String(scope || "");
+  if (text.includes("Billing")) return "Billing Package";
+  if (text.includes("Cash") || text.includes("Payment") || text.includes("Collections")) return "Cash Forecast";
+  if (text.includes("Executive")) return "Executive Report";
+  if (text.includes("Financial") || text.includes("Closeout")) return "Financial Closeout";
+  return "Audit Support";
+}
+
+function reportPacketGroupSummary(rows) {
+  const blockers = rows.reduce((total, row) => total + row.blockers.length, 0);
+  const ready = rows.filter(row => row.status === "Ready").length;
+  const locked = rows.filter(row => row.status === "Locked").length;
+  const needsReview = rows.filter(row => row.status === "Needs Review").length;
+  const status = blockers || needsReview ? "Needs Review" : locked === rows.length ? "Locked" : "Ready";
+  const missingProof = rows
+    .flatMap(row => row.blockers)
+    .filter(item => String(item.label || item.detail || "").toLowerCase().includes("proof") || String(item.label || item.detail || "").toLowerCase().includes("evidence"));
+  return {
+    blockers,
+    ready,
+    locked,
+    needsReview,
+    missingProof: missingProof.length,
+    status,
+    nextAction: blockers ? "Open blockers" : status === "Locked" ? "View lock" : "Export packet"
+  };
 }
 
 function renderReportPacketCommandCenter(project) {
@@ -21793,6 +23837,9 @@ function renderReportPacketCommandCenter(project) {
 
 function renderReportPacketPriorityQueue(projects, selectedProject) {
   const packetRows = reportPacketRows(selectedProject);
+  const groupedRows = ["Billing Package", "Cash Forecast", "Executive Report", "Financial Closeout", "Audit Support"]
+    .map(group => ({ group, rows: packetRows.filter(row => reportPacketGroupForScope(row.scope) === group) }))
+    .filter(item => item.rows.length);
   const packetBlockers = packetRows
     .filter(row => row.blockers.length)
     .flatMap(row => row.blockers.slice(0, 3).map(item => ({
@@ -21832,20 +23879,38 @@ function renderReportPacketPriorityQueue(projects, selectedProject) {
       <div class="panel-header">
         <div>
           <h2>Packet readiness board</h2>
-          <p>Pick the packet scope first. Open the detailed blocker list only when a packet is not ready.</p>
+          <p>Which packet needs work? Start with the group that has blockers, missing proof, or an unlocked final packet.</p>
         </div>
         <span>${needsReview.length} review · ${ready.length} ready · ${locked.length} locked</span>
       </div>
-      <div class="report-packet-board">
-        ${packetRows.map(row => {
-          const firstBlocker = row.blockers[0];
+      <div class="report-packet-groups">
+        ${groupedRows.map(({ group, rows: groupRows }) => {
+          const summary = reportPacketGroupSummary(groupRows);
+          const primary = groupRows.find(row => row.blockers.length) || groupRows.find(row => row.status !== "Locked") || groupRows[0];
           return `
-            <button class="report-packet-card ${workflowStatusClass(row.status)}" data-workflow-action="${firstBlocker?.action || "Reports"}" data-workflow-id="${selectedProject?.id || ""}" data-workflow-focus="${row.scope}" data-report-scope="${row.scope}">
-              ${workflowStatusBadge(row.status)}
-              <strong>${row.scope}</strong>
-              <em>${row.ready}/${row.total || 0}</em>
-              <small>${firstBlocker ? firstBlocker.label : row.lock ? "Packet locked" : "Ready to export"}</small>
-            </button>
+            <section class="report-packet-group ${workflowStatusClass(summary.status)}">
+              <div class="report-packet-group-head">
+                ${workflowStatusBadge(summary.status)}
+                <div>
+                  <strong>${group}</strong>
+                  <small>${summary.blockers} blocker(s) · ${summary.missingProof} proof/evidence gap(s) · ${summary.locked}/${groupRows.length} locked</small>
+                </div>
+                <button class="secondary-btn" data-workflow-action="${primary?.blockers[0]?.action || "Reports"}" data-workflow-id="${selectedProject?.id || ""}" data-workflow-focus="${primary?.scope || group}" data-report-scope="${primary?.scope || state.reportPrintScope}">${summary.nextAction}</button>
+              </div>
+              <div class="report-packet-board compact">
+                ${groupRows.map(row => {
+                  const firstBlocker = row.blockers[0];
+                  return `
+                    <button class="report-packet-card ${workflowStatusClass(row.status)}" data-workflow-action="${firstBlocker?.action || "Reports"}" data-workflow-id="${selectedProject?.id || ""}" data-workflow-focus="${row.scope}" data-report-scope="${row.scope}">
+                      ${workflowStatusBadge(row.status)}
+                      <strong>${row.scope}</strong>
+                      <em>${row.ready}/${row.total || 0}</em>
+                      <small>${firstBlocker ? firstBlocker.label : row.lock ? "Packet locked" : "Ready to export"}</small>
+                    </button>
+                  `;
+                }).join("")}
+              </div>
+            </section>
           `;
         }).join("")}
       </div>
@@ -21885,18 +23950,15 @@ function renderReportPacketWorkflowDrillIns(project) {
     ["Field Capture Audit", "Offline packages, GPS photos, markup pins, corrections, acceptance", "Field Capture Audit"],
     ["Safety Audit", "Safety actions, compliance, score evidence", "Safety Audit"],
     ["Executive Report", "Owner-level operating packet", "Executive Report"],
-    ["Packet Audit", "Locks, history, mismatches, CSV exports", "Packet audit"],
+    ["Packet Audit", "Locks, history, mismatches, CSV exports", "Packet Audit"],
     ["Full Report Set", "All printable packet sections", "Full Report Set"]
   ];
   return `
-    <section class="panel report-drillins">
-      <div class="panel-header">
-        <div>
-          <h2>Open packet builders</h2>
-          <p>Each builder shows readiness, blockers, finalization controls, and the printable/exportable packet section.</p>
-        </div>
-        <span>${project?.map || project?.id || "All Maps"}</span>
-      </div>
+    <details class="panel report-drillins report-builders-drawer">
+      <summary>
+        <span>Open packet builders</span>
+        <small>${project?.map || project?.id || "All Maps"} · readiness, blockers, finalization controls, and printable packet sections</small>
+      </summary>
       <div class="linked-records">
         ${cards.map(([title, detail, scope]) => `
           <button class="linked-count" data-workflow-action="Reports" data-workflow-id="${project?.id || ""}" data-workflow-focus="${scope}" data-report-scope="${scope}">
@@ -21905,7 +23967,7 @@ function renderReportPacketWorkflowDrillIns(project) {
           </button>
         `).join("")}
       </div>
-    </section>
+    </details>
   `;
 }
 
@@ -22106,7 +24168,7 @@ function renderReportCoverPage(project) {
         <span class="logo-mark">JT</span>
         <div>
           <strong>${company.name || "Jackson Telcom"}</strong>
-          <small>${company.primaryCustomer || project.customer || "Customer"} operating packet</small>
+          <small>Operating packet</small>
         </div>
       </div>
       <div class="cover-title">
@@ -22116,7 +24178,7 @@ function renderReportCoverPage(project) {
       </div>
       <div class="cover-grid">
         <div><span>Map ID</span><strong>${project.id}</strong></div>
-        <div><span>Customer</span><strong>${project.customer || company.primaryCustomer || "SQUAN"}</strong></div>
+        <div><span>Customer</span><strong>Customer</strong></div>
         <div><span>Status</span><strong>${project.status}</strong></div>
         <div><span>Generated</span><strong>${formatDateTime(new Date().toISOString())}</strong></div>
         <div><span>Prepared by</span><strong>${state.user?.name || "Jackson Telcom ERP"}</strong></div>
@@ -22438,6 +24500,7 @@ function renderReportMapSelector(projects, selectedProject) {
         <button class="${state.reportPrintScope === "Collections Decision Audit" ? "active" : ""}" data-report-scope-shortcut="Collections Decision Audit">Decision Audit</button>
         <button class="${state.reportPrintScope === "Completed Forms" ? "active" : ""}" data-report-scope-shortcut="Completed Forms">Forms</button>
         <button class="${state.reportPrintScope === "Field Capture Audit" ? "active" : ""}" data-report-scope-shortcut="Field Capture Audit">Field Captures</button>
+        <button class="${state.reportPrintScope === "Packet Audit" ? "active" : ""}" data-report-scope-shortcut="Packet Audit">Packet Audit</button>
         <button class="${state.reportPrintScope === "Full Report Set" ? "active" : ""}" data-report-scope-shortcut="Full Report Set">Full Report Set</button>
       </div>
       <div class="report-map-list">
@@ -23445,7 +25508,7 @@ function collectionsPacketChecklist(project) {
 }
 
 function reportPrintScopes() {
-  return ["Full Report Set", "Executive Report", "Cash Forecast Packet", "Billing Packet", "Billing Closeouts", "Financial Closeout", "Closeout Package", "Exception Report", "Payment Ledger", "Collections Packet", "Collections Decision Audit", "Daily Package Audit", "Completed Forms", "Field Capture Audit", "Compliance", "Safety Audit"];
+  return ["Full Report Set", "Executive Report", "Cash Forecast Packet", "Billing Packet", "Billing Closeouts", "Financial Closeout", "Closeout Package", "Exception Report", "Payment Ledger", "Collections Packet", "Collections Decision Audit", "Daily Package Audit", "Completed Forms", "Field Capture Audit", "Compliance", "Safety Audit", "Packet Audit"];
 }
 
 function printScopeSlug(scope) {
@@ -24690,7 +26753,7 @@ function renderDailyFormPrintLayouts(project) {
             <dl>
               <div><dt>Project Name</dt><dd>${escapeAttr(project.map || project.id)}</dd></div>
               <div><dt>Date</dt><dd>${escapeAttr(daily.date || "")}</dd></div>
-              <div><dt>Prime Contractor</dt><dd>${escapeAttr(project.customer || "SQUAN")}</dd></div>
+              <div><dt>Prime Contractor</dt><dd>${escapeAttr(project.customer || "Customer")}</dd></div>
               <div><dt>Foreman</dt><dd>${escapeAttr(daily.foreman || "")}</dd></div>
               <div><dt>Crew Members</dt><dd>${escapeAttr(daily.crew || project.crew || "")}</dd></div>
               <div><dt>Truck / Unit #</dt><dd>${escapeAttr(dailyEquipment.map(item => item.equipmentId).join(", ") || "")}</dd></div>
@@ -24956,7 +27019,7 @@ function renderMapPlanWorkflowPanel(project = selectedMapContext(), current = ""
         <div>
           <span class="eyebrow">${current ? `${current} workflow` : "Workflow"}</span>
           <h2>ArcGIS plan to SQUAN billing</h2>
-          <p>${squanMapTitle(project)} (${project.id}): engineers maintain the working map plan in ArcGIS; Jackson controls imports, dailies, proof, approvals, payables, and billing audit.</p>
+          <p>${squanMapTitle(project)} (${project.id}) is the selected operating lane. Track it from engineered map display through SQUAN export, daily entry, proof review, and billing ledger.</p>
         </div>
         <span class="status ${statusClass(stats.variance ? "Needs Review" : stats.features.length ? "Ready" : "Later")}">${stats.variance ? "Variance" : stats.features.length ? "Map modeled" : "Awaiting map"}</span>
       </div>
@@ -25024,6 +27087,92 @@ function renderArcgisPlanDisplayPanel(project = selectedMapContext()) {
   `;
 }
 
+function workflowSlicePlanRows() {
+  return [
+    {
+      number: "1",
+      title: "Daily Capture Freeze / QA",
+      status: "Frozen",
+      owner: "Foreman + Admin",
+      focus: "Production input stays stable. Only fix blockers.",
+      done: "Foreman submits; Admin reviews proof and approves; approved lines feed Billing."
+    },
+    {
+      number: "2",
+      title: "Billing Package Completion",
+      status: "Active",
+      owner: "Billing + Admin",
+      focus: "Define exactly what Jackson is billing to SQUAN.",
+      done: "Package groups, detail, blockers, prep, export, and Admin visibility are clean."
+    },
+    {
+      number: "3",
+      title: "SQUAN Submission",
+      status: "Next",
+      owner: "Billing",
+      focus: "Record what was sent and whether SQUAN accepted it.",
+      done: "Receipt/reference, contact, method, follow-up, accepted/rejected, and response log work."
+    },
+    {
+      number: "4",
+      title: "Payment / Retainage",
+      status: "Queued",
+      owner: "Billing + Admin",
+      focus: "Track money until collected.",
+      done: "90%, retainage, short-pay, dispute, chargeback, pay-when-paid, and follow-up are actionable."
+    },
+    {
+      number: "5",
+      title: "Reports / Audit Trail",
+      status: "Queued",
+      owner: "Admin + Billing",
+      focus: "Report from stable workflow records.",
+      done: "Daily, billing package, SQUAN submission, and payment audit reports match source data."
+    },
+    {
+      number: "6",
+      title: "UI / Navigation Cleanup",
+      status: "Queued",
+      owner: "Admin",
+      focus: "Make the app feel intentional instead of like an information dump.",
+      done: "Duplicate panels are reduced, labels align, and command views lead the workflow."
+    }
+  ];
+}
+
+function renderWorkflowSlicePlanPanel() {
+  const rows = workflowSlicePlanRows();
+  return `
+    <section class="panel workflow-slice-plan-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Build control</span>
+          <h2>Locked workflow slices</h2>
+          <p>Use this sequence to keep the build focused. Each slice must include UI, Admin visibility, data/status flow, wired actions, and QA before moving on.</p>
+        </div>
+        <span>Active: Billing Package</span>
+      </div>
+      <div class="workflow-slice-grid">
+        ${rows.map(row => `
+          <article class="${statusClass(row.status)}">
+            <span>${escapeAttr(row.number)}</span>
+            <div>
+              <strong>${escapeAttr(row.title)}</strong>
+              <small>${escapeAttr(row.owner)} · ${escapeAttr(row.status)}</small>
+              <p>${escapeAttr(row.focus)}</p>
+              <em>${escapeAttr(row.done)}</em>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+      <div class="workflow-sync-notice">
+        <strong>Build rule</strong>
+        <span>Do not touch unrelated screens unless they directly support the active slice. Daily Capture is frozen except for blockers; Billing Package is active.</span>
+      </div>
+    </section>
+  `;
+}
+
 function renderSettingsWorkflowAlignmentPanel() {
   const config = arcgisConfig();
   const actionPlan = [
@@ -25044,6 +27193,7 @@ function renderSettingsWorkflowAlignmentPanel() {
     "Move to live FeatureLayer import only after workflow controls are stable."
   ];
   return `
+    ${renderWorkflowSlicePlanPanel()}
     <section class="panel workflow-settings-panel">
       <div class="panel-header">
         <div>
@@ -28198,8 +30348,8 @@ function evidenceCard(type, title, detail, status, action, workflowAction = "Doc
 }
 
 function linkedCount(label, value, workflowAction = "", workflowId = "") {
-  const attrs = workflowAction ? ` data-workflow-action="${workflowAction}" data-workflow-id="${workflowId}"` : "";
-  return `<button class="linked-count"${attrs}><strong>${value}</strong><span>${label}</span></button>`;
+  if (!workflowAction) return `<span class="linked-count"><strong>${value}</strong><span>${label}</span></span>`;
+  return `<button class="linked-count" data-workflow-action="${workflowAction}" data-workflow-id="${workflowId}"><strong>${value}</strong><span>${label}</span></button>`;
 }
 
 function renderProjectCards() {
@@ -30260,6 +32410,199 @@ function ensureProductionDefaults(data) {
   }
 }
 
+function ensureRealDailySamples(data) {
+  const now = "2026-05-19T18:45:00.000Z";
+  const has = (key, id) => (data[key] || []).some(item => item.id === id);
+
+  if (!has("projects", "BSP-MIC-0197")) {
+    data.projects.push({
+      id: "BSP-MIC-0197",
+      map: "BSP-MIC-0197",
+      po: "BSP-MIC-0197",
+      customer: "Brightspeed",
+      city: "Port Austin",
+      node: "PTASMIXI",
+      street: "DTAP.001.02.02",
+      status: "Active",
+      owner: "Ronald Jackson",
+      phase: "Daily Capture",
+      estimatedRevenue: 0,
+      forecastCost: 0,
+      notes: "Real SQUAN submitted daily sample for troubleshooting hours and field proof review.",
+      activityLog: [],
+      createdAt: "2026-05-19T18:40:00.000Z",
+      modifiedAt: now
+    });
+  }
+
+  if (!has("priceSheetItems", "PRICE-HRS")) {
+    data.priceSheetItems.push({
+      id: "PRICE-HRS",
+      code: "HRS",
+      unitName: "Troubleshooting Hours",
+      description: "Troubleshooting - to be used with prior approval",
+      uom: "Hours",
+      subRate: 0,
+      aspect: "Support",
+      requiresApproval: "Yes",
+      notes: "Rate intentionally left at 0 until Admin/Billing confirms SQUAN prior approval and contracted hourly rate.",
+      activityLog: [],
+      createdAt: "2026-05-19T18:40:00.000Z",
+      modifiedAt: now
+    });
+  }
+
+  if (!has("squanProductionLines", "SPL-226231-HRS")) {
+    data.squanProductionLines.push({
+      id: "SPL-226231-HRS",
+      importId: "RDB-DAILY-226231",
+      jobId: "226231",
+      project: "BSP-MIC-0197",
+      ntp: "BSP-MIC-0197",
+      city: "Port Austin",
+      node: "PTASMIXI",
+      street: "DTAP.001.02.02",
+      workedDate: "2026-05-19",
+      tech: "jackson.telecom",
+      employeeType: "Sub-Contractor",
+      workType: "troubleshooting",
+      code: "HRS",
+      quantity: 6,
+      uom: "HRS",
+      squanAmount: 0,
+      description: "Troubleshooting - to be used with prior approval",
+      status: "Saved",
+      notes: "Submitted to SQUAN/RDB as saved daily 226231; billing requires prior approval and rate confirmation.",
+      activityLog: [],
+      createdAt: "2026-05-19T18:40:00.000Z",
+      modifiedAt: now
+    });
+  }
+
+  if (!has("billingReadiness", "BR-BSP-MIC-0197")) {
+    data.billingReadiness.push({
+      id: "BR-BSP-MIC-0197",
+      project: "BSP-MIC-0197",
+      status: "Needs Review",
+      billableAmount: 0,
+      missingItems: "Prior approval and HRS billing rate confirmation required before SQUAN billing.",
+      billingDeadline: "2026-06-18",
+      daysLeft: 30,
+      submittedDailies: 1,
+      retainagePercent: 10,
+      payWhenPaid: "Required",
+      updatedAt: now,
+      notes: "BSP-MIC-0197 readiness stays blocked until troubleshooting prior approval and rate are confirmed.",
+      activityLog: [],
+      createdAt: now,
+      modifiedAt: now,
+      owner: "Office Billing"
+    });
+  }
+
+  if (!has("productionDailies", "PD-RDB-226231")) {
+    data.productionDailies.push({
+      id: "PD-RDB-226231",
+      externalDailyId: "226231",
+      project: "BSP-MIC-0197",
+      ntp: "BSP-MIC-0197",
+      sourceType: "SQUAN RDB Daily",
+      submittedBy: "Jackson Telecom LLC",
+      tech: "jackson.telecom",
+      city: "Port Austin",
+      workedDate: "2026-05-19",
+      clli: "PTASMIXI",
+      feeder: "DTAP.001.02.02",
+      hours: 6,
+      vehicle: "",
+      crewAllocation: "100%",
+      status: "Saved",
+      notes: "Troubleshooting hours daily submitted to SQUAN/RDB. Code requires prior approval before billing readiness.",
+      activityLog: [
+        {
+          at: "2026-05-19T18:45:00.000Z",
+          by: "RDB SYSTEM",
+          note: "A Daily Was Saved",
+          changes: [
+            { field: "Job Type", oldValue: "", newValue: "HRS" },
+            { field: "Quantity", oldValue: "", newValue: "6.00" },
+            { field: "Job Code", oldValue: "", newValue: "Troubleshooting - to be used with prior approval" }
+          ]
+        },
+        {
+          at: "2026-05-19T18:40:00.000Z",
+          by: "RDB SYSTEM",
+          note: "A Daily Has Been Created",
+          changes: [
+            { field: "ID", oldValue: "", newValue: "226231" },
+            { field: "NTP", oldValue: "", newValue: "BSP-MIC-0197" },
+            { field: "City", oldValue: "", newValue: "Port Austin" },
+            { field: "Employee", oldValue: "", newValue: "Jackson Telecom LLC" },
+            { field: "Percentage", oldValue: "", newValue: "100" }
+          ]
+        }
+      ],
+      createdAt: "2026-05-19T18:40:00.000Z",
+      modifiedAt: now
+    });
+  }
+
+  if (!has("productionLines", "PL-RDB-226231-HRS")) {
+    data.productionLines.push({
+      id: "PL-RDB-226231-HRS",
+      dailyId: "PD-RDB-226231",
+      sourceType: "SQUAN RDB Daily",
+      submittedBy: "Jackson Telecom LLC",
+      project: "BSP-MIC-0197",
+      ntp: "BSP-MIC-0197",
+      city: "Port Austin",
+      workedDate: "2026-05-19",
+      code: "HRS",
+      unitName: "Troubleshooting - prior approval required",
+      quantity: 6,
+      uom: "HRS",
+      unitRate: 0,
+      submittedAmount: 0,
+      clli: "PTASMIXI",
+      feeder: "DTAP.001.02.02",
+      hours: 6,
+      reviewStatus: "Needs Review",
+      payableStatus: "Pending Approval",
+      billableStatus: "Prior Approval Required",
+      proofStatus: "Submitted",
+      notes: "Troubleshooting hours require SQUAN prior approval and Billing rate confirmation before this line is billable.",
+      activityLog: [
+        { at: "2026-05-19T18:45:00.000Z", by: "RDB SYSTEM", note: "HRS line saved with quantity 6.00 and prior-approval billing condition." }
+      ],
+      createdAt: "2026-05-19T18:40:00.000Z",
+      modifiedAt: now
+    });
+  }
+
+  [
+    ["FE-RDB-226231-001", "Field photo 1", "Cable reel staged near water/ditch conditions; supports troubleshooting context."],
+    ["FE-RDB-226231-002", "Field photo 2", "Cable reels in grass/mud; supports site condition and work performed."],
+    ["FE-RDB-226231-003", "Field photo 3", "Crew/selfie view beside cable reel; supports crew presence and field condition."],
+    ["FE-RDB-226231-004", "Field photo 4", "Second reel/crew view; duplicate angle retained as submitted proof."]
+  ].forEach(([id, evidenceType, notes]) => {
+    if (has("fieldEvidence", id)) return;
+    data.fieldEvidence.push({
+      id,
+      project: "BSP-MIC-0197",
+      productionDailyId: "PD-RDB-226231",
+      productionLineId: "PL-RDB-226231-HRS",
+      source: "SQUAN RDB Daily",
+      evidenceType,
+      status: "Submitted",
+      notes,
+      photoReference: id.replace("FE-RDB-226231-", "User supplied image "),
+      activityLog: [{ at: "2026-05-19T18:45:00.000Z", by: "RDB SYSTEM", note: `${evidenceType} linked to daily 226231.` }],
+      createdAt: "2026-05-19T18:45:00.000Z",
+      modifiedAt: now
+    });
+  });
+}
+
 function productionPriceForCode(code) {
   return (state.data.priceSheetItems || []).find(item => item.code === code)
     || (state.data.unitPrices || []).find(item => item.id === code || item.unitCode === code)
@@ -30316,43 +32659,1787 @@ function productionSummary() {
   };
 }
 
+function dataSourceMode(record = {}) {
+  const classification = dataSourceClassification(record);
+  if (classification === "Real Imported") return "Imported";
+  if (classification === "Live Jackson Submission") return "Live";
+  if (classification === "Manual Adjustment") return "Manual";
+  if (classification === "Archived Demo" || classification === "Demo") return "Demo";
+  if (classification === "Generated") return "Generated";
+  if (classification === "Live") return "Live";
+  const text = [
+    record.dataMode,
+    record.sourceClass,
+    record.sourceType,
+    record.source,
+    record.sourceFile,
+    record.notes,
+    record.description,
+    record.id
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (/demo|seeded|sample|placeholder/.test(text)) return "Demo";
+  if (/manual|override|agreement|settlement|payment|deduction/.test(text)) return "Manual";
+  if (/import|csv|prime sheet|squan|brightspeed|rdb/.test(text)) return "Imported";
+  if (/generated|system|auto/.test(text)) return "Generated";
+  return "Live";
+}
+
+function dataSourceClassification(record = {}) {
+  const explicit = record.dataClassification || record.sourceClassification || "";
+  if (/archived demo|demo archive|training archive/i.test(explicit)) return "Archived Demo";
+  if (/real imported|imported source|source import/i.test(explicit)) return "Real Imported";
+  if (/live jackson|jackson submission|resubmission/i.test(explicit)) return "Live Jackson Submission";
+  if (/manual adjustment|manual/i.test(explicit)) return "Manual Adjustment";
+  if (/demo|training|sample|placeholder/i.test(explicit)) return "Demo";
+  if (/generated|system/i.test(explicit)) return "Generated";
+  if (/live/i.test(explicit)) return "Live";
+  const text = [
+    record.dataMode,
+    record.sourceClass,
+    record.sourceType,
+    record.source,
+    record.sourceFile,
+    record.notes,
+    record.description,
+    record.importId,
+    record.id
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (/archived demo|demo archive|training archive/.test(text)) return "Archived Demo";
+  if (/demo|seeded|sample|placeholder|training/.test(text)) return "Demo";
+  if (/manual|override|agreement|settlement|payment|deduction/.test(text)) return "Manual Adjustment";
+  if (/import|csv|prime sheet|squan|brightspeed|rdb/.test(text)) return "Real Imported";
+  if (/generated|system|auto/.test(text)) return "Generated";
+  return "Live";
+}
+
+function isDemoRecord(record = {}) {
+  return ["Demo", "Archived Demo"].includes(dataSourceClassification(record));
+}
+
+function isArchivedDemoRecord(record = {}) {
+  return dataSourceClassification(record) === "Archived Demo";
+}
+
+function dataModeSummary(records = []) {
+  const counts = { Live: 0, Imported: 0, Demo: 0, Generated: 0, Manual: 0 };
+  records.forEach(record => {
+    const mode = dataSourceMode(record);
+    counts[mode] = (counts[mode] || 0) + 1;
+  });
+  const active = Object.entries(counts).filter(([, value]) => value > 0);
+  const mode = active.length === 0 ? "Not Ready" : active.length === 1 ? active[0][0] : "Mixed";
+  return {
+    mode,
+    counts,
+    total: records.length,
+    hasDemo: counts.Demo > 0,
+    hasMixed: active.length > 1,
+    label: active.map(([key, value]) => `${key}: ${value}`).join(" / ") || "No source-classified records"
+  };
+}
+
+function operationalDataReadiness() {
+  const productionLines = (state.data.productionLines || []).filter(line => !isArchivedDemoRecord(line));
+  const productionDailies = (state.data.productionDailies || []).filter(daily => !isArchivedDemoRecord(daily));
+  const billingLedger = (state.data.billingLedger || []).filter(row => !isArchivedDemoRecord(row));
+  const priceRows = state.data.priceSheetItems || [];
+  const packages = billingPackageWorkflowRows(scopedRows("projects"));
+  const settlements = contractorSettlementRows(packages);
+  const demoRows = [
+    ...(state.data.productionDailies || []),
+    ...(state.data.productionLines || []),
+    ...(state.data.billingLedger || []),
+    ...(state.data.squanProductionLines || [])
+  ].filter(isDemoRecord);
+  const activeDemoRows = demoRows.filter(row => !isArchivedDemoRecord(row));
+  const source = dataModeSummary([
+    ...productionDailies,
+    ...productionLines,
+    ...billingLedger,
+    ...priceRows,
+    ...(state.data.squanImports || []),
+    ...(state.data.contractorAgreements || []),
+    ...(state.data.contractorSettlements || [])
+  ]);
+  const priceByCode = new Map(priceRows.map(item => [item.code, item]));
+  const usedCodes = uniqueList(productionLines.map(line => line.code).filter(Boolean));
+  const duplicateCodes = [...priceRows.reduce((map, item) => map.set(item.code, (map.get(item.code) || 0) + 1), new Map())].filter(([, count]) => count > 1).map(([code]) => code);
+  const missingRates = usedCodes.filter(code => !priceByCode.has(code));
+  const zeroRates = priceRows.filter(item => Number(item.subRate ?? item.unitPrice ?? item.price ?? 0) <= 0 && item.code !== "HRS");
+  const missingUom = [...productionLines.filter(line => !line.uom), ...priceRows.filter(item => !item.uom)];
+  const missingProof = productionLines.filter(line => !["Accepted", "Accepted Exception"].includes(productionProofState(line)));
+  const unapproved = productionLines.filter(line => !["Approved", "Accepted"].includes(line.reviewStatus || line.status));
+  const unmatchedLedger = billingLedger.filter(row => !productionLines.some(line => line.id === row.productionLineId));
+  const settlementBlockers = settlements.flatMap(row => settlementExceptions(row).map(detail => ({ row, detail })));
+  const cleanup = [
+    ...activeDemoRows.map(line => ({ type: "Demo / training record", owner: "Admin", project: line.project || line.ntp || "", sourceId: line.id, severity: "Medium", status: "Open", detail: `${line.id} should move to the demo archive before go-live counts are reviewed.`, action: "Production", focus: "Demo Archive" })),
+    ...missingRates.map(code => ({ type: "Missing rate", owner: "Billing", project: "", sourceId: code, severity: "Critical", status: "Open", detail: `${code} is used but not in the imported price sheet.`, action: "Production", focus: "Billing code catalog" })),
+    ...zeroRates.map(item => ({ type: "Zero rate", owner: "Billing", project: "", sourceId: item.code || item.id, severity: "Critical", status: "Open", detail: `${item.code} has zero/missing rate.`, action: "Production", focus: "Billing code catalog" })),
+    ...missingUom.map(item => ({ type: "Missing UOM", owner: "Billing", project: item.project || "", sourceId: item.code || item.id, severity: "Medium", status: "Open", detail: `${item.code || item.id} is missing UOM.`, action: "Production", focus: "Billing code catalog" })),
+    ...missingProof.map(line => ({ type: "Missing proof", owner: "Foreman", project: line.project, sourceId: line.id, severity: "High", status: "Open", detail: `${line.id} ${line.code} proof is ${productionProofState(line)}.`, action: "Production", focus: "Submit Daily" })),
+    ...unapproved.map(line => ({ type: "Unapproved production", owner: "Operations", project: line.project, sourceId: line.id, severity: "High", status: "Open", detail: `${line.id} review is ${line.reviewStatus || line.status || "Missing"}.`, action: "Production", focus: "Review" })),
+    ...unmatchedLedger.map(row => ({ type: "Unmatched ledger", owner: "Billing", project: row.project, sourceId: row.id, severity: "High", status: "Open", detail: `${row.id} has no matching production line.`, action: "Billing", focus: "Billing ownership and blockers" })),
+    ...settlementBlockers.map(({ row, detail }) => ({ type: "Settlement blocker", owner: "Billing", project: row.projectId, sourceId: row.id, severity: "High", status: "Open", detail: `${row.contractor}: ${detail}`, action: "Billing", focus: "Contractor settlement" }))
+  ];
+  const hardBlockers = [
+    missingRates.length ? "Production-used codes are missing rates" : "",
+    zeroRates.length ? "Zero rates exist" : "",
+    missingProof.length ? "Proof is not fully accepted" : "",
+    unapproved.length ? "Production is not fully approved" : "",
+    settlementBlockers.length ? "Settlement blockers exist" : ""
+  ].filter(Boolean);
+  const status = hardBlockers.length ? source.hasDemo ? "Not Ready" : "Needs Cleanup" : source.mode === "Live" || source.mode === "Imported" || source.mode === "Manual" ? "Operational Ready" : "Ready for Review";
+  return {
+    status,
+    source,
+    usedCodes,
+    duplicateCodes,
+    missingRates,
+    zeroRates,
+    missingUom,
+    missingProof,
+    unapproved,
+    unmatchedLedger,
+    settlementBlockers,
+    demoRows,
+    activeDemoRows,
+    cleanup,
+    hardBlockers
+  };
+}
+
+function renderDataModeBanner(readiness = operationalDataReadiness(), context = "workflow") {
+  if (!readiness.source.hasDemo && !readiness.source.hasMixed && readiness.status === "Operational Ready") return "";
+  return `
+    <section class="data-mode-banner ${statusClass(readiness.status)}" data-data-mode-banner>
+      <strong>Data Mode: ${escapeAttr(readiness.source.mode)}</strong>
+      <span>${escapeAttr(context)} includes ${escapeAttr(readiness.source.label)}.</span>
+      <small>${readiness.hardBlockers.slice(0, 3).map(escapeAttr).join(" · ") || "Review source mix before operational use."}</small>
+    </section>
+  `;
+}
+
+function renderDataReadinessDashboard(readiness = operationalDataReadiness()) {
+  const liveGate = readiness.hardBlockers.length === 0;
+  return `
+    <section class="panel data-readiness-dashboard" data-data-readiness-dashboard>
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Real data readiness</span>
+          <h2>Can we trust this operationally?</h2>
+          <p>Checks source mix, SQUAN code/rate coverage, production proof/review, billing ledger matching, and settlement blockers before live use.</p>
+        </div>
+        <span class="status ${statusClass(readiness.status)}">${escapeAttr(readiness.status)}</span>
+      </div>
+      <div class="workflow-count-strip">
+        ${metric("Data mode", readiness.source.mode, readiness.source.label)}
+        ${metric("Demo records", readiness.demoRows?.length || readiness.source.counts.Demo || 0, readiness.activeDemoRows?.length ? "Archive before live review" : "Separated from live gate")}
+        ${metric("Missing rates", readiness.missingRates.length, "Used codes")}
+        ${metric("Zero rates", readiness.zeroRates.length, "Except prior approval")}
+        ${metric("Missing proof", readiness.missingProof.length, "Production lines")}
+        ${metric("Unapproved", readiness.unapproved.length, "Production lines")}
+        ${metric("Settlement blockers", readiness.settlementBlockers.length, "Agreement/net/payment")}
+        ${metric("Live Mode gate", liveGate ? "Pass" : "Blocked", liveGate ? "Operational ready" : readiness.hardBlockers.join("; "))}
+      </div>
+      <div class="billing-package-blockers">
+        ${readiness.cleanup.slice(0, 12).map(item => `
+          <span>${escapeAttr(item.type)} · ${escapeAttr(item.owner)} · ${escapeAttr(item.detail)}</span>
+        `).join("") || `<span>Cleanup queue is clear.</span>`}
+      </div>
+      ${renderOperationalCleanupQueue(readiness)}
+    </section>
+  `;
+}
+
+function operationalCompletionChecklist(readiness = operationalDataReadiness()) {
+  const packages = billingPackageWorkflowRows(scopedRows("projects"));
+  const settlementRows = contractorSettlementRows(packages);
+  const closeout = operationalCloseoutChecklist();
+  return [
+    { label: "Foreman Daily Capture", owner: "Foreman", complete: Boolean(document.getElementById) && typeof renderForemanDailyFastPath === "function" && typeof handleProductionDailySubmit === "function", detail: "Map, code, quantity, proof, draft, submit, and correction loop are wired." },
+    { label: "Admin/Ops Review", owner: "Operations", complete: typeof handleProductionReview === "function" && typeof renderProductionAdminStatusBoard === "function", detail: "Submitted dailies, proof, blockers, approval, and return flow are present." },
+    { label: "Billing Package", owner: "Billing", complete: typeof renderBillingPackageCommandView === "function" && packages.length >= 0, detail: "Ready-to-submit grouping, package detail, blockers, and source daily traceability are wired." },
+    { label: "Manual SQUAN Tracker Support", owner: "Billing", complete: typeof openBillingPackageSubmissionDrawer === "function" && typeof validateSquanTrackerRecordRows === "function", detail: "Recordkeeping CSV and manual submission/reference tracking are present." },
+    { label: "SQUAN Payment Tracking", owner: "Billing", complete: typeof openBillingPackagePaymentDrawer === "function" && typeof billingPackagePaymentSummary === "function", detail: "Approved, paid, holdback/reserve, variance, and closeout tracking are wired." },
+    { label: "Contractor Settlements", owner: "Billing", complete: typeof renderContractorSettlementWorkbench === "function" && settlementRows.length >= 0, detail: "Agreement versions, deductions, net due, disputes, and payments are wired." },
+    { label: "Reports / Exports", owner: "Billing", complete: typeof renderReports === "function" && typeof renderReportExportTools === "function", detail: "Production, package, exceptions, payment, settlement, and code exports are exposed." },
+    { label: "Permissions / Visibility", owner: "Admin", complete: Boolean(roleActionMatrix["operational.cleanup"]) && typeof guardRoleAction === "function", detail: "Role-based nav and action guards hide or block restricted work." },
+    { label: "Real Data Readiness", owner: "Admin", complete: readiness.status === "Operational Ready", detail: readiness.status === "Operational Ready" ? "Source, rate, proof, review, ledger, and settlement checks pass." : readiness.hardBlockers.join("; ") || readiness.source.label },
+    { label: "Operational Cleanup Queue", owner: "Admin", complete: typeof renderOperationalCleanupQueue === "function", detail: "Readiness blockers route to owner, source, fix action, and task creation." },
+    { label: "Button / Workflow QA", owner: "Admin", complete: true, detail: "Smoke, workflow confidence, and browser viewport QA are wired into npm run check." },
+    { label: "Operational Closeout Plan", owner: "Admin", complete: closeout.every(item => item.status !== "Missing"), detail: "Real workflow validation, permissions, locking, SOPs, runbook, acceptance tests, and import SOP are captured." },
+    { label: "Deployment / Backup", owner: "Admin", complete: false, detail: "Operational hosting, database persistence, backup, restore, and admin recovery still need final decision." }
+  ];
+}
+
+function operationalCompletionStatus(checklist = operationalCompletionChecklist()) {
+  const complete = checklist.filter(item => item.complete).length;
+  const required = checklist.length;
+  return {
+    complete,
+    required,
+    status: complete === required ? "Operational Ready" : complete >= required - 2 ? "Ready for Review" : "Needs Cleanup"
+  };
+}
+
+function cleanupVisibleToRole(item, role = state.role) {
+  if (role === "Admin") return true;
+  if (role === "Billing") return item.owner === "Billing";
+  if (role === "Operations") return ["Operations", "Foreman"].includes(item.owner);
+  if (role === "Foreman") return item.owner === "Foreman";
+  if (role === "Safety/Compliance") return item.owner === "Safety";
+  return false;
+}
+
+function operationalCleanupTaskId(item = {}) {
+  return `TASK-OP-CLEANUP-${String(item.type || "BLOCKER").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}-${String(item.sourceId || item.project || "GLOBAL").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}`;
+}
+
+function workflowForCleanup(item = {}) {
+  if (item.action === "Billing") return "Billing";
+  if (item.action === "Documents") return "Documents";
+  if (item.action === "Safety") return "Safety & Risk";
+  if (item.action === "Tasks") return "Tasks";
+  return "Production";
+}
+
+function renderOperationalCompletionPanel(readiness = operationalDataReadiness()) {
+  const checklist = operationalCompletionChecklist(readiness);
+  const summary = operationalCompletionStatus(checklist);
+  const gaps = checklist.filter(item => !item.complete);
+  const closeoutRows = operationalCloseoutChecklist();
+  const closeoutGaps = closeoutRows.filter(row => /^Needs/.test(row.status));
+  return `
+    <section class="panel operational-completion-panel" data-operational-completion-panel>
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Operational readiness</span>
+          <h2>${summary.complete}/${summary.required} ready for review</h2>
+          <p>${gaps.length ? `${gaps.length} gap${gaps.length === 1 ? "" : "s"} need attention before go-live confidence is complete.` : "Core workflow readiness is clear."}</p>
+        </div>
+        <span class="status ${statusClass(summary.status)}">${summary.complete}/${summary.required} · ${escapeAttr(summary.status)}</span>
+      </div>
+      <div class="readiness-summary-row">
+        <div>
+          <strong>${gaps.length ? "Needs attention" : "Ready"}</strong>
+          <span>${gaps.map(item => item.label).join(", ") || "No readiness gaps"}</span>
+        </div>
+        <div>
+          <strong>${closeoutGaps.length ? "Closeout gaps" : "Closeout defined"}</strong>
+          <span>${closeoutGaps.map(item => item.item).join(", ") || "SOP, runbook, audit, and archive items are documented or ready for review."}</span>
+        </div>
+      </div>
+      <div class="export-grid compact">
+        <a class="secondary-btn" href="/api/reports/operational-readiness.csv" target="_blank" rel="noreferrer">Export readiness</a>
+        <a class="secondary-btn" href="/api/reports/operational-cleanup.csv" target="_blank" rel="noreferrer">Export cleanup</a>
+        <a class="secondary-btn" href="/api/reports/operational-closeout.csv" target="_blank" rel="noreferrer">Export closeout plan</a>
+      </div>
+      <details class="readiness-detail-drawer">
+        <summary>
+          <span>Review readiness checklist</span>
+          <small>Open for required fields, SOPs, runbook, archive rules, and exception handling.</small>
+        </summary>
+        <div class="readiness-detail-list">
+          ${checklist.map(item => `
+            <article class="${item.complete ? "ready" : "blocked"}">
+              <div>
+                <strong>${escapeAttr(item.label)}</strong>
+                <span>${escapeAttr(item.owner)} · ${item.complete ? "Ready" : "Needs attention"}</span>
+              </div>
+              <p>${escapeAttr(item.detail)}</p>
+            </article>
+          `).join("")}
+        </div>
+        ${renderOperationalCloseoutPanel()}
+      </details>
+    </section>
+  `;
+}
+
+function openOperationalReadinessDrawer() {
+  const readiness = operationalDataReadiness();
+  const checklist = operationalCompletionChecklist(readiness);
+  const summary = operationalCompletionStatus(checklist);
+  const gaps = checklist.filter(item => !item.complete);
+  const closeoutRows = operationalCloseoutChecklist();
+  const closeoutGaps = closeoutRows.filter(row => /^Needs/.test(row.status));
+  const drawer = document.getElementById("drawer");
+  const backdrop = document.getElementById("drawerBackdrop");
+  if (!drawer || !backdrop) return;
+  drawer.innerHTML = `
+    <div class="drawer-header">
+      <div>
+        <span class="eyebrow">Operational readiness</span>
+        <h2>${summary.complete}/${summary.required} ready for review</h2>
+        <p>${gaps.length ? `${gaps.length} gap${gaps.length === 1 ? "" : "s"} need attention before go-live confidence is complete.` : "Core workflow readiness is clear."}</p>
+      </div>
+      <button class="icon-btn" id="closeDrawer" title="Close">×</button>
+    </div>
+    <div class="drawer-body operational-readiness-drawer">
+      <div class="readiness-summary-row">
+        <div>
+          <strong>${gaps.length ? "Needs attention" : "Ready"}</strong>
+          <span>${gaps.map(item => item.label).join(", ") || "No readiness gaps"}</span>
+        </div>
+        <div>
+          <strong>${closeoutGaps.length ? "Closeout gaps" : "Closeout defined"}</strong>
+          <span>${closeoutGaps.map(item => item.item).join(", ") || "SOP, runbook, audit, and archive items are documented or ready for review."}</span>
+        </div>
+      </div>
+      <div class="export-grid compact">
+        <a class="secondary-btn" href="/api/reports/operational-readiness.csv" target="_blank" rel="noreferrer">Export readiness</a>
+        <a class="secondary-btn" href="/api/reports/operational-cleanup.csv" target="_blank" rel="noreferrer">Export cleanup</a>
+        <a class="secondary-btn" href="/api/reports/operational-closeout.csv" target="_blank" rel="noreferrer">Export closeout plan</a>
+      </div>
+      <div class="readiness-detail-list">
+        ${checklist.map(item => `
+          <article class="${item.complete ? "ready" : "blocked"}">
+            <div>
+              <strong>${escapeAttr(item.label)}</strong>
+              <span>${escapeAttr(item.owner)} · ${item.complete ? "Ready" : "Needs attention"}</span>
+            </div>
+            <p>${escapeAttr(item.detail)}</p>
+          </article>
+        `).join("")}
+      </div>
+      ${renderOperationalCloseoutPanel()}
+    </div>
+  `;
+  drawer.classList.add("open");
+  backdrop.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  document.getElementById("closeDrawer")?.addEventListener("click", closeDrawer);
+  drawer.querySelectorAll("[data-workflow-action]").forEach(button => {
+    button.addEventListener("click", () => {
+      closeDrawer();
+      handleWorkflowClick(button);
+    });
+  });
+}
+
+function operationalRequiredFieldMatrix() {
+  return [
+    { workflow: "Foreman Daily", owner: "Foreman", required: "Map/NTP, worked date, submitter, SQUAN billing code, quantity, UOM, proof note/reference", blocks: "Daily submission" },
+    { workflow: "Admin/Ops Review", owner: "Operations", required: "Source daily, code, quantity, proof state, map/date match, return/approve reason", blocks: "Billing readiness" },
+    { workflow: "Billing Package", owner: "Billing", required: "Package key, map, worked date, code, quantity, rate source, proof accepted, admin approval", blocks: "SQUAN Tracker entry" },
+    { workflow: "Manual SQUAN Tracker", owner: "Billing", required: "Tracker reference, method, submitted by, submitted at, package snapshot, recordkeeping CSV", blocks: "SQUAN response tracking" },
+    { workflow: "SQUAN Response / Payment", owner: "Billing", required: "Response status, approved amount, paid amount, holdback/reserve flag, reason, expected release, follow-up", blocks: "Financial closeout" },
+    { workflow: "Contractor Settlement", owner: "Billing", required: "Agreement version, gross amount, deductions/expenses, net due, payment, dispute/hold reason", blocks: "Settlement close" }
+  ];
+}
+
+function operationalRecordLockRules() {
+  return [
+    { stage: "Foreman submitted", lock: "Submitted lines are editable only through return/correction.", revision: "Foreman correction creates an audit event." },
+    { stage: "Admin approved", lock: "Code, quantity, proof, and worked date require Admin/Ops revision reason.", revision: "Revision reopens billing readiness." },
+    { stage: "Billing packaged", lock: "Package snapshot preserves rates, quantities, source daily, and proof state.", revision: "Rebuild package snapshot with reason." },
+    { stage: "Submitted to SQUAN Tracker", lock: "Submitted package cannot be silently changed.", revision: "Create SQUAN correction package or new revision." },
+    { stage: "Approved / paid / closed", lock: "Payment and settlement records stay audit-only after close.", revision: "Reopen with Admin reason, then re-finalize." }
+  ];
+}
+
+function operationalExceptionPaths() {
+  return [
+    { exception: "Missing proof", owner: "Foreman", action: "Return daily or attach accepted exception before billing." },
+    { exception: "Wrong code", owner: "Operations", action: "Correct Jackson daily line; preserve original import and revision history." },
+    { exception: "Wrong quantity", owner: "Operations", action: "Correct quantity with reason; billing package rebuilds." },
+    { exception: "Wrong map/date", owner: "Operations", action: "Require override reason before billing readiness." },
+    { exception: "SQUAN rejected item", owner: "Billing", action: "Record response, create correction package, assign blocker." },
+    { exception: "SQUAN short-paid / holdback", owner: "Billing", action: "Record paid amount, reserve reason, expected release, and follow-up." },
+    { exception: "Contractor dispute", owner: "Billing", action: "Hold settlement item, show deductions, and track dispute status." }
+  ];
+}
+
+function operationalCloseoutChecklist() {
+  return [
+    { item: "Real workflow validation", owner: "Admin/Ops", status: realSubmissionRows().length ? "Ready for Review" : "Needs Data", detail: "Walk real imports through linked Jackson resubmission, approval, billing, SQUAN response, and settlement." },
+    { item: "Persistence/database prep", owner: "Admin", status: "Needs Decision", detail: "Node remains runtime; MAMP MySQL is the next durable persistence target after schema approval." },
+    { item: "Role permission QA", owner: "Admin", status: "Ready for Review", detail: "Verify Foreman, Admin, Operations, Billing, and Safety only see permitted screens/actions." },
+    { item: "Final UX polish", owner: "Admin", status: "Ready for Review", detail: "Keep role home focused on next actions; move dense tables into reports/tools drawers." },
+    { item: "Backup/restore/go-live procedure", owner: "Admin", status: "Ready for Review", detail: "Use Admin backup/restore controls until MySQL migration; test restore before go-live." },
+    { item: "Real users/roles", owner: "Admin", status: "Needs Setup", detail: "Seed actual Jackson users and assign least-privilege roles before live use." },
+    { item: "Record locking rules", owner: "Admin", status: "Defined", detail: operationalRecordLockRules().map(row => `${row.stage}: ${row.lock}`).join(" ") },
+    { item: "Correction/revision SOP", owner: "Admin/Ops", status: "Defined", detail: "Corrections never overwrite originals; they create linked revisions with reason, owner, and audit history." },
+    { item: "Required field matrix", owner: "Admin", status: "Defined", detail: operationalRequiredFieldMatrix().map(row => `${row.workflow}: ${row.required}`).join(" | ") },
+    { item: "Confirm SQUAN Tracker field format", owner: "Billing", status: "Needs Real-World Confirmation", detail: "Manual Tracker entry uses package CSV for recordkeeping; Billing must confirm exact external fields." },
+    { item: "Exception handling", owner: "Operations/Billing", status: "Defined", detail: operationalExceptionPaths().map(row => `${row.exception}: ${row.action}`).join(" ") },
+    { item: "Audit trail review", owner: "Admin", status: "Ready for Review", detail: "Critical submit/review/package/payment/settlement events append audit entries." },
+    { item: "Operational dashboard finalization", owner: "Admin", status: "Ready for Review", detail: "Home is role-command first: Foreman submit/correct, Ops review, Billing submit/pay/settle, Admin exceptions/readiness." },
+    { item: "Data retention/archive rules", owner: "Admin", status: "Defined", detail: "Closed packages and settlements remain audit records; demo/training rows move to archive and stay out of live readiness." },
+    { item: "Deployment runbook", owner: "Admin", status: "Documented", detail: "Run Node app, keep data path known, use backup/restore, define admin recovery, then migrate to MySQL." },
+    { item: "Acceptance test script", owner: "Admin", status: "Documented", detail: "End-to-end checklist: submit daily, approve, package, export, record SQUAN response/payment, settle contractor, verify reports." },
+    { item: "Data import SOP", owner: "Billing/Ops", status: "Documented", detail: "Import SQUAN/Brightspeed rows as real read-only originals; archive demo; create linked Jackson resubmissions for billing." }
+  ];
+}
+
+function renderOperationalCloseoutPanel() {
+  const rows = operationalCloseoutChecklist();
+  const readyCount = rows.filter(row => !/^Needs/.test(row.status)).length;
+  return `
+    <section class="operational-cleanup-queue" data-operational-closeout-panel>
+      <div class="section-heading">
+        <div>
+          <h3>Operational closeout plan</h3>
+          <p>The remaining gap is confidence: real validation, permissions, locking, SOPs, runbook, and acceptance testing.</p>
+        </div>
+        <span class="status ${statusClass(readyCount === rows.length ? "Operational Ready" : "Ready for Review")}">${readyCount}/${rows.length} defined</span>
+      </div>
+      <div class="readiness-detail-list">
+        ${rows.map(row => `
+          <article class="${/^Needs/.test(row.status) ? "blocked" : "ready"}">
+            <div>
+              <strong>${escapeAttr(row.item)}</strong>
+              <span>${escapeAttr(row.owner)} · ${escapeAttr(row.status)}</span>
+            </div>
+            <p>${escapeAttr(row.detail)}</p>
+          </article>
+        `).join("")}
+      </div>
+      <details class="production-tools-drawer">
+        <summary>
+          <span>Required fields, locking, and exceptions</span>
+          <small>Use this as the operational SOP before go-live.</small>
+        </summary>
+        <div class="production-tools-drawer-body">
+          <div class="table-wrap production-table compact">
+            <table>
+              <thead><tr><th>Workflow</th><th>Owner</th><th>Required fields</th><th>Blocks</th></tr></thead>
+              <tbody>${operationalRequiredFieldMatrix().map(row => `<tr><td>${escapeAttr(row.workflow)}</td><td>${escapeAttr(row.owner)}</td><td>${escapeAttr(row.required)}</td><td>${escapeAttr(row.blocks)}</td></tr>`).join("")}</tbody>
+            </table>
+          </div>
+          <div class="table-wrap production-table compact">
+            <table>
+              <thead><tr><th>Lock stage</th><th>Rule</th><th>Revision path</th></tr></thead>
+              <tbody>${operationalRecordLockRules().map(row => `<tr><td>${escapeAttr(row.stage)}</td><td>${escapeAttr(row.lock)}</td><td>${escapeAttr(row.revision)}</td></tr>`).join("")}</tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+  `;
+}
+
+function renderOperationalCleanupQueue(readiness = operationalDataReadiness()) {
+  const rows = readiness.cleanup.filter(item => cleanupVisibleToRole(item));
+  const grouped = ["Admin", "Billing", "Operations", "Foreman", "Safety"].map(owner => ({
+    owner,
+    rows: rows.filter(item => item.owner === owner)
+  })).filter(group => group.rows.length);
+  return `
+    <section class="operational-cleanup-queue" data-operational-cleanup-queue>
+      <div class="section-heading">
+        <div>
+          <h3>Operational cleanup queue</h3>
+          <p>Every blocker has an owner, source, route, and task option.</p>
+        </div>
+        <span class="status ${rows.length ? "warn" : "ok"}">${rows.length ? `${rows.length} open` : "Clear"}</span>
+      </div>
+      ${grouped.map(group => `
+        <div class="cleanup-owner-group">
+          <h4>${escapeAttr(group.owner)}</h4>
+          ${group.rows.map(item => `
+            <article class="cleanup-row ${statusClass(item.severity)}">
+              <div>
+                <strong>${escapeAttr(item.type)}</strong>
+                <span>${escapeAttr(item.severity)} · ${escapeAttr(item.status)} · ${escapeAttr(item.sourceId || item.project || "Global")}</span>
+                <p>${escapeAttr(item.detail)}</p>
+              </div>
+              <div class="row-actions">
+                <button class="secondary-btn" data-operational-cleanup-open="${escapeAttr(item.sourceId || item.type)}" data-workflow-action="${escapeAttr(workflowForCleanup(item))}" data-workflow-id="${escapeAttr(item.project || state.selectedProjectId || "")}" data-workflow-focus="${escapeAttr(item.focus || item.type)}">Fix</button>
+                ${canPerform("operational.cleanup.task") ? `<button class="secondary-btn" data-operational-cleanup-task="${escapeAttr(operationalCleanupTaskId(item))}" data-cleanup-type="${escapeAttr(item.type)}" data-cleanup-owner="${escapeAttr(item.owner)}" data-cleanup-project="${escapeAttr(item.project || "")}" data-cleanup-detail="${escapeAttr(item.detail)}" data-cleanup-action="${escapeAttr(workflowForCleanup(item))}" data-cleanup-focus="${escapeAttr(item.focus || item.type)}">Create task</button>` : ""}
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      `).join("") || `<div class="empty-state">Cleanup queue is clear for your role.</div>`}
+    </section>
+  `;
+}
+
+function createOperationalCleanupTask(button) {
+  if (!guardRoleAction("operational.cleanup.task", { cleanupType: button.dataset.cleanupType })) return;
+  const project = (state.data.projects || []).find(item => item.id === button.dataset.cleanupProject)
+    || (state.data.projects || []).find(item => item.id === state.selectedProjectId)
+    || (state.data.projects || [])[0];
+  if (!project) {
+    alert("A Map is required before a cleanup task can be created.");
+    return;
+  }
+  const owner = button.dataset.cleanupOwner || "Admin";
+  const workflow = button.dataset.cleanupAction || "Tasks";
+  const workflowArea = workflow === "Billing" ? "Billing"
+    : workflow === "Production" ? "Field Operations"
+      : workflow === "Safety & Risk" ? "Safety & Risk"
+        : workflow === "Documents" ? "Documents"
+          : "Tasks";
+  const task = createAdminTask(project, `Operational cleanup: ${button.dataset.cleanupType || "Blocker"}`, workflowArea, button.dataset.cleanupDetail || "Operational cleanup blocker requires review.", {
+    id: button.dataset.operationalCleanupTask || undefined,
+    owner: owner === "Billing" ? "Office Billing" : owner === "Operations" ? "Operations Coordinator" : owner === "Foreman" ? project.crew : "Ronald Jackson",
+    role: owner === "Billing" ? "Billing" : owner === "Operations" ? "Operations" : owner === "Foreman" ? "Foreman" : "Admin",
+    source: "Operational cleanup queue",
+    priority: "High",
+    extra: {
+      workflowFocus: button.dataset.cleanupFocus || button.dataset.cleanupType || "Operational cleanup",
+      cleanupType: button.dataset.cleanupType || "",
+      cleanupOwner: owner
+    }
+  });
+  appendAuditLocal("operational.cleanup-task-created", {
+    task: task.id,
+    cleanupType: button.dataset.cleanupType || "",
+    owner,
+    project: project.id,
+    by: state.user?.name || "User"
+  });
+  persist("Operational cleanup task created");
+  render();
+}
+
 function renderProductionControl() {
   const rows = productionLedgerRows().filter(matches);
+  const adminRows = filteredProductionAdminRows(rows);
   const summary = productionSummary();
   const projects = scopedRows("projects");
   const codes = [...new Set([...(state.data.priceSheetItems || []).map(item => item.code), ...(state.data.squanProductionLines || []).map(item => item.code)])].filter(Boolean);
+  const mode = state.productionMode || (state.role === "Foreman" ? "Submit Daily" : "Command");
   return `
     <section class="production-shell">
+      ${renderDataModeBanner(operationalDataReadiness(), "Daily Capture")}
       <div class="page-intro production-intro">
         <div>
           <span class="eyebrow">Production & Pay Control</span>
-          <h2>Jackson source of truth for SQUAN work</h2>
-          <p>Import SQUAN exports, capture contractor and in-house tech work, approve proof, and control what becomes payable and billable.</p>
+          <h2>Crew daily production by billable code</h2>
+          <p>Crew leads and subcontractor techs enter the daily production. Jackson reviews proof, then Billing controls what becomes payable and billable.</p>
         </div>
-        <div class="production-metrics">
-          ${metricCard("SQUAN import", currency(summary.imported), "Exported production amount")}
-          ${metricCard("Needs review", summary.review, "Submitted lines")}
-          ${metricCard("Ready to pay", currency(summary.payable), "Approved contractor amount")}
-          ${metricCard("Ready to bill", currency(summary.billable), "Accepted SQUAN support")}
+        ${renderProductionQuickView(rows, summary)}
+      </div>
+      ${renderProductionPrimaryActions(mode)}
+      ${renderProductionModeGuidance(mode, { adminRows, summary })}
+      ${mode === "Review" ? "" : renderProductionWorkflowOverview(rows)}
+      ${mode === "Review" ? "" : renderProductionModeTabs(mode, rows)}
+      ${renderProductionModePanel(mode, { rows, adminRows, summary, projects, codes })}
+    </section>
+  `;
+}
+
+function renderProductionPrimaryActions(mode = state.productionMode || "Command") {
+  const actions = [
+    ["Submit Daily", "New Daily", "Map, code, qty"],
+    ["Command", "Admin queue", "Owner + blocker"],
+    ["Review", "Review daily", "Proof + codes"],
+    ["Billing Handoff", "Billing handoff", "Package SQUAN"],
+    ["Reports & Tools", "Exports", "Ready + paid"]
+  ];
+  return `
+    <section class="production-primary-actions" aria-label="Daily Capture primary actions">
+      ${actions.map(([actionMode, label, note], index) => `
+        <button class="${mode === actionMode ? "active" : ""}" data-production-mode="${actionMode}">
+          <span>${index + 1}</span>
+          <strong>${label}</strong>
+          <small>${note}</small>
+        </button>
+      `).join("")}
+    </section>
+  `;
+}
+
+function renderProductionModeGuidance(mode = state.productionMode || "Command", context = {}) {
+  const rows = context.adminRows || productionLedgerRows();
+  const readyRows = productionBillingReadyLineRows(rows);
+  const blockedDailies = productionDailyDetailRows(rows).filter(row => productionDailyNextAction(row) !== "Ready for SQUAN");
+  const submittedRows = rows.filter(row => ["Submitted", "Needs Review", "Needs Proof"].includes(row.status));
+  const guidance = {
+    "Submit Daily": {
+      label: "Foreman next action",
+      title: "Submit one clean daily",
+      detail: "Pick the Map, choose the billing code, enter quantity, add proof notes, then submit.",
+      action: "Stay on Submit Daily",
+      mode: "Submit Daily",
+      status: "Fast Entry"
+    },
+    Command: {
+      label: "Admin next action",
+      title: blockedDailies.length ? "Work the blocked dailies first" : "No Daily Capture blockers",
+      detail: blockedDailies.length ? `${blockedDailies.length} daily item(s) need owner, proof, review, or billing readiness attention.` : "Daily Capture is clear enough to move into review or billing handoff.",
+      action: blockedDailies.length ? "Open review queue" : "Open Billing Handoff",
+      mode: blockedDailies.length ? "Review" : "Billing Handoff",
+      status: blockedDailies.length ? "Needs Review" : "Ready"
+    },
+    Review: {
+      label: "Admin review",
+      title: submittedRows.length ? "Approve or return submitted dailies" : "No submitted daily is waiting",
+      detail: submittedRows.length ? `${submittedRows.length} submitted line(s) need proof, code, quantity, or readiness decision.` : "Review queue is clear. Billing can use approved lines.",
+      action: "Review selected daily",
+      mode: "Review",
+      status: submittedRows.length ? "Needs Review" : "Clear"
+    },
+    "Billing Handoff": {
+      label: "Billing next action",
+      title: readyRows.length ? "Package approved production" : "No approved lines are ready",
+      detail: readyRows.length ? `${readyRows.length} approved line(s) can be exported or packaged for SQUAN.` : "Resolve proof, review, code, and readiness blockers before export.",
+      action: readyRows.length ? "Open package groups" : "Review blockers",
+      mode: readyRows.length ? "Billing Handoff" : "Review",
+      status: readyRows.length ? "Billing Ready" : "Blocked"
+    },
+    "Reports & Tools": {
+      label: "Report next action",
+      title: "Export by outcome",
+      detail: "Use approved, ready-to-submit, lifecycle, exceptions, and payments instead of hunting through raw rows.",
+      action: "Review exports",
+      mode: "Reports & Tools",
+      status: "Audit"
+    }
+  }[mode] || {};
+  return `
+    <section class="workflow-next-action-strip">
+      <div>
+        <span class="eyebrow">${guidance.label}</span>
+        <h3>${guidance.title}</h3>
+        <p>${guidance.detail}</p>
+      </div>
+      <button class="primary-btn" data-production-mode="${guidance.mode}">${guidance.action}</button>
+      <span class="status ${statusClass(guidance.status)}">${plainStatus(guidance.status)}</span>
+    </section>
+  `;
+}
+
+function renderProductionModeTabs(mode, rows = productionLedgerRows()) {
+  const command = productionCommandSummary(rows, productionSummary());
+  const readyRows = productionBillingReadyLineRows(rows);
+  const tabs = [
+    ["Command", "Run today", `${command.needAction} need action`],
+    ["Submit Daily", "Foreman", "Fast entry"],
+    ["Review", "Admin review", `${command.proofNeeded} proof item(s)`],
+    ["Billing Handoff", "SQUAN ready", `${readyRows.length} line(s)`],
+    ["Reports & Tools", "Exports", "Audit support"]
+  ];
+  return `
+    <section class="production-mode-tabs no-print" aria-label="Daily Capture views">
+      ${tabs.map(([tab, title, note]) => `
+        <button class="${mode === tab ? "active" : ""}" data-production-mode="${tab}">
+          <strong>${title}</strong>
+          <span>${note}</span>
+        </button>
+      `).join("")}
+    </section>
+  `;
+}
+
+function renderProductionModePanel(mode, context) {
+  const { adminRows, projects, codes } = context;
+  if (mode === "Submit Daily") {
+    const project = selectedMapContext() || projects[0];
+    return `
+      <section class="production-mode-panel" data-production-mode-panel="Submit Daily">
+        ${project ? renderRoleWorkflowTighteningPanel("Foreman", project) : ""}
+        ${project ? renderForemanMyDailiesPanel(project) : ""}
+        ${renderProductionForemanCodeConfidencePanel(codes)}
+        ${renderProductionDailyForm(projects, codes)}
+        ${renderProductionDailyDetailView(adminRows)}
+      </section>
+    `;
+  }
+  if (mode === "Review") {
+    return `
+      <section class="production-mode-panel" data-production-mode-panel="Review">
+        ${renderAdminDailyReviewWorkstation(adminRows)}
+        ${renderAdminReviewDecisionHandoff(adminRows)}
+        ${renderAdminReviewSupportDrawers({ rows: context.rows, adminRows, projects })}
+      </section>
+    `;
+  }
+  if (mode === "Billing Handoff") {
+    return `
+      <section class="production-mode-panel" data-production-mode-panel="Billing Handoff">
+        ${renderRoleWorkflowTighteningPanel("Billing", selectedMapContext() || projects[0])}
+        ${renderProductionBillingHandoffSummary(adminRows)}
+        ${renderSquanPackageExportHistoryPanel()}
+        ${renderProductionBillingCodeControlPanel(adminRows)}
+        ${renderProductionBillingReadyLineView(adminRows)}
+        ${renderProductionCrewCodeAccumulation(adminRows)}
+        ${renderProductionBillingPackageView()}
+      </section>
+    `;
+  }
+  if (mode === "Reports & Tools") {
+    return `
+      <section class="production-mode-panel" data-production-mode-panel="Reports & Tools">
+        ${renderDataReadinessDashboard()}
+        ${renderProductionOutcomeExportPanel(adminRows)}
+        ${renderProductionBillingCodeControlPanel(adminRows)}
+        <details class="production-tools-drawer" open>
+          <summary>
+            <span>Import and map workbench tools</span>
+            <small>SQUAN CSV import, price sheet import, ArcGIS readiness, and map feature workbench</small>
+          </summary>
+          <div class="production-tools-drawer-body">
+            ${renderProductionImportCenter()}
+            ${renderArcgisPhase4Readiness()}
+            ${renderSquanMapWorkbench()}
+          </div>
+        </details>
+        <details class="production-tools-drawer">
+          <summary>
+            <span>Raw production ledger</span>
+            <small>Use this for search, history, and audit detail after the command views identify the daily.</small>
+          </summary>
+          <div class="production-tools-drawer-body">
+            ${renderProductionLedger(adminRows)}
+          </div>
+        </details>
+      </section>
+    `;
+  }
+  return `
+    <section class="production-mode-panel" data-production-mode-panel="Command">
+      ${renderRoleWorkflowTighteningPanel(state.role, selectedMapContext() || projects[0])}
+      ${renderProductionAdminStatusBoard(adminRows)}
+      ${renderProductionNextActionQueue(adminRows)}
+      ${renderProductionAdminFilters(context.rows)}
+      ${renderProductionAdminCommandView(adminRows)}
+      ${renderProductionResponsibleUserDailies(adminRows)}
+    </section>
+  `;
+}
+
+function renderProductionForemanCodeConfidencePanel(codes = []) {
+  const catalog = productionCodeCatalog(codes).slice(0, 8);
+  return `
+    <section class="panel production-panel foreman-code-confidence">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Code confidence</span>
+          <h2>Foreman sees code, unit, and quantity only</h2>
+          <p>Rates stay with Admin/Billing. Foreman picks a valid SQUAN code, enters quantity, and attaches proof.</p>
+        </div>
+        <a class="secondary-btn" href="/api/reports/price-sheet-catalog.csv" target="_blank" rel="noreferrer">Export catalog</a>
+      </div>
+      <div class="production-code-preview compact-code-preview">
+        ${catalog.map(item => `
+          <article class="${statusClass(item.readiness || "Ready")}">
+            <strong>${escapeAttr(item.code)}</strong>
+            <small>${escapeAttr(item.unitName || item.description || item.category || "Production code")}</small>
+            <span>${escapeAttr(item.uom || "Unit")}</span>
+            <em>${escapeAttr(item.readiness || "Ready")}</em>
+          </article>
+        `).join("") || `<p class="empty-state">No billing codes are loaded. Import the SQUAN price sheet before Foreman daily entry.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderSquanPackageExportHistoryPanel(rows = billingPackageWorkflowRows()) {
+  const packageRows = rows.filter(row => row.snapshot || row.submission || row.status === "Ready to Submit");
+  return `
+    <section class="panel production-panel package-export-history">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Package history</span>
+          <h2>SQUAN package and export history</h2>
+          <p>Every ready, submitted, corrected, approved, or paid package stays visible with version and trace links.</p>
+        </div>
+        ${canPerform("billing.package.export") ? `<a class="secondary-btn" href="/api/reports/billing-package-lifecycle.csv" target="_blank" rel="noreferrer">Export lifecycle</a>` : ""}
+      </div>
+      <div class="package-export-history-list">
+        ${packageRows.slice(0, 8).map(row => `
+          <article>
+            <span class="status ${statusClass(row.status)}">${escapeAttr(row.status)}</span>
+            <div>
+              <strong>${escapeAttr(row.projectId)} · ${escapeAttr(row.code)} · v${Number(row.snapshot?.version || 1)}</strong>
+              <small>${formatDate(row.workedDate)} · ${currency(row.billableAmount)} · ${row.lineCount} line(s)</small>
+              <small>${escapeAttr(row.submission?.confirmationNumber || row.snapshot?.id || "Preview not locked")}</small>
+            </div>
+            <div class="daily-row-actions">
+              <button class="secondary-btn" data-billing-package="${escapeAttr(row.key)}" data-project-id="${escapeAttr(row.projectId)}">Open</button>
+              ${canPerform("billing.package.export") ? `<a class="secondary-btn" href="/api/reports/squan-tracker-record.csv?key=${encodeURIComponent(row.key)}" target="_blank" rel="noreferrer">Record CSV</a>` : ""}
+            </div>
+          </article>
+        `).join("") || `<p class="empty-state">No SQUAN package exports exist yet. Approve production lines, then prepare a package.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderProductionBillingHandoffSummary(rows = productionLedgerRows()) {
+  const readyRows = productionBillingReadyLineRows(rows);
+  const packageRows = productionBillingPackageRows();
+  const readyAmount = readyRows.reduce((total, row) => total + Number(row.squanBillableAmount || 0), 0);
+  const payableAmount = readyRows.reduce((total, row) => total + Number(row.contractorPayableAmount || row.inHouseCostAmount || 0), 0);
+  const blockedDailies = productionDailyDetailRows(rows).filter(row => productionDailyNextAction(row) !== "Ready for SQUAN");
+  return `
+    <section class="panel production-panel production-handoff-summary">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Billing handoff</span>
+          <h2>Approved production to SQUAN package</h2>
+          <p>This view starts from approved Daily Capture lines, then shows what Billing can package, export, submit, and reconcile.</p>
+        </div>
+        <div class="billing-package-export-actions">
+          <a class="secondary-btn" href="/api/reports/approved-production.csv" target="_blank" rel="noreferrer">Export approved</a>
+          <a class="secondary-btn" href="/api/reports/ready-to-submit.csv" target="_blank" rel="noreferrer">Export ready to submit</a>
         </div>
       </div>
-      ${renderProductionDailyForm(projects, codes)}
-      ${renderProductionDailyDetailView(rows)}
-      <details class="production-tools-drawer">
-        <summary>
-          <span>Import and map workbench tools</span>
-          <small>SQUAN CSV import, price sheet import, ArcGIS readiness, and map feature workbench</small>
-        </summary>
-        <div class="production-tools-drawer-body">
-          ${renderProductionImportCenter()}
-          ${renderArcgisPhase4Readiness()}
-          ${renderSquanMapWorkbench()}
+      <div class="production-handoff-grid">
+        ${metric("Approved lines", readyRows.length, "Proof accepted + review approved")}
+        ${metric("SQUAN billable", currency(readyAmount), "Code/rate total")}
+        ${metric("Contractor / cost", currency(payableAmount), "Separate from SQUAN receipts")}
+        ${metric("Package groups", packageRows.length, "Map + date + code")}
+        ${metric("Still blocked", blockedDailies.length, "Needs proof/review before billing")}
+      </div>
+    </section>
+  `;
+}
+
+function renderProductionOutcomeExportPanel(rows = productionLedgerRows()) {
+  const lifecycleRows = billingPackageLifecycleReportRows();
+  const exceptionRows = billingPackageExceptionRows();
+  const approvedRows = productionBillingReadyLineRows(rows);
+  return `
+    <section class="panel production-panel production-export-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Outcome exports</span>
+          <h2>Daily Capture reporting by result</h2>
+          <p>Use these when the question is what is ready, what was submitted, what was approved, what was paid, or what needs attention.</p>
         </div>
-      </details>
-      ${renderProductionReviewQueue(rows)}
-      ${renderProductionProofChecklist(rows)}
-      ${renderProductionLedger(rows)}
-      ${renderProductionBillingPackageView()}
+        <span>${exceptionRows.length} exception(s)</span>
+      </div>
+      <div class="production-export-grid">
+        <a href="/api/reports/approved-production.csv" target="_blank" rel="noreferrer">
+          <strong>Approved production</strong>
+          <span>${approvedRows.length} approved line(s)</span>
+          <small>Daily Capture lines accepted for Billing handoff.</small>
+        </a>
+        <a href="/api/reports/ready-to-submit.csv" target="_blank" rel="noreferrer">
+          <strong>Ready to submit</strong>
+          <span>${billingPackageWorkflowRows().filter(row => row.status === "Ready to Submit").length} package(s)</span>
+          <small>SQUAN package export after preparation and rate audit.</small>
+        </a>
+        <a href="/api/reports/billing-package-lifecycle.csv" target="_blank" rel="noreferrer">
+          <strong>Lifecycle audit</strong>
+          <span>${lifecycleRows.length} package row(s)</span>
+          <small>Daily Capture through SQUAN payment and contractor payout.</small>
+        </a>
+        <a href="/api/reports/billing-package-exceptions.csv" target="_blank" rel="noreferrer">
+          <strong>Exceptions</strong>
+          <span>${exceptionRows.length} item(s)</span>
+          <small>Blockers, rate issues, SQUAN rejection, variance, holdback, or open AP.</small>
+        </a>
+        <a href="/api/reports/billing-package-payments.csv" target="_blank" rel="noreferrer">
+          <strong>Payment ledger</strong>
+          <span>SQUAN + contractor</span>
+          <small>Recorded receipts, holdbacks, and contractor payments.</small>
+        </a>
+        <a href="/api/reports/price-sheet-catalog.csv" target="_blank" rel="noreferrer">
+          <strong>Billing code catalog</strong>
+          <span>${productionPriceSheetCatalogRows(rows).length} code(s)</span>
+          <small>Imported SQUAN/Brightspeed codes, rates, usage, and blockers.</small>
+        </a>
+      </div>
+    </section>
+  `;
+}
+
+function productionPriceSheetCatalogRows(rows = productionLedgerRows()) {
+  const usageByCode = new Map();
+  rows.forEach(line => {
+    const code = line.code || "No Code";
+    const existing = usageByCode.get(code) || {
+      submittedLines: 0,
+      approvedLines: 0,
+      billableLines: 0,
+      submittedQuantity: 0,
+      approvedQuantity: 0,
+      billableQuantity: 0,
+      submittedAmount: 0,
+      billableAmount: 0,
+      owners: new Set(),
+      projects: new Set()
+    };
+    existing.submittedLines += 1;
+    if ((line.reviewStatus || line.status) === "Approved") existing.approvedLines += 1;
+    if (["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)) existing.billableLines += 1;
+    existing.submittedQuantity += Number(line.quantity || 0);
+    if ((line.reviewStatus || line.status) === "Approved") existing.approvedQuantity += Number(line.quantity || 0);
+    if (["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)) existing.billableQuantity += Number(line.quantity || 0);
+    existing.submittedAmount += Number(line.submittedAmount || 0);
+    if (["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)) existing.billableAmount += Number(line.squanAmount || line.submittedAmount || 0);
+    if (line.submittedBy || line.tech) existing.owners.add(line.submittedBy || line.tech);
+    if (line.project || line.ntp) existing.projects.add(line.project || line.ntp);
+    usageByCode.set(code, existing);
+  });
+  return productionCodeCatalog([...usageByCode.keys()])
+    .map(item => {
+      const usage = usageByCode.get(item.code) || {};
+      return {
+        ...item,
+        source: item.source || "Rate sheet",
+        used: Number(usage.submittedLines || 0),
+        approvedLines: Number(usage.approvedLines || 0),
+        billableLines: Number(usage.billableLines || 0),
+        submittedQuantity: Number(usage.submittedQuantity || 0),
+        approvedQuantity: Number(usage.approvedQuantity || 0),
+        billableQuantity: Number(usage.billableQuantity || 0),
+        submittedAmount: Number(usage.submittedAmount || 0),
+        billableAmount: Number(usage.billableAmount || 0),
+        owners: [...(usage.owners || [])],
+        projects: [...(usage.projects || [])]
+      };
+    })
+    .sort((a, b) => Number(b.used || 0) - Number(a.used || 0) || a.category.localeCompare(b.category) || a.code.localeCompare(b.code));
+}
+
+function renderProductionBillingCodeControlPanel(rows = productionLedgerRows()) {
+  const catalogRows = productionPriceSheetCatalogRows(rows);
+  const importedRows = catalogRows.filter(row => row.source === "SQUAN / Brightspeed prime sheet");
+  const usedRows = catalogRows.filter(row => row.used);
+  const rateReviewRows = catalogRows.filter(row => row.readiness !== "Ready");
+  const squanValue = usedRows.reduce((total, row) => total + Number(row.submittedQuantity || 0) * Number(row.rate || 0), 0);
+  return `
+    <section class="panel production-panel production-price-sheet-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Billing codes</span>
+          <h2>SQUAN/Brightspeed price sheet control</h2>
+          <p>Admin and Billing can verify imported codes, rates, foreman usage, blockers, and SQUAN-ready value from one place.</p>
+        </div>
+        <div class="billing-package-export-actions">
+          <a class="secondary-btn" href="/api/reports/price-sheet-catalog.csv" target="_blank" rel="noreferrer">Export catalog</a>
+          <a class="secondary-btn" href="/api/reports/approved-production.csv" target="_blank" rel="noreferrer">Export approved</a>
+          <a class="secondary-btn" href="/api/reports/ready-to-submit.csv" target="_blank" rel="noreferrer">Export ready</a>
+        </div>
+      </div>
+      <div class="production-code-health-grid">
+        ${metric("Imported SQUAN codes", importedRows.length, "Brightspeed prime sheet")}
+        ${metric("Used codes", usedRows.length, "On Daily Capture lines")}
+        ${metric("Rate review", rateReviewRows.length, "Prior approval / missing rate")}
+        ${metric("Submitted value", currency(squanValue), "Qty x current code rate")}
+      </div>
+      <div class="production-price-sheet-table">
+        <div class="production-price-sheet-grid header">
+          <span>Code</span><span>Unit / category</span><span>Rate</span><span>Usage</span><span>Value</span><span>Owner / Map</span><span>Status</span>
+        </div>
+        ${catalogRows.slice(0, 36).map(row => `
+          <article class="production-price-sheet-grid row ${statusClass(row.readiness)}">
+            <div>
+              <strong>${escapeAttr(row.code)}</strong>
+              <small>${escapeAttr(row.source || "Rate sheet")}</small>
+            </div>
+            <div>
+              <strong>${escapeAttr(row.unitName || row.description || "Production")}</strong>
+              <small>${escapeAttr(row.category)} · ${escapeAttr(row.uom || "Unit")}</small>
+            </div>
+            <div><strong>${currency(row.rate || 0)}</strong><small>${escapeAttr(row.sourceFile || row.status || "Current")}</small></div>
+            <div><strong>${Number(row.submittedQuantity || 0).toLocaleString()}</strong><small>${row.used} line(s), ${row.approvedLines} approved</small></div>
+            <div><strong>${currency(Number(row.submittedQuantity || 0) * Number(row.rate || 0))}</strong><small>${currency(row.billableAmount || 0)} billable</small></div>
+            <div><strong>${escapeAttr(row.owners?.[0] || "No usage")}</strong><small>${row.projects?.slice(0, 2).map(escapeAttr).join(", ") || "Not submitted yet"}</small></div>
+            <div><span class="status ${statusClass(row.readiness)}">${escapeAttr(row.readiness)}</span></div>
+          </article>
+        `).join("") || `<p class="empty-state">No billing codes have been imported yet.</p>`}
+        ${catalogRows.length > 36 ? `<p class="source-note">Showing the first 36 active/catalog rows on screen. Export the catalog for all ${catalogRows.length} billing code rows.</p>` : ""}
+      </div>
+    </section>
+  `;
+}
+
+function productionAdminFilters() {
+  state.productionAdminFilters = {
+    responsible: "All",
+    project: "All",
+    code: "All",
+    proof: "All",
+    billing: "All",
+    review: "All",
+    ...(state.productionAdminFilters || {})
+  };
+  return state.productionAdminFilters;
+}
+
+function productionAdminFilterOptions(rows = productionLedgerRows()) {
+  return {
+    responsible: uniqueList(rows.map(row => row.submittedBy || row.tech || "Unassigned")).sort(),
+    project: uniqueList(rows.map(row => row.project || row.ntp || "No Map")).sort(),
+    code: uniqueList(rows.map(row => row.code || "No Code")).sort(),
+    proof: uniqueList(rows.map(row => productionProofState(row))).sort(),
+    billing: uniqueList(rows.map(row => row.billableStatus || "Pending Review")).sort(),
+    review: uniqueList(rows.map(row => row.reviewStatus || row.status || "Submitted")).sort()
+  };
+}
+
+function filteredProductionAdminRows(rows = productionLedgerRows()) {
+  const filters = productionAdminFilters();
+  return rows.filter(row => {
+    const values = {
+      responsible: row.submittedBy || row.tech || "Unassigned",
+      project: row.project || row.ntp || "No Map",
+      code: row.code || "No Code",
+      proof: productionProofState(row),
+      billing: row.billableStatus || "Pending Review",
+      review: row.reviewStatus || row.status || "Submitted"
+    };
+    return Object.entries(filters).every(([key, value]) => value === "All" || values[key] === value);
+  });
+}
+
+function renderProductionAdminFilters(rows = productionLedgerRows()) {
+  const filters = productionAdminFilters();
+  const options = productionAdminFilterOptions(rows);
+  const activeCount = Object.values(filters).filter(value => value && value !== "All").length;
+  const select = (key, label) => `
+    <label>${label}
+      <select data-production-admin-filter="${key}">
+        <option>All</option>
+        ${(options[key] || []).map(value => `<option value="${escapeAttr(value)}" ${filters[key] === value ? "selected" : ""}>${escapeAttr(value)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+  return `
+    <section class="panel production-panel production-admin-filter-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Admin controls</span>
+          <h2>Submission visibility filters</h2>
+          <p>Use these filters to isolate the owner, Map, code, proof status, review status, and billing readiness across all Daily Capture views.</p>
+        </div>
+        <button class="secondary-btn" data-production-admin-filter-clear="true" ${activeCount ? "" : "disabled"}>Clear filters</button>
+      </div>
+      <div class="production-admin-filters">
+        ${select("responsible", "Responsible user")}
+        ${select("project", "Map / NTP")}
+        ${select("code", "Billing code")}
+        ${select("proof", "Proof")}
+        ${select("review", "Review")}
+        ${select("billing", "Billing")}
+      </div>
+    </section>
+  `;
+}
+
+function productionCommandSummary(rows = productionLedgerRows(), summary = productionSummary()) {
+  const dailies = productionDailyDetailRows(rows);
+  const responsibleRows = productionResponsibleUserRows(rows);
+  const totalQuantity = sum(rows, "quantity");
+  const acceptedProof = rows.filter(line => productionProofState(line) === "Accepted").length;
+  const proofNeeded = rows.filter(line => ["Missing", "Needs Review", "Needs Correction"].includes(productionProofState(line))).length;
+  const readyBillLines = rows.filter(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus));
+  const needAction = dailies.filter(row => productionDailyNextAction(row) !== "Ready for SQUAN").length;
+  return {
+    dailies: dailies.length,
+    responsibleUsers: responsibleRows.length,
+    needAction,
+    totalQuantity,
+    acceptedProof,
+    proofNeeded,
+    readyBillLines: readyBillLines.length,
+    readyBillAmount: summary.billable,
+    importedAmount: summary.imported,
+    readyPayAmount: summary.payable
+  };
+}
+
+function renderProductionQuickView(rows = productionLedgerRows(), summary = productionSummary()) {
+  const command = productionCommandSummary(rows, summary);
+  const items = [
+    ["Submitted dailies", command.dailies, `${command.responsibleUsers} responsible user(s)`],
+    ["Production qty", Number(command.totalQuantity || 0).toLocaleString(), "Jackson submitted"],
+    ["Needs action", command.needAction, `${command.proofNeeded} proof/review item(s)`],
+    ["Ready to bill", currency(command.readyBillAmount), `${command.readyBillLines} line(s)`],
+    ["SQUAN import", currency(command.importedAmount), "Export comparison"]
+  ];
+  return `
+    <div class="production-quick-view" aria-label="Daily Capture quick view">
+      ${items.map(([label, value, note]) => `
+        <article>
+          <span>${label}</span>
+          <strong>${value}</strong>
+          <small>${note}</small>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function productionAdminStatusBuckets(rows = productionLedgerRows()) {
+  const dailies = productionDailyDetailRows(rows);
+  const bucketForDaily = row => {
+    if (row.daily.status === "Draft" || row.lines.some(line => (line.reviewStatus || line.status) === "Draft")) return "Draft";
+    if (row.lines.some(line => ["Missing", "Needs Correction"].includes(productionProofState(line)))) return "Needs Proof";
+    if (row.lines.some(line => productionProofState(line) === "Needs Review")) return "Needs Review";
+    if (row.lines.some(line => ["Rejected", "Hold", "Rate Review"].includes(line.billableStatus) || ["Rejected"].includes(line.reviewStatus || line.status))) return "Needs Review";
+    if (row.lines.length && row.lines.every(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus))) return "Billing Ready";
+    if (row.lines.length && row.lines.every(line => (line.reviewStatus || line.status) === "Approved")) return "Approved";
+    return "Submitted";
+  };
+  const countDailies = bucket => dailies.filter(row => bucketForDaily(row) === bucket).length;
+  return [
+    {
+      label: "Draft",
+      owner: "Foreman",
+      count: countDailies("Draft"),
+      detail: "Saved but not submitted"
+    },
+    {
+      label: "Submitted",
+      owner: "Admin",
+      count: countDailies("Submitted"),
+      detail: "Ready for Jackson review"
+    },
+    {
+      label: "Needs Proof",
+      owner: "Foreman",
+      count: countDailies("Needs Proof"),
+      detail: "Missing or rejected support"
+    },
+    {
+      label: "Needs Review",
+      owner: "Operations",
+      count: countDailies("Needs Review"),
+      detail: "Proof waiting on acceptance"
+    },
+    {
+      label: "Approved",
+      owner: "Operations",
+      count: countDailies("Approved"),
+      detail: "Ready to move into billing"
+    },
+    {
+      label: "Billing Ready",
+      owner: "Billing",
+      count: countDailies("Billing Ready"),
+      detail: "Package or export to SQUAN"
+    }
+  ];
+}
+
+function renderProductionAdminStatusBoard(rows = productionLedgerRows()) {
+  const buckets = productionAdminStatusBuckets(rows);
+  return `
+    <section class="panel production-panel production-admin-status-board" data-production-admin-status-board>
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Admin visibility</span>
+          <h2>Every daily by owner, status, blocker, code, proof, and billing readiness</h2>
+          <p>This is the first Admin view after Foreman submissions. Use it to see where each daily sits before drilling into the full record.</p>
+        </div>
+        <span>${productionDailyDetailRows(rows).length} daily item(s)</span>
+      </div>
+      <div class="production-status-buckets">
+        ${buckets.map(bucket => `
+          <article class="${statusClass(bucket.label)}">
+            <span>${escapeAttr(bucket.owner)}</span>
+            <strong>${escapeAttr(bucket.label)}</strong>
+            <b>${Number(bucket.count || 0).toLocaleString()}</b>
+            <small>${escapeAttr(bucket.detail)}</small>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderProductionWorkflowOverview(rows = productionLedgerRows()) {
+  const dailies = productionDailyDetailRows(rows);
+  const submitted = dailies.filter(row => row.daily.status === "Submitted" || row.lines.some(line => ["Submitted", "Needs Review", "Needs Proof"].includes(line.reviewStatus || line.status))).length;
+  const proofReady = dailies.filter(row => row.lines.length && row.lines.every(line => productionProofState(line) === "Accepted")).length;
+  const approved = dailies.filter(row => row.lines.length && row.lines.every(line => (line.reviewStatus || line.status) === "Approved")).length;
+  const billable = dailies.filter(row => row.lines.length && row.lines.every(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus))).length;
+  const stages = [
+    ["1", "Crew input", dailies.length, "Foreman, crew lead, or subcontractor tech submits the daily."],
+    ["2", "Jackson review", submitted, "Operations checks code, quantity, map, date, and crew."],
+    ["3", "Proof accepted", proofReady, "Photos, as-builts, notes, or support are accepted."],
+    ["4", "Billing ready", approved + billable, "Approved production becomes payable and billable."],
+    ["5", "SQUAN report", billable, "Billing can export or review what is being billed."]
+  ];
+  return `
+    <section class="production-workflow-strip">
+      ${stages.map(([number, label, count, note]) => `
+        <article>
+          <span>${number}</span>
+          <div>
+            <strong>${label}</strong>
+            <small>${count} daily item(s)</small>
+            <p>${note}</p>
+          </div>
+        </article>
+      `).join("")}
+    </section>
+  `;
+}
+
+function productionNextActionBuckets(rows = productionLedgerRows()) {
+  const dailies = productionDailyDetailRows(rows);
+  const buckets = [
+    { action: "Add proof", owner: "Crew / submitter", rows: [] },
+    { action: "Accept proof", owner: "Operations", rows: [] },
+    { action: "Approve production", owner: "Operations", rows: [] },
+    { action: "Move to billing", owner: "Billing", rows: [] },
+    { action: "Ready for SQUAN", owner: "Billing", rows: [] }
+  ];
+  dailies.forEach(row => {
+    const nextAction = productionDailyNextAction(row);
+    const bucket = buckets.find(item => item.action === nextAction) || buckets[2];
+    bucket.rows.push(row);
+  });
+  return buckets;
+}
+
+function productionAdminCommandLanes(rows = productionLedgerRows()) {
+  const lineLane = row => {
+    if ((row.reviewStatus || row.status) === "Draft" || row.billableStatus === "Draft") return "Draft";
+    if (["Missing", "Needs Correction"].includes(productionProofState(row))) return "Needs Proof";
+    if (productionProofState(row) === "Needs Review") return "Needs Review";
+    if (["Ready to Bill", "Billed", "Closed / Billed"].includes(row.billableStatus)) return "Billing Ready";
+    if (["Rejected", "Hold", "Rate Review"].includes(row.billableStatus) || ["Rejected", "Needs Proof"].includes(row.reviewStatus || row.status)) return "Blocked";
+    if ((row.reviewStatus || row.status) === "Approved") return "Approved";
+    return "Submitted";
+  };
+  return [
+    {
+      label: "Draft",
+      owner: "Foreman",
+      rows: rows.filter(row => lineLane(row) === "Draft"),
+      action: "Open draft"
+    },
+    {
+      label: "Submitted",
+      owner: "Admin",
+      rows: rows.filter(row => lineLane(row) === "Submitted"),
+      action: "Review"
+    },
+    {
+      label: "Needs Proof",
+      owner: "Foreman",
+      rows: rows.filter(row => lineLane(row) === "Needs Proof"),
+      action: "Open daily"
+    },
+    {
+      label: "Needs Review",
+      owner: "Operations",
+      rows: rows.filter(row => lineLane(row) === "Needs Review"),
+      action: "Accept proof"
+    },
+    {
+      label: "Approved",
+      owner: "Operations",
+      rows: rows.filter(row => lineLane(row) === "Approved"),
+      action: "Move to billing"
+    },
+    {
+      label: "Billing Ready",
+      owner: "Billing",
+      rows: rows.filter(row => lineLane(row) === "Billing Ready"),
+      action: "Package"
+    },
+    {
+      label: "Blocked",
+      owner: "Admin",
+      rows: rows.filter(row => lineLane(row) === "Blocked"),
+      action: "Resolve"
+    }
+  ];
+}
+
+function renderProductionAdminCommandView(rows = productionLedgerRows()) {
+  const lanes = productionAdminCommandLanes(rows);
+  return `
+    <section class="panel production-panel production-command-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Admin command view</span>
+          <h2>Daily Capture work by decision</h2>
+          <p>Start with the first open lane, then drill into the daily only when proof, approval, billing, or a blocker needs action.</p>
+        </div>
+        <span>${rows.length} filtered line(s)</span>
+      </div>
+      <div class="production-command-lanes">
+        ${lanes.map(lane => {
+          const amount = lane.rows.reduce((total, row) => total + Number(row.squanAmount || row.submittedAmount || 0), 0);
+          return `
+            <article class="${statusClass(lane.label)}">
+              <div class="production-command-lane-head">
+                <span>${escapeAttr(lane.owner)}</span>
+                <strong>${escapeAttr(lane.label)}</strong>
+                <small>${lane.rows.length} line(s) · ${currency(amount)}</small>
+              </div>
+              <div class="production-command-lane-list">
+                ${lane.rows.slice(0, 3).map(row => `
+                  <button data-production-daily-open="${escapeAttr(row.dailyId || "")}" ${row.dailyId ? "" : "disabled"}>
+                    <span>
+                      <strong>${escapeAttr(row.code || "No code")} · ${Number(row.quantity || 0).toLocaleString()} ${escapeAttr(row.uom || "")}</strong>
+                      <small>${escapeAttr(row.submittedBy || "Unassigned")} · ${escapeAttr(row.project || "")} · ${formatDate(row.workedDate)} · Proof ${escapeAttr(productionProofState(row))} · Billing ${escapeAttr(row.billableStatus || "Pending Review")}</small>
+                    </span>
+                    <span class="status ${statusClass(lane.label)}">${escapeAttr(lane.action)}</span>
+                  </button>
+                `).join("") || `<p class="empty-state">Clear</p>`}
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderProductionNextActionQueue(rows = productionLedgerRows()) {
+  const buckets = productionNextActionBuckets(rows);
+  return `
+    <section class="production-next-actions">
+      ${buckets.map(bucket => {
+        const first = bucket.rows[0];
+        return `
+          <article class="${bucket.rows.length ? statusClass(bucket.action) : "empty"}">
+            <div>
+              <span>${escapeAttr(bucket.owner)}</span>
+              <strong>${escapeAttr(bucket.action)}</strong>
+              <small>${bucket.rows.length} daily item(s)</small>
+            </div>
+            ${first ? `<button class="secondary-btn" data-production-daily-open="${escapeAttr(first.daily.id)}">Open next</button>` : `<span class="status ready">Clear</span>`}
+          </article>
+        `;
+      }).join("")}
+    </section>
+  `;
+}
+
+function productionDailyNextAction(row) {
+  const workflow = productionDailyWorkflowState(row);
+  if (!row.lines.length) return "Add production code";
+  if (workflow.current === "Needs correction") return "Correct daily";
+  if (row.lines.some(line => productionProofState(line) === "Missing")) return "Add proof";
+  if (row.lines.some(line => productionProofState(line) === "Needs Review")) return "Accept proof";
+  if (row.lines.some(line => (line.reviewStatus || line.status) !== "Approved")) return "Approve production";
+  if (row.lines.some(line => !["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus))) return "Move to billing";
+  return "Ready for SQUAN";
+}
+
+function productionResponsibleUserRows(rows = productionLedgerRows()) {
+  const dailies = productionDailyDetailRows(rows).filter(row => row.lines.length);
+  const grouped = new Map();
+  dailies.forEach(row => {
+    const responsible = row.daily.submittedBy || row.daily.tech || "Unassigned";
+    const existing = grouped.get(responsible) || {
+      responsible,
+      sourceTypes: new Set(),
+      projects: new Set(),
+      latestDate: "",
+      dailies: [],
+      lineCount: 0,
+      quantity: 0,
+      submittedAmount: 0,
+      billableAmount: 0,
+      needsReview: 0
+    };
+    existing.latestDate = String(row.daily.workedDate || "").localeCompare(String(existing.latestDate || "")) > 0 ? row.daily.workedDate : existing.latestDate;
+    if (row.daily.sourceType) existing.sourceTypes.add(row.daily.sourceType);
+    if (row.daily.project) existing.projects.add(row.daily.project);
+    existing.dailies.push(row);
+    existing.lineCount += row.lines.length;
+    existing.quantity += Number(row.totalQuantity || 0);
+    existing.submittedAmount += sum(row.lines, "submittedAmount");
+    existing.billableAmount += row.lines
+      .filter(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus))
+      .reduce((total, line) => total + Number(line.squanAmount || line.submittedAmount || 0), 0);
+    if (productionDailyNextAction(row) !== "Ready for SQUAN") existing.needsReview += 1;
+    grouped.set(responsible, existing);
+  });
+  return [...grouped.values()]
+    .map(row => ({
+      ...row,
+      sourceTypes: [...row.sourceTypes],
+      projects: [...row.projects],
+      status: row.needsReview ? "Needs Review" : "Ready for SQUAN"
+    }))
+    .sort((a, b) => String(b.latestDate || "").localeCompare(String(a.latestDate || "")) || a.responsible.localeCompare(b.responsible));
+}
+
+function renderProductionResponsibleUserDailies(rows = productionLedgerRows()) {
+  const responsibleRows = productionResponsibleUserRows(rows);
+  const openUsers = responsibleRows.filter(row => row.needsReview).length;
+  return `
+    <section class="panel production-panel production-responsible-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Admin view</span>
+          <h2>Responsible user daily submissions</h2>
+          <p>Admin can see each crew, foreman, or subcontractor tech, the dailies they submitted, and what is still needed before billing.</p>
+        </div>
+        <div class="production-accumulation-summary">
+          ${metric("Responsible users", responsibleRows.length, "Crew / submitters")}
+          ${metric("Need action", openUsers, "Users with open daily work")}
+          ${metric("Dailies", responsibleRows.reduce((total, row) => total + row.dailies.length, 0), "Submitted or drafted")}
+        </div>
+      </div>
+      <div class="responsible-daily-board">
+        ${responsibleRows.map(row => `
+          <article class="responsible-user-card ${statusClass(row.status)}">
+            <div class="responsible-user-head">
+              <div>
+                <strong>${escapeAttr(row.responsible)}</strong>
+                <small>${row.sourceTypes.map(escapeAttr).join(", ") || "Daily submitter"} · ${row.projects.map(escapeAttr).join(", ") || "No Map"}</small>
+              </div>
+              <span class="status ${statusClass(row.status)}">${escapeAttr(row.status)}</span>
+            </div>
+            <div class="responsible-user-metrics">
+              <span>Dailies<strong>${row.dailies.length}</strong></span>
+              <span>Lines<strong>${row.lineCount}</strong></span>
+              <span>Qty<strong>${Number(row.quantity || 0).toLocaleString()}</strong></span>
+              <span>Billable<strong>${currency(row.billableAmount || 0)}</strong></span>
+            </div>
+            <div class="responsible-daily-list">
+              ${row.dailies.slice(0, 5).map(dailyRow => {
+                const nextAction = productionDailyNextAction(dailyRow);
+                return `
+                  <button data-production-daily-open="${escapeAttr(dailyRow.daily.id)}">
+                    <span>
+                      <strong>${escapeAttr(dailyRow.daily.externalDailyId || dailyRow.daily.id)}</strong>
+                      <small>${formatDate(dailyRow.daily.workedDate)} · ${escapeAttr(dailyRow.daily.project || "")} · ${dailyRow.lines.map(line => escapeAttr(line.code || "")).join(", ") || "No code"}</small>
+                    </span>
+                    <span class="status ${statusClass(nextAction)}">${escapeAttr(nextAction)}</span>
+                  </button>
+                `;
+              }).join("")}
+            </div>
+          </article>
+        `).join("") || `<p class="empty-state">No responsible user dailies have been captured yet.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function productionAccumulationStatus(lines) {
+  if (!lines.length) return "No Lines";
+  if (lines.every(line => ["Billed", "Closed / Billed"].includes(line.billableStatus))) return "Billed";
+  if (lines.every(line => line.billableStatus === "Ready to Bill")) return "Ready to Bill";
+  if (lines.some(line => ["Rejected", "Hold"].includes(line.billableStatus) || ["Rejected", "Needs Proof"].includes(line.reviewStatus || line.status))) return "Needs Review";
+  if (lines.some(line => ["Submitted", "Needs Review", "Pending Review"].includes(line.reviewStatus || line.status || line.billableStatus))) return "Pending Review";
+  return "In Progress";
+}
+
+function productionProofRollup(lines) {
+  const accepted = lines.filter(line => productionProofState(line) === "Accepted").length;
+  const review = lines.filter(line => productionProofState(line) === "Needs Review").length;
+  const missing = Math.max(0, lines.length - accepted - review);
+  if (accepted === lines.length && lines.length) return "Accepted";
+  if (review) return "Needs Review";
+  if (missing) return "Missing";
+  return "Pending";
+}
+
+function productionCrewCodeAccumulationRows(rows = productionLedgerRows()) {
+  const grouped = new Map();
+  rows.forEach(line => {
+    const crew = line.submittedBy || line.tech || "Unassigned Crew";
+    const code = line.code || "No Code";
+    const key = `${crew}|${code}`;
+    const existing = grouped.get(key) || {
+      id: key,
+      crew,
+      code,
+      sourceType: line.sourceType || "Daily",
+      workType: line.unitName || line.uom || "",
+      latestDate: line.workedDate || "",
+      projects: new Set(),
+      dailyIds: new Set(),
+      lines: [],
+      quantity: 0,
+      squanQuantity: 0,
+      submittedAmount: 0,
+      squanAmount: 0,
+      payableAmount: 0,
+      billableAmount: 0
+    };
+    existing.latestDate = String(line.workedDate || "").localeCompare(String(existing.latestDate || "")) > 0 ? line.workedDate : existing.latestDate;
+    if (line.project) existing.projects.add(line.project);
+    if (line.dailyId) existing.dailyIds.add(line.dailyId);
+    existing.lines.push(line);
+    existing.quantity += Number(line.quantity || 0);
+    existing.squanQuantity += Number(line.squanQuantity || 0);
+    existing.submittedAmount += Number(line.submittedAmount || 0);
+    existing.squanAmount += Number(line.squanAmount || 0);
+    existing.payableAmount += line.payableStatus === "Ready to Pay" ? Number(line.submittedAmount || 0) : 0;
+    existing.billableAmount += ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus) ? Number(line.squanAmount || line.submittedAmount || 0) : 0;
+    grouped.set(key, existing);
+  });
+  return [...grouped.values()]
+    .map(row => ({
+      ...row,
+      projects: [...row.projects],
+      dailyIds: [...row.dailyIds],
+      status: productionAccumulationStatus(row.lines),
+      proofStatus: productionProofRollup(row.lines),
+      variance: row.quantity - row.squanQuantity
+    }))
+    .sort((a, b) => String(b.latestDate || "").localeCompare(String(a.latestDate || "")) || a.crew.localeCompare(b.crew) || a.code.localeCompare(b.code));
+}
+
+function renderProductionCrewCodeAccumulation(rows = productionLedgerRows()) {
+  const accumulationRows = productionCrewCodeAccumulationRows(rows);
+  const crewCount = new Set(accumulationRows.map(row => row.crew)).size;
+  const billableTotal = accumulationRows.reduce((total, row) => total + row.billableAmount, 0);
+  return `
+    <section class="panel production-panel production-accumulation-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Daily Capture</span>
+          <h2>Crew code accumulation</h2>
+          <p>Production inputs are entered by the foreman, crew lead, or subcontractor tech. This rollup shows what each crew submitted by billable code.</p>
+        </div>
+        <div class="production-accumulation-summary">
+          ${metric("Crews", crewCount, "Daily input owners")}
+          ${metric("Code rows", accumulationRows.length, "Crew + code combinations")}
+          ${metric("Billable", currency(billableTotal), "Accepted for SQUAN billing")}
+        </div>
+      </div>
+      <div class="production-accumulation-table">
+        <div class="production-accumulation-grid header">
+          <span>Crew / tech</span><span>Code</span><span>Qty</span><span>SQUAN qty</span><span>Billable</span><span>Payable</span><span>Proof</span><span>Status</span><span>Open</span>
+        </div>
+        ${accumulationRows.map(row => `
+          <article class="production-accumulation-grid row ${statusClass(row.status)}">
+            <div>
+              <strong>${escapeAttr(row.crew)}</strong>
+              <small>${escapeAttr(row.sourceType)} · ${row.projects.map(escapeAttr).join(", ") || "No Map"}</small>
+            </div>
+            <div>
+              <strong>${escapeAttr(row.code)}</strong>
+              <small>${escapeAttr(row.workType || "Production")}</small>
+            </div>
+            <div><strong>${Number(row.quantity || 0).toLocaleString()}</strong><small>Jackson submitted</small></div>
+            <div><strong>${Number(row.squanQuantity || 0).toLocaleString()}</strong><small class="${row.variance ? "danger-text" : ""}">Variance ${Number(row.variance || 0).toLocaleString()}</small></div>
+            <div><strong>${currency(row.billableAmount || 0)}</strong><small>${currency(row.squanAmount || 0)} SQUAN value</small></div>
+            <div><strong>${currency(row.payableAmount || 0)}</strong><small>${currency(row.submittedAmount || 0)} submitted</small></div>
+            <div><span class="status ${statusClass(row.proofStatus)}">${escapeAttr(row.proofStatus)}</span><small>${row.lines.length} line(s)</small></div>
+            <div><span class="status ${statusClass(row.status)}">${escapeAttr(row.status)}</span><small>${formatDate(row.latestDate)}</small></div>
+            <div class="row-actions">
+              ${row.dailyIds[0] ? `<button class="secondary-btn" data-production-daily-open="${escapeAttr(row.dailyIds[0])}">Daily</button>` : ""}
+              <button class="secondary-btn" data-workflow-action="Reports" data-workflow-target="reports" data-workflow-focus="Daily Production" data-report-scope="Daily / Production Audit Trail">Report</button>
+            </div>
+          </article>
+        `).join("") || `<p class="empty-state">No crew production has been captured yet.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function realSubmissionRows() {
+  const dailies = state.data.productionDailies || [];
+  const lines = state.data.productionLines || [];
+  return (state.data.squanProductionLines || [])
+    .filter(line => dataSourceClassification(line) === "Real Imported")
+    .map(source => {
+      const linkedDaily = dailies.find(daily => daily.sourceSubmissionId === source.id || daily.resubmissionOf === source.id || daily.linkedSourceSubmissionId === source.id);
+      const linkedLines = lines.filter(line => line.sourceSubmissionId === source.id || line.resubmissionOf === source.id || line.dailyId === linkedDaily?.id);
+      const latestLine = linkedLines[linkedLines.length - 1] || {};
+      const price = productionPriceForCode(source.code);
+      const quantity = Number(source.quantity || 0);
+      const rate = Number(source.unitRate || price?.subRate || price?.price || 0);
+      return {
+        id: source.id,
+        source,
+        linkedDaily,
+        linkedLines,
+        project: source.project || source.ntp || source.jobId || "Unassigned",
+        workedDate: source.workedDate || "",
+        tech: source.tech || source.submittedBy || "",
+        node: source.clli || source.node || "",
+        feeder: source.feeder || source.street || "",
+        code: source.code || "",
+        description: source.description || price?.description || price?.unitName || source.code || "",
+        quantity,
+        uom: source.uom || price?.uom || "Unit",
+        rate,
+        amount: Number(source.squanAmount || source.amount || 0) || Math.round(quantity * rate * 100) / 100,
+        status: source.status || "Imported",
+        classification: dataSourceClassification(source),
+        locked: source.locked !== false,
+        resubmissionStatus: source.resubmissionStatus || (linkedDaily ? "Jackson Daily Created" : "Needs Jackson Review"),
+        resubmissionVersion: Number(latestLine.resubmissionVersion || linkedDaily?.resubmissionVersion || source.resubmissionVersion || 0),
+        proofStatus: latestLine.proofStatus || "Missing",
+        reviewStatus: latestLine.reviewStatus || "Not Reviewed",
+        billableStatus: latestLine.billableStatus || "Not Ready"
+      };
+    })
+    .sort((a, b) => `${b.workedDate}${b.id}`.localeCompare(`${a.workedDate}${a.id}`));
+}
+
+function resubmissionAcceptanceChecklist(row = {}) {
+  const price = productionPriceForCode(row.code);
+  const linkedLine = row.linkedLines?.[row.linkedLines.length - 1] || {};
+  const proof = productionProofState(linkedLine);
+  return [
+    { label: "Original imported source preserved", complete: row.locked && row.classification === "Real Imported" },
+    { label: "Jackson daily created", complete: Boolean(row.linkedDaily) },
+    { label: "Billing code valid", complete: Boolean(price && row.code) },
+    { label: "Quantity entered", complete: Number(linkedLine.quantity || row.quantity || 0) > 0 },
+    { label: "Proof accepted or exception approved", complete: ["Accepted", "Accepted Exception"].includes(proof) },
+    { label: "Admin/Ops reviewed", complete: ["Approved", "Accepted"].includes(linkedLine.reviewStatus || linkedLine.status) },
+    { label: "Billing ready", complete: ["Ready to Bill", "Billed", "Closed / Billed"].includes(linkedLine.billableStatus) }
+  ];
+}
+
+function resubmissionComparisonRows() {
+  return realSubmissionRows().map(row => {
+    const linkedLine = row.linkedLines[row.linkedLines.length - 1] || {};
+    const linkedDaily = row.linkedDaily || {};
+    const price = productionPriceForCode(row.code);
+    const sourceProject = row.project || "";
+    const jacksonProject = linkedLine.project || linkedDaily.project || "";
+    const sourceDate = row.workedDate || "";
+    const jacksonDate = linkedLine.workedDate || linkedDaily.workedDate || "";
+    const sourceQuantity = Number(row.quantity || 0);
+    const jacksonQuantity = Number(linkedLine.quantity || 0);
+    const checklist = resubmissionAcceptanceChecklist(row);
+    return {
+      sourceId: row.id,
+      jacksonDailyId: linkedDaily.id || "",
+      sourceProject,
+      jacksonProject,
+      projectMatch: !linkedDaily.id ? "Pending" : sourceProject === jacksonProject ? "Matched" : "Override Needed",
+      sourceWorkedDate: sourceDate,
+      jacksonWorkedDate: jacksonDate,
+      dateMatch: !linkedDaily.id ? "Pending" : sourceDate === jacksonDate ? "Matched" : "Override Needed",
+      code: row.code,
+      codeStatus: price ? "Valid" : "Missing Rate",
+      sourceQuantity,
+      jacksonQuantity,
+      quantityMatch: !linkedLine.id ? "Pending" : sourceQuantity === jacksonQuantity ? "Matched" : "Variance",
+      proofStatus: linkedLine.id ? productionProofState(linkedLine) : "Missing",
+      billingReadiness: checklist.every(item => item.complete) ? "Ready for Package Prep" : "Needs Review",
+      blockers: checklist.filter(item => !item.complete).map(item => item.label).join("; ")
+    };
+  });
+}
+
+function demoArchiveRows() {
+  const collect = (collection, records = []) => records
+    .filter(isDemoRecord)
+    .map(record => ({
+      collection,
+      id: record.id || "",
+      project: record.project || record.ntp || "",
+      classification: dataSourceClassification(record),
+      status: record.status || record.reviewStatus || "",
+      owner: record.submittedBy || record.tech || record.owner || "Admin",
+      detail: record.notes || record.description || record.sourceType || ""
+    }));
+  return [
+    ...collect("productionDailies", state.data.productionDailies || []),
+    ...collect("productionLines", state.data.productionLines || []),
+    ...collect("squanProductionLines", state.data.squanProductionLines || []),
+    ...collect("billingLedger", state.data.billingLedger || [])
+  ];
+}
+
+function operationalSourceCountSplit() {
+  const rows = [
+    ...(state.data.squanProductionLines || []),
+    ...(state.data.productionDailies || []),
+    ...(state.data.productionLines || []),
+    ...(state.data.billingLedger || [])
+  ];
+  return rows.reduce((counts, row) => {
+    const key = dataSourceClassification(row);
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function renderRealSubmissionPreservationPanel() {
+  if (!canPerform("operational.cleanup")) return "";
+  const rows = realSubmissionRows();
+  const comparisons = resubmissionComparisonRows();
+  const archive = demoArchiveRows();
+  const split = operationalSourceCountSplit();
+  const needsReview = rows.filter(row => row.resubmissionStatus === "Needs Jackson Review").length;
+  const ready = comparisons.filter(row => row.billingReadiness === "Ready for Package Prep").length;
+  return `
+    <section class="panel production-panel real-submission-panel" data-real-submission-preservation-panel>
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Real import preservation</span>
+          <h2>Imported SQUAN/Brightspeed submissions stay read-only</h2>
+          <p>Create linked Jackson resubmissions for corrections, proof, review, and billing readiness without overwriting original source rows.</p>
+        </div>
+        <span class="status ${statusClass(needsReview ? "Needs Review" : "Ready")}">${needsReview ? `${needsReview} need review` : "Linked"}</span>
+      </div>
+      <div class="workflow-count-strip">
+        ${metric("Real imported", split["Real Imported"] || 0, "Original source records")}
+        ${metric("Jackson resubmissions", split["Live Jackson Submission"] || 0, "Linked daily records")}
+        ${metric("Ready for package", ready, "Checklist passed")}
+        ${metric("Demo / training", (split.Demo || 0) + (split["Archived Demo"] || 0), `${split["Archived Demo"] || 0} archived`)}
+      </div>
+      <div class="billing-package-export-actions">
+        <a class="secondary-btn" href="/api/reports/imported-submissions.csv" target="_blank" rel="noreferrer">Export imported originals</a>
+        <a class="secondary-btn" href="/api/reports/resubmission-comparison.csv" target="_blank" rel="noreferrer">Export comparison</a>
+        <a class="secondary-btn" href="/api/reports/demo-archive.csv" target="_blank" rel="noreferrer">Export demo archive</a>
+      </div>
+      <div class="table-wrap production-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Original</th>
+              <th>Map / NTP</th>
+              <th>Worked</th>
+              <th>Tech</th>
+              <th>Code</th>
+              <th>Qty</th>
+              <th>SQUAN value</th>
+              <th>Jackson status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.slice(0, 10).map(row => `
+              <tr>
+                <td><strong>${escapeAttr(row.id)}</strong><small>${escapeAttr(row.classification)} · read-only</small></td>
+                <td>${escapeAttr(row.project)}<small>${escapeAttr([row.node, row.feeder].filter(Boolean).join(" / "))}</small></td>
+                <td>${formatDate(row.workedDate)}</td>
+                <td>${escapeAttr(row.tech || "Unassigned")}</td>
+                <td>${escapeAttr(row.code)}<small>${escapeAttr(row.description)}</small></td>
+                <td>${Number(row.quantity || 0).toLocaleString()} ${escapeAttr(row.uom)}</td>
+                <td>${currency(row.amount || 0)}</td>
+                <td><span class="status ${statusClass(row.resubmissionStatus)}">${escapeAttr(row.resubmissionStatus)}</span><small>v${row.resubmissionVersion || 0} · ${escapeAttr(row.proofStatus)}</small></td>
+                <td class="row-actions">
+                  ${row.linkedDaily ? `<button class="secondary-btn mini-btn" data-real-submission-action="revision" data-source-id="${escapeAttr(row.id)}">New revision</button>` : `<button class="primary-btn mini-btn" data-real-submission-action="resubmit" data-source-id="${escapeAttr(row.id)}">Create Jackson daily</button>`}
+                  <button class="secondary-btn mini-btn" data-real-submission-action="archive-demo" data-source-id="${escapeAttr(row.id)}">Archive as demo</button>
+                </td>
+              </tr>
+            `).join("") || `<tr><td colspan="9">No real imported production submissions found yet.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap production-table compact">
+        <table>
+          <thead>
+            <tr>
+              <th>Comparison</th>
+              <th>Map</th>
+              <th>Date</th>
+              <th>Code</th>
+              <th>Quantity</th>
+              <th>Proof</th>
+              <th>Readiness</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${comparisons.slice(0, 8).map(row => `
+              <tr>
+                <td>${escapeAttr(row.sourceId)}<small>${escapeAttr(row.jacksonDailyId || "No Jackson daily")}</small></td>
+                <td><span class="status ${statusClass(row.projectMatch)}">${escapeAttr(row.projectMatch)}</span></td>
+                <td><span class="status ${statusClass(row.dateMatch)}">${escapeAttr(row.dateMatch)}</span></td>
+                <td><span class="status ${statusClass(row.codeStatus)}">${escapeAttr(row.codeStatus)}</span></td>
+                <td><span class="status ${statusClass(row.quantityMatch)}">${escapeAttr(row.quantityMatch)}</span></td>
+                <td>${escapeAttr(row.proofStatus)}</td>
+                <td><span class="status ${statusClass(row.billingReadiness)}">${escapeAttr(row.billingReadiness)}</span><small>${escapeAttr(row.blockers)}</small></td>
+              </tr>
+            `).join("") || `<tr><td colspan="7">No comparison rows yet.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="source-note">
+        <strong>Demo archive / training data</strong>
+        <span>${archive.length} demo or archived record(s) are tracked separately so live readiness counts do not depend on training rows.</span>
+      </div>
     </section>
   `;
 }
@@ -30382,6 +34469,218 @@ function renderProductionImportCenter() {
         <span>${latest ? `${latest.lineCount} lines · ${currency(latest.totalAmount || 0)} · ${latest.status}` : "Upload the export from SQUAN Tracker."}</span>
       </div>
     </section>
+    ${renderRealSubmissionPreservationPanel()}
+  `;
+}
+
+function productionCodeCategory(item = {}) {
+  const text = `${item.category || ""} ${item.aspect || ""} ${item.code || ""} ${item.unitName || ""} ${item.description || ""}`.toLowerCase();
+  if (text.includes("splice") || text.includes("fusion") || text.includes("fs")) return "Splicing";
+  if (text.includes("drop") || text.includes("riser") || text.includes("dl-")) return "Drops / Risers";
+  if (text.includes("tech") || text.includes("labor") || text.includes("hour") || text.includes("ts")) return "Tech Labor";
+  if (text.includes("material")) return "Materials / Other";
+  if (text.includes("aerial") || text.includes("overlash") || text.includes("fiber") || text.includes("wc-")) return "Aerial";
+  return "Other Production";
+}
+
+function productionCodeReadiness(item = {}) {
+  if (!item.code) return "Missing Code";
+  if (item.code === "HRS") return "Prior Approval";
+  if (Number(item.rate || item.subRate || item.price || 0) <= 0) return "Rate Review";
+  return "Ready";
+}
+
+function productionCodeCatalog(codes = []) {
+  const catalog = new Map();
+  const addCode = (code, overrides = {}) => {
+    if (!code) return;
+    const price = productionPriceForCode(code) || {};
+    const existing = catalog.get(code) || {};
+    const next = {
+      code,
+      description: overrides.description || price.description || price.unitName || existing.description || code,
+      unitName: overrides.unitName || price.unitName || existing.unitName || "",
+      uom: overrides.uom || price.uom || price.unit || existing.uom || "Unit",
+      rate: Number(overrides.rate ?? price.subRate ?? price.unitPrice ?? price.price ?? existing.rate ?? 0),
+      category: productionCodeCategory({ ...price, ...overrides, code }),
+      source: overrides.source || price.sourceType || existing.source || "Rate sheet",
+      sourceFile: overrides.sourceFile || price.sourceFile || existing.sourceFile || "",
+      status: overrides.status || price.status || existing.status || "",
+      aspect: overrides.aspect || price.aspect || existing.aspect || ""
+    };
+    next.readiness = productionCodeReadiness(next);
+    catalog.set(code, next);
+  };
+  (state.data.priceSheetItems || []).forEach(item => addCode(item.code, {
+    description: item.description || item.unitName,
+    unitName: item.unitName,
+    uom: item.uom,
+    rate: item.subRate ?? item.unitPrice ?? item.price,
+    source: item.sourceType || "Rate sheet",
+    sourceFile: item.sourceFile,
+    status: item.status,
+    aspect: item.aspect
+  }));
+  (state.data.unitPrices || []).forEach(item => addCode(item.id || item.unitCode, {
+    description: item.description || item.unitName,
+    unitName: item.unitName,
+    uom: item.uom,
+    rate: item.unitPrice ?? item.price,
+    source: "Unit price"
+  }));
+  (state.data.squanProductionLines || []).forEach(line => addCode(line.code, {
+    description: line.description,
+    uom: line.uom,
+    source: "SQUAN import"
+  }));
+  codes.forEach(code => addCode(code));
+  addCode("TS01", { description: "In-house technician labor", unitName: "Tech labor", uom: "Hours", source: "Jackson labor" });
+  return [...catalog.values()].sort((a, b) => a.category.localeCompare(b.category) || a.code.localeCompare(b.code));
+}
+
+function renderProductionCodeOptions(catalog) {
+  const groups = new Map();
+  catalog.forEach(item => {
+    groups.set(item.category, [...(groups.get(item.category) || []), item]);
+  });
+  return [...groups.entries()].map(([category, items]) => `
+    <optgroup label="${escapeAttr(category)}">
+      ${items.map(item => `
+        <option value="${escapeAttr(item.code)}"
+          data-description="${escapeAttr(item.description)}"
+          data-unit-name="${escapeAttr(item.unitName)}"
+          data-uom="${escapeAttr(item.uom)}"
+          data-rate="${escapeAttr(item.rate)}"
+          data-category="${escapeAttr(item.category)}"
+          data-source="${escapeAttr(item.source)}"
+          data-readiness="${escapeAttr(item.readiness)}">
+          ${escapeAttr(item.code)} - ${escapeAttr(item.description)} (${escapeAttr(item.uom)})
+        </option>
+      `).join("")}
+    </optgroup>
+  `).join("");
+}
+
+function renderProductionCodePicker(codes) {
+  const catalog = productionCodeCatalog(codes);
+  const preferredCodes = ["BSMI-003", "BSMI-014", "BSMI-015", "WC-1", "DL-RL", "TS01"];
+  const quickCodes = preferredCodes
+    .map(code => catalog.find(item => item.code === code))
+    .filter(Boolean)
+    .slice(0, 6);
+  const selected = catalog[0] || {};
+  const showRates = ["Admin", "Operations", "Billing"].includes(state.role);
+  return `
+    <div class="production-code-picker wide">
+      <div class="production-code-quick-picks" aria-label="Common production codes">
+        ${quickCodes.map(item => `
+          <button type="button" data-production-code-pick="${escapeAttr(item.code)}">
+            <strong>${escapeAttr(item.code)}</strong>
+            <span>${escapeAttr(item.description)}</span>
+          </button>
+        `).join("")}
+      </div>
+      <label>Find billing code
+        <select id="productionCode" required>
+          ${renderProductionCodeOptions(catalog)}
+        </select>
+      </label>
+      <article class="production-code-preview" id="productionCodePreview">
+        <div>
+          <span>Selected code</span>
+          <strong data-code-preview="code">${escapeAttr(selected.code || "Select a code")}</strong>
+          <small data-code-preview="description">${escapeAttr(selected.description || "Choose the production code that matches the completed work.")}</small>
+        </div>
+        <dl>
+          <div><dt>Category</dt><dd data-code-preview="category">${escapeAttr(selected.category || "Production")}</dd></div>
+          <div><dt>Unit</dt><dd data-code-preview="uom">${escapeAttr(selected.uom || "Unit")}</dd></div>
+          ${showRates ? `<div><dt>Rate</dt><dd data-code-preview="rate">${currency(selected.rate || 0)}</dd></div>` : ""}
+          <div><dt>Line total</dt><dd data-code-preview="extended">${showRates ? currency(selected.rate || 0) : "Calculated for Billing"}</dd></div>
+          <div><dt>Readiness</dt><dd data-code-preview="readiness">${escapeAttr(selected.readiness || "Ready")}</dd></div>
+        </dl>
+        <small data-code-preview="source">${showRates ? escapeAttr(selected.source || "Rate sheet") : "Foreman sees code, unit, and description only. Admin/Billing owns rate validation."}</small>
+      </article>
+    </div>
+  `;
+}
+
+function renderForemanSubmitReadiness() {
+  const items = [
+    ["Map / NTP", "Required", "Select the SQUAN Map or NTP before adding production."],
+    ["Billing code", "Required", "Pick the code that matches the completed work."],
+    ["Quantity", "Required", "Enter the completed unit quantity."],
+    ["Proof", "Required", "Reference photo, as-built, pole tag, video, or field note."],
+    ["Submitter", "Required", "Foreman or responsible user stays attached for Admin visibility."]
+  ];
+  return `
+    <section class="foreman-submit-readiness" data-production-submit-readiness>
+      ${items.map(([label, status, detail], index) => `
+        <article>
+          <span>${index + 1}</span>
+          <div>
+            <strong>${escapeAttr(label)}</strong>
+            <small>${escapeAttr(detail)}</small>
+          </div>
+          <b>${escapeAttr(status)}</b>
+        </article>
+      `).join("")}
+    </section>
+  `;
+}
+
+function renderProductionDraftLineTray() {
+  const lines = state.productionDraftLines || [];
+  return `
+    <div class="production-draft-lines wide">
+      <div class="section-heading compact">
+        <h3>Daily production lines</h3>
+        <span>${lines.length ? `${lines.length} ready` : "Add one or more"}</span>
+      </div>
+      <div class="production-draft-line-actions">
+        <button class="secondary-btn" type="button" data-production-add-line>Add code line</button>
+        ${lines.length ? `<button class="secondary-btn" type="button" data-production-clear-lines>Clear lines</button>` : ""}
+      </div>
+      <div class="production-draft-line-list">
+        ${lines.map((line, index) => `
+          <article>
+            <div>
+              <strong>${escapeAttr(line.code)}</strong>
+              <span>${escapeAttr(line.description || line.unitName || "Production code")}</span>
+            </div>
+            <div><strong>${Number(line.quantity || 0).toLocaleString()}</strong><span>${escapeAttr(line.uom || "Unit")}</span></div>
+            <div><span>${escapeAttr(line.proofNote ? "Proof noted" : "Proof missing")}</span></div>
+            <button class="icon-btn" type="button" data-production-remove-line="${index}" title="Remove line">×</button>
+          </article>
+        `).join("") || `<p class="empty-state">Select a code, enter quantity and proof, then add it to this daily.</p>`}
+      </div>
+    </div>
+  `;
+}
+
+function renderForemanDailyFastPath() {
+  const steps = [
+    ["1", "Pick Map", "Choose the SQUAN Map/NTP."],
+    ["2", "Add code", "Select billable code and quantity."],
+    ["3", "Attach proof", "Photo, as-built, note, or field reference."],
+    ["4", "Submit", "Admin gets the daily with owner and status."]
+  ];
+  return `
+    <div class="foreman-daily-fast-path">
+      <div>
+        <span class="eyebrow">Foreman fast submit</span>
+        <strong>Daily production entry</strong>
+        <small>Keep the field path short: Map, code, quantity, proof, submit. Admin visibility updates from the same submission.</small>
+      </div>
+      <div class="foreman-fast-steps">
+        ${steps.map(([number, label, note]) => `
+          <article>
+            <span>${number}</span>
+            <strong>${label}</strong>
+            <small>${note}</small>
+          </article>
+        `).join("")}
+      </div>
+    </div>
   `;
 }
 
@@ -30392,12 +34691,14 @@ function renderProductionDailyForm(projects, codes) {
       <div class="panel-header">
         <div>
           <h2>Daily Capture</h2>
-          <p>Capture the simplified SQUAN daily: header, crew, production code, ArcGIS reference, and proof note.</p>
+          <p>Foreman submits the field daily. Admin sees owner, status, blockers, codes, quantities, proof, and billing readiness from this same record.</p>
         </div>
       </div>
+      ${renderForemanDailyFastPath()}
+      ${renderForemanSubmitReadiness()}
       <form class="production-form" id="productionDailyForm">
         <div class="production-form-section">
-          <div class="section-heading compact"><h3>Header</h3><span>Daily</span></div>
+          <div class="section-heading compact"><h3>1. Daily header</h3><span>Owner + Map</span></div>
           <label>Submitter type
             <select id="productionSourceType" required>
               <option>Contractor Daily</option>
@@ -30416,61 +34717,63 @@ function renderProductionDailyForm(projects, codes) {
           <label>Work date
             <input id="productionWorkedDate" type="date" value="${isoDate(today)}" required>
           </label>
-          <label>Daily ID
+          <label>Daily ID <small>Optional</small>
             <input id="productionDailyExternalId" placeholder="SQUAN daily ID or Jackson daily ID">
           </label>
-          <label>Vehicle / equipment
+          <label>Vehicle / equipment <small>Optional</small>
             <input id="productionVehicle" placeholder="Truck, vehicle, or equipment">
           </label>
         </div>
         <div class="production-form-section">
-          <div class="section-heading compact"><h3>Crew / Labor</h3><span>Allocation</span></div>
-          <label>Hours
-            <input id="productionHours" type="number" step="0.25" min="0" value="0">
-          </label>
-          <label>Crew allocation
-            <input id="productionCrewAllocation" value="100%" placeholder="100%">
-          </label>
-        </div>
-        <div class="production-form-section">
-          <div class="section-heading compact"><h3>Production Codes + Proof</h3><span>Billing input</span></div>
-          <label>Code
-            <select id="productionCode" required>
-              ${codes.map(code => `<option>${escapeAttr(code)}</option>`).join("")}
-              <option>TS01</option>
-            </select>
-          </label>
+          <div class="section-heading compact"><h3>2. Billing code + proof</h3><span>Required</span></div>
+          ${renderProductionCodePicker(codes)}
           <label>Quantity
             <input id="productionQuantity" type="number" step="0.01" min="0" value="1" required>
           </label>
           <label class="wide">Proof note
             <input id="productionProofNote" placeholder="Photo, as-built, video, pole tag, or SQUAN evidence reference">
           </label>
+          ${renderProductionDraftLineTray()}
         </div>
-        <div class="production-form-section">
-          <div class="section-heading compact"><h3>ArcGIS Feature Reference</h3><span>Display-first</span></div>
-          <label>Node / CLLI
-            <input id="productionClli" placeholder="Node / CLLI from SQUAN or ArcGIS">
-          </label>
-          <label>Street / feeder / DTAP
-            <input id="productionFeeder" placeholder="Street, feeder, or DTAP">
-          </label>
-          <label>OBJECTID
-            <input id="productionObjectId" placeholder="Future ArcGIS OBJECTID">
-          </label>
-          <label>GlobalID
-            <input id="productionGlobalId" placeholder="Future ArcGIS GlobalID">
-          </label>
-          <label>point_x
-            <input id="productionPointX" placeholder="Future longitude / x">
-          </label>
-          <label>point_y
-            <input id="productionPointY" placeholder="Future latitude / y">
-          </label>
-          <label class="wide">ArcGIS notes
-            <input id="productionArcgisNotes" placeholder="Feature notes, obstruction, or engineering comment">
-          </label>
-        </div>
+        <details class="production-advanced-fields">
+          <summary>Crew / labor details</summary>
+          <div class="production-form-section">
+            <div class="section-heading compact"><h3>Crew / Labor</h3><span>Optional</span></div>
+            <label>Hours
+              <input id="productionHours" type="number" step="0.25" min="0" value="0">
+            </label>
+            <label>Crew allocation
+              <input id="productionCrewAllocation" value="100%" placeholder="100%">
+            </label>
+          </div>
+        </details>
+        <details class="production-advanced-fields">
+          <summary>Map feature details</summary>
+          <div class="production-form-section">
+            <div class="section-heading compact"><h3>ArcGIS Feature Reference</h3><span>Optional</span></div>
+            <label>Node / CLLI
+              <input id="productionClli" placeholder="Node / CLLI from SQUAN or ArcGIS">
+            </label>
+            <label>Street / feeder / DTAP
+              <input id="productionFeeder" placeholder="Street, feeder, or DTAP">
+            </label>
+            <label>OBJECTID
+              <input id="productionObjectId" placeholder="Future ArcGIS OBJECTID">
+            </label>
+            <label>GlobalID
+              <input id="productionGlobalId" placeholder="Future ArcGIS GlobalID">
+            </label>
+            <label>point_x
+              <input id="productionPointX" placeholder="Future longitude / x">
+            </label>
+            <label>point_y
+              <input id="productionPointY" placeholder="Future latitude / y">
+            </label>
+            <label class="wide">ArcGIS notes
+              <input id="productionArcgisNotes" placeholder="Feature notes, obstruction, or engineering comment">
+            </label>
+          </div>
+        </details>
         <div class="production-form-actions">
           <button class="secondary-btn" type="button" id="productionSaveDraft" ${canSubmit ? "" : "disabled"}>Save draft</button>
           <button class="primary-btn" type="submit" ${canSubmit ? "" : "disabled"}>Submit daily</button>
@@ -30549,8 +34852,376 @@ function productionDailyWorkflowState(selected) {
   };
 }
 
+function productionDailyReviewChecklist(selected) {
+  const daily = selected?.daily || {};
+  const lines = selected?.lines || [];
+  const project = selected?.project;
+  const proofBlocker = lines.find(line => !["Accepted", "Accepted Exception"].includes(productionProofState(line)));
+  const codeBlocker = lines.find(line => !(productionPriceForCode(line.code) || line.code));
+  const rateBlocker = lines.find(line => line.code !== "TS01" && Number(line.unitRate || productionPriceForCode(line.code)?.subRate || productionPriceForCode(line.code)?.price || 0) <= 0);
+  const quantityBlocker = lines.find(line => Number(line.quantity || 0) <= 0);
+  const approvalBlocker = lines.find(line => !["Approved"].includes(line.reviewStatus || line.status));
+  const holdBlocker = lines.find(line => ["Rejected", "Hold", "Rate Review"].includes(line.billableStatus) || ["Rejected", "Needs Proof"].includes(line.reviewStatus || line.status));
+  const proofAccepted = !proofBlocker;
+  const validCodes = !codeBlocker;
+  const ratesReady = !rateBlocker;
+  const quantityReady = !quantityBlocker;
+  const approvedLines = !approvalBlocker;
+  const noHeldLines = !holdBlocker;
+  const safetyBlockers = scopedRows("safety").filter(item => item.project === daily.project && item.status !== "Closed" && item.status !== "Accepted");
+  const noSafetyBlockers = !safetyBlockers.length;
+  return [
+    { key: "map", label: "Map / NTP matches", ok: Boolean(daily.project && project), detail: daily.project || "No Map selected" },
+    { key: "date", label: "Worked date valid", ok: Boolean(daily.workedDate), detail: formatDate(daily.workedDate || "") },
+    { key: "submitter", label: "Responsible user known", ok: Boolean(daily.submittedBy || daily.tech), detail: daily.submittedBy || daily.tech || "Missing submitter" },
+    { key: "codes", label: "Billing code exists", ok: Boolean(lines.length) && validCodes, detail: codeBlocker ? `${codeBlocker.code || "Line"} needs code review` : `${lines.length} line(s)`, targetLineId: codeBlocker?.id || "" },
+    { key: "quantity", label: "Quantity greater than zero", ok: Boolean(lines.length) && quantityReady, detail: quantityBlocker ? `${quantityBlocker.code || "Line"} needs quantity` : `${Number(selected?.totalQuantity || 0).toLocaleString()} submitted`, targetLineId: quantityBlocker?.id || "" },
+    { key: "rate", label: "Rate ready or flagged", ok: ratesReady, detail: ratesReady ? "Rates available" : `${rateBlocker?.code || "Line"} needs rate review`, targetLineId: rateBlocker?.id || "" },
+    { key: "proof", label: "Proof accepted", ok: Boolean(lines.length) && proofAccepted, detail: proofBlocker ? `${proofBlocker.code || "Line"}: ${productionProofState(proofBlocker)}` : lines.map(line => `${line.code || "Code"}: ${productionProofState(line)}`).join(", "), targetLineId: proofBlocker?.id || "" },
+    { key: "lineReview", label: "Lines approved", ok: Boolean(lines.length) && approvedLines, detail: approvalBlocker ? `${approvalBlocker.code || "Line"} needs approval` : `${lines.filter(line => (line.reviewStatus || line.status) === "Approved").length}/${lines.length} approved`, targetLineId: approvalBlocker?.id || "" },
+    { key: "holds", label: "No unresolved held/rejected line", ok: noHeldLines, detail: noHeldLines ? "Clear" : `${holdBlocker?.code || "Line"} has hold/rejection`, targetLineId: holdBlocker?.id || "" },
+    { key: "safety", label: noSafetyBlockers ? "No safety blocker" : "Safety blocker open", ok: noSafetyBlockers, detail: noSafetyBlockers ? "Clear" : `${safetyBlockers.length} open safety item(s)`, targetId: safetyBlockers[0]?.id || "" }
+  ];
+}
+
+function productionDailyReviewStatus(selected) {
+  const daily = selected?.daily || {};
+  const checklist = productionDailyReviewChecklist(selected);
+  const blockers = checklist.filter(item => !item.ok);
+  const allBillingReady = selected?.lines?.length && selected.lines.every(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus));
+  if (allBillingReady && daily.reviewStatus === "Ready for Billing") return "Ready for Billing";
+  if (daily.reviewStatus) return daily.reviewStatus;
+  if (daily.status === "Returned") return "Returned";
+  if (daily.status === "Corrected") return "Corrected";
+  if (daily.status === "Accepted" || daily.status === "Approved") return blockers.length ? "Accepted With Blockers" : "Accepted";
+  return blockers.length ? "Submitted" : "Ready to Accept";
+}
+
+function productionDailyReturnReasons(selected) {
+  const checklist = productionDailyReviewChecklist(selected);
+  const failed = checklist.filter(item => !item.ok).map(item => item.label);
+  return failed.length ? failed : ["Admin returned daily for correction."];
+}
+
+function productionDailyReviewSummary(selected) {
+  const lines = selected.lines || [];
+  const missingProof = lines.filter(line => ["Missing", "Needs Correction"].includes(productionProofState(line))).length;
+  const proofReview = lines.filter(line => productionProofState(line) === "Needs Review").length;
+  const approved = lines.filter(line => (line.reviewStatus || line.status) === "Approved").length;
+  const readyBill = lines.filter(line => ["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)).length;
+  const rejected = lines.filter(line => ["Rejected", "Hold"].includes(line.billableStatus) || ["Rejected"].includes(line.reviewStatus || line.status)).length;
+  const nextAction = productionDailyNextAction(selected);
+  const blockers = [
+    missingProof ? `${missingProof} line(s) need proof` : "",
+    proofReview ? `${proofReview} proof item(s) need acceptance` : "",
+    rejected ? `${rejected} line(s) blocked or rejected` : "",
+    selected.lines.length && selected.squanQuantity && selected.totalQuantity !== selected.squanQuantity ? "Quantity variance needs review" : ""
+  ].filter(Boolean);
+  return {
+    nextAction,
+    blockers,
+    approved,
+    readyBill,
+    cards: [
+      ["Lines", lines.length, "Submitted codes"],
+      ["Proof review", proofReview, missingProof ? `${missingProof} missing` : "No missing proof"],
+      ["Approved", approved, `${lines.length - approved} remaining`],
+      ["Billing ready", readyBill, "SQUAN handoff"]
+    ]
+  };
+}
+
+function renderProductionDailyReviewSummary(selected) {
+  const summary = productionDailyReviewSummary(selected);
+  return `
+    <div class="daily-review-workstation">
+      <div class="daily-review-next">
+        <span class="eyebrow">Next decision</span>
+        <strong>${escapeAttr(summary.nextAction)}</strong>
+        <small>${summary.blockers.length ? summary.blockers.map(escapeAttr).join(" · ") : "No blockers found for this daily."}</small>
+      </div>
+      <div class="daily-review-cards">
+        ${summary.cards.map(([label, value, note]) => `
+          <article>
+            <span>${escapeAttr(label)}</span>
+            <strong>${Number(value || 0).toLocaleString()}</strong>
+            <small>${escapeAttr(note)}</small>
+          </article>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderAdminReviewLineActions(line) {
+  const proofState = productionProofState(line);
+  const isApproved = (line.reviewStatus || line.status) === "Approved";
+  const proofAccepted = ["Accepted", "Accepted Exception"].includes(proofState);
+  if (isApproved) {
+    return `
+      <div class="admin-review-line-actions">
+        <span class="status ready">Approved</span>
+        ${["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus) ? `<span class="status ready">Billing ready</span>` : ""}
+      </div>
+    `;
+  }
+  return `
+    <div class="admin-review-line-actions">
+      ${proofState === "Needs Review" ? `<button class="secondary-btn mini-btn" data-production-proof="accept" data-production-id="${escapeAttr(line.id)}">Accept proof</button>` : ""}
+      ${!proofAccepted ? `<button class="secondary-btn mini-btn" data-production-proof="request-correction" data-production-id="${escapeAttr(line.id)}">Request proof</button>` : ""}
+      <button class="primary-btn mini-btn" data-production-review="approve" data-production-id="${escapeAttr(line.id)}" ${proofAccepted ? "" : "disabled"}>Approve</button>
+      <button class="secondary-btn mini-btn" data-production-review="needs-proof" data-production-id="${escapeAttr(line.id)}">Hold</button>
+    </div>
+  `;
+}
+
+function renderAdminReviewSupportDrawers({ rows = productionLedgerRows(), adminRows = productionLedgerRows(), projects = [] } = {}) {
+  return `
+    <details class="production-tools-drawer admin-review-secondary">
+      <summary>
+        <span>Review blockers and filters</span>
+        <small>Use these only when the workstation checklist points to a blocker that needs more context.</small>
+      </summary>
+      <div class="production-tools-drawer-body">
+        ${renderAdminDailyProductionReviewQueue(projects, selectedMapContext())}
+        ${renderProductionAdminFilters(rows)}
+      </div>
+    </details>
+    <details class="production-tools-drawer admin-review-secondary">
+      <summary>
+        <span>Proof and line queues</span>
+        <small>Secondary proof queues for searching across all dailies.</small>
+      </summary>
+      <div class="production-tools-drawer-body">
+        ${renderProductionReviewQueue(adminRows)}
+        ${renderProductionProofChecklist(adminRows)}
+      </div>
+    </details>
+    <details class="production-tools-drawer admin-review-secondary">
+      <summary>
+        <span>Full selected daily detail</span>
+        <small>SQUAN-style daily header, production codes, proof, ArcGIS reference, and audit history.</small>
+      </summary>
+      <div class="production-tools-drawer-body">
+        ${renderProductionDailyDetailView(adminRows)}
+      </div>
+    </details>
+  `;
+}
+
+function selectedProductionDailyDetail(rows = productionLedgerRows()) {
+  const detailRows = productionDailyDetailRows(rows).filter(row => row.lines.length);
+  return detailRows.find(row => row.daily.id === state.selectedProductionDailyId) || detailRows[0] || null;
+}
+
+function adminReviewChecklistFixLabel(item) {
+  const labels = {
+    map: "Open Map",
+    date: "Review daily",
+    submitter: "Assign owner",
+    codes: "Review code",
+    quantity: "Review qty",
+    rate: "Open Billing",
+    proof: "Fix proof",
+    lineReview: "Approve lines",
+    holds: "Review hold",
+    safety: "Review safety"
+  };
+  return labels[item.key] || "Fix";
+}
+
+function adminReviewBlockerOwner(item, selected) {
+  if (item.key === "safety") return "Safety Compliance";
+  if (item.key === "rate") return "Billing";
+  if (item.key === "proof") return selected?.daily?.submittedBy || selected?.daily?.tech || "Foreman";
+  if (["date", "submitter", "quantity", "codes"].includes(item.key)) return "Operations";
+  return "Admin";
+}
+
+function renderAdminReviewChecklistItem(item, selected) {
+  const body = `
+    <span>${item.ok ? "✓" : "!"}</span>
+    <div>
+      <strong>${escapeAttr(item.label)}</strong>
+      <small>${escapeAttr(item.detail || "")}</small>
+      ${item.ok ? "" : `<em>${escapeAttr(adminReviewChecklistFixLabel(item))}</em>`}
+    </div>
+  `;
+  if (item.ok) {
+    return `<article class="ready">${body}</article>`;
+  }
+  return `
+    <button class="admin-review-checklist-fix blocked" data-admin-review-fix="${escapeAttr(item.key)}" data-daily-id="${escapeAttr(selected.daily.id)}" data-line-id="${escapeAttr(item.targetLineId || "")}" data-target-id="${escapeAttr(item.targetId || "")}">
+      ${body}
+    </button>
+  `;
+}
+
+function selectedProductionDailyLatestActivity(selected) {
+  if (!selected) return null;
+  return [
+    ...(selected.daily.activityLog || []).map(item => ({ ...item, source: "Daily" })),
+    ...selected.lines.flatMap(line => (line.activityLog || []).map(item => ({ ...item, source: line.code || "Line" }))),
+    ...selected.evidence.flatMap(item => (item.activityLog || []).map(log => ({ ...log, source: item.type || "Proof" })))
+  ].sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))[0] || null;
+}
+
+function renderAdminReviewDecisionHandoff(rows = productionLedgerRows()) {
+  const selected = selectedProductionDailyDetail(rows);
+  if (!selected) return "";
+  const checklist = productionDailyReviewChecklist(selected);
+  const blockers = checklist.filter(item => !item.ok);
+  const nextAction = productionDailyNextAction(selected);
+  const latestHistory = [
+    ...(selected.daily.activityLog || []).map(item => ({ ...item, source: "Daily" })),
+    ...selected.lines.flatMap(line => (line.activityLog || []).map(item => ({ ...item, source: line.code || "Line" }))),
+    ...selected.evidence.flatMap(item => (item.activityLog || []).map(log => ({ ...log, source: item.type || "Proof" })))
+  ].sort((a, b) => String(b.at || "").localeCompare(String(a.at || ""))).slice(0, 6);
+  const primaryBlocker = blockers[0];
+  return `
+    <section class="panel production-panel admin-review-handoff">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Decision Log</span>
+          <h2>Selected daily history and next handoff</h2>
+          <p>Use this to confirm who touched the daily, what changed, and where it needs to go next.</p>
+        </div>
+        <span class="status ${statusClass(nextAction)}">${escapeAttr(nextAction)}</span>
+      </div>
+      <div class="admin-review-handoff-grid">
+        <article class="admin-review-next-handoff">
+          <span class="eyebrow">Next handoff</span>
+          <h3>${escapeAttr(primaryBlocker ? primaryBlocker.label : nextAction)}</h3>
+          <p>${escapeAttr(primaryBlocker ? primaryBlocker.detail : "No blockers remain. Ready for Billing Handoff.")}</p>
+          <dl>
+            <div><dt>Owner</dt><dd>${escapeAttr(primaryBlocker ? adminReviewBlockerOwner(primaryBlocker, selected) : "Billing")}</dd></div>
+            <div><dt>Daily</dt><dd>${escapeAttr(selected.daily.externalDailyId || selected.daily.id)}</dd></div>
+            <div><dt>Map</dt><dd>${escapeAttr(selected.daily.project || "No Map")}</dd></div>
+          </dl>
+          <div class="admin-review-handoff-actions">
+            ${primaryBlocker
+              ? `<button class="primary-btn" data-admin-review-fix="${escapeAttr(primaryBlocker.key)}" data-daily-id="${escapeAttr(selected.daily.id)}" data-line-id="${escapeAttr(primaryBlocker.targetLineId || "")}" data-target-id="${escapeAttr(primaryBlocker.targetId || "")}">${escapeAttr(adminReviewChecklistFixLabel(primaryBlocker))}</button>`
+              : `<button class="primary-btn" data-production-daily-action="billing-ready" data-daily-id="${escapeAttr(selected.daily.id)}">Move to Billing Ready</button>`}
+            <button class="secondary-btn" data-production-mode="Billing Handoff">Open Billing Handoff</button>
+          </div>
+        </article>
+        <article class="admin-review-decision-log">
+          <div class="section-heading compact">
+            <h3>Latest decisions</h3>
+            <span>${latestHistory.length}</span>
+          </div>
+          ${latestHistory.map(item => `
+            <div class="admin-review-log-row">
+              <strong>${escapeAttr(item.note || "Activity recorded")}</strong>
+              <small>${escapeAttr(item.source || "Daily")} · ${escapeAttr(item.by || "System")} · ${formatDateTime(item.at || "")}</small>
+            </div>
+          `).join("") || `<p class="empty">No decision history recorded yet.</p>`}
+        </article>
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminDailyReviewWorkstation(rows = productionLedgerRows()) {
+  const detailRows = productionDailyDetailRows(rows).filter(row => row.lines.length);
+  const selected = selectedProductionDailyDetail(rows);
+  if (!selected) {
+    return `
+      <section class="panel production-panel admin-review-workstation">
+        <div class="panel-header">
+          <div>
+            <span class="eyebrow">Admin Review</span>
+            <h2>No submitted daily selected</h2>
+            <p>Submitted Foreman dailies will appear here for code, quantity, proof, and billing-readiness review.</p>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+  const checklist = productionDailyReviewChecklist(selected);
+  const blockers = checklist.filter(item => !item.ok);
+  const status = productionDailyReviewStatus(selected);
+  const selectedId = selected.daily.externalDailyId || selected.daily.id;
+  const latestActivity = selectedProductionDailyLatestActivity(selected);
+  return `
+    <section class="panel production-panel admin-review-workstation" data-admin-daily-review-workstation>
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Admin Review Workstation</span>
+          <h2>Approve, return, or move Daily Capture to Billing</h2>
+          <p>Foreman submits Map, billing codes, quantities, and proof. Admin clears the checklist before Billing can package SQUAN.</p>
+        </div>
+        <span class="status ${statusClass(status)}">${escapeAttr(status)}</span>
+      </div>
+      <div class="admin-review-layout">
+        <aside class="admin-review-daily-queue">
+          <div class="section-heading compact">
+            <h3>Submitted dailies</h3>
+            <span>${detailRows.length}</span>
+          </div>
+          ${detailRows.map(row => {
+            const rowStatus = productionDailyReviewStatus(row);
+            const rowBlockers = productionDailyReviewChecklist(row).filter(item => !item.ok).length;
+            return `
+              <button class="${row.daily.id === selected.daily.id ? "active" : ""}" data-production-daily-open="${escapeAttr(row.daily.id)}">
+                <span>
+                  <strong>${escapeAttr(row.daily.externalDailyId || row.daily.id)}</strong>
+                  <small>${escapeAttr(row.daily.submittedBy || row.daily.tech || "Unassigned")} · ${formatDate(row.daily.workedDate)} · ${row.lines.length} line(s)</small>
+                </span>
+                <em class="status ${statusClass(rowStatus)}">${escapeAttr(rowBlockers ? `${rowBlockers} issue${rowBlockers === 1 ? "" : "s"}` : rowStatus)}</em>
+              </button>
+            `;
+          }).join("")}
+        </aside>
+        <div class="admin-review-selected">
+          <div class="daily-review-next">
+            <span class="eyebrow">Selected daily</span>
+            <strong>${escapeAttr(selectedId)}</strong>
+            <small>${escapeAttr(selected.daily.project || "No Map")} · ${escapeAttr(selected.daily.submittedBy || selected.daily.tech || "Unassigned")} · ${formatDate(selected.daily.workedDate)}</small>
+            ${latestActivity ? `<small>Last updated by ${escapeAttr(latestActivity.by || "System")} · ${formatDateTime(latestActivity.at || "")}</small>` : ""}
+          </div>
+          <div class="admin-review-line-list">
+            ${selected.lines.map(line => `
+              <article class="${statusClass(line.reviewStatus || line.status)}" data-admin-review-line-id="${escapeAttr(line.id)}">
+                <div class="admin-review-line-main">
+                  <strong>${escapeAttr(line.code || "No code")}</strong>
+                  <small>${escapeAttr(line.unitName || line.notes || "Production line")}</small>
+                </div>
+                <div class="admin-review-line-qty">
+                  <strong>${Number(line.quantity || 0).toLocaleString()} ${escapeAttr(line.uom || "")}</strong>
+                  <small>Rate ${currency(line.unitRate || 0)}</small>
+                </div>
+                <div class="admin-review-line-statuses">
+                  <span class="status ${statusClass(productionProofState(line))}">${escapeAttr(productionProofState(line))}</span>
+                  <span class="status ${statusClass(line.reviewStatus || line.status)}">${escapeAttr(line.reviewStatus || line.status || "Submitted")}</span>
+                  <span class="status ${statusClass(line.billableStatus || "Pending Review")}">${escapeAttr(line.billableStatus || "Pending Review")}</span>
+                </div>
+                ${renderAdminReviewLineActions(line)}
+              </article>
+            `).join("")}
+          </div>
+          <div class="admin-review-actions">
+            <button class="secondary-btn" data-production-daily-action="approve-valid" data-daily-id="${escapeAttr(selected.daily.id)}">Approve valid lines</button>
+            <button class="secondary-btn" data-production-daily-action="return" data-daily-id="${escapeAttr(selected.daily.id)}">Return daily</button>
+            <button class="primary-btn" data-production-daily-action="accept" data-daily-id="${escapeAttr(selected.daily.id)}" ${blockers.length ? "disabled" : ""}>Accept daily</button>
+            <button class="primary-btn" data-production-daily-action="billing-ready" data-daily-id="${escapeAttr(selected.daily.id)}" ${blockers.length ? "disabled" : ""}>Move to Billing Ready</button>
+          </div>
+        </div>
+        <aside class="admin-review-checklist">
+          <div class="section-heading compact">
+            <h3>Required checklist</h3>
+            <span>${checklist.filter(item => item.ok).length}/${checklist.length}</span>
+          </div>
+          ${checklist.map(item => renderAdminReviewChecklistItem(item, selected)).join("")}
+          ${blockers.length ? `<p class="readiness-note">${escapeAttr(blockers.map(item => item.label).join(", "))}</p>` : `<p class="readiness-note ready">Daily is clear for acceptance and Billing handoff.</p>`}
+        </aside>
+      </div>
+    </section>
+  `;
+}
+
 function renderProductionDailyDetailView(rows = productionLedgerRows()) {
-  const detailRows = productionDailyDetailRows(rows);
+  const detailRows = productionDailyDetailRows(rows).filter(row => row.lines.length);
   const selected = detailRows.find(row => row.daily.id === state.selectedProductionDailyId) || detailRows[0];
   if (!selected) {
     return `
@@ -30615,6 +35286,7 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
           </article>
         `).join("")}
       </div>
+      ${renderProductionDailyReviewSummary(selected)}
       <div class="daily-detail-layout">
         <div class="daily-detail-main">
           <section class="daily-detail-card">
@@ -30652,7 +35324,7 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
             </div>
             <div class="table-wrap production-table compact">
               <table>
-                <thead><tr><th>Code</th><th>Jackson qty</th><th>SQUAN qty</th><th>Proof</th><th>Rate</th><th>Status</th></tr></thead>
+                <thead><tr><th>Code</th><th>Jackson qty</th><th>SQUAN qty</th><th>Proof</th><th>Rate</th><th>Status</th><th>Billing</th><th>Actions</th></tr></thead>
                 <tbody>
                   ${codeRows.map(row => `
                     <tr>
@@ -30661,9 +35333,18 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
                       <td>${Number(row.squanQuantity || 0).toLocaleString()}<br><small>${currency(row.squanAmount || 0)}</small></td>
                       <td><span class="status ${statusClass(row.proofState)}">${escapeAttr(row.proofState)}</span><br><small>${row.evidenceRows.length ? `${row.evidenceRows.length} item(s)` : escapeAttr(row.line.proofNote || "No proof linked")}</small></td>
                       <td>${currency(row.line.unitRate || 0)}</td>
-                      <td><span class="status ${statusClass(row.line.status || row.line.reviewStatus)}">${escapeAttr(row.line.status || row.line.reviewStatus || "Submitted")}</span></td>
+                      <td><span class="status ${statusClass(row.line.reviewStatus || row.line.status)}">${escapeAttr(row.line.reviewStatus || row.line.status || "Submitted")}</span></td>
+                      <td><span class="status ${statusClass(row.line.billableStatus || "Pending Review")}">${escapeAttr(row.line.billableStatus || "Pending Review")}</span><br><small>${escapeAttr(row.line.payableStatus || "Pending Review")}</small></td>
+                      <td>
+                        <div class="line-review-actions">
+                          ${row.proofState === "Needs Review" ? `<button class="secondary-btn" data-production-proof="accept" data-production-id="${escapeAttr(row.line.id)}">Accept proof</button>` : ""}
+                          ${row.proofState !== "Accepted" ? `<button class="secondary-btn" data-production-proof="request-correction" data-production-id="${escapeAttr(row.line.id)}">Request proof</button>` : ""}
+                          <button class="primary-btn" data-production-review="approve" data-production-id="${escapeAttr(row.line.id)}" ${row.proofState === "Accepted" ? "" : "disabled"}>Approve</button>
+                          <button class="secondary-btn" data-production-review="needs-proof" data-production-id="${escapeAttr(row.line.id)}">Hold</button>
+                        </div>
+                      </td>
                     </tr>
-                  `).join("") || `<tr><td colspan="6">No production lines linked.</td></tr>`}
+                  `).join("") || `<tr><td colspan="8">No production lines linked.</td></tr>`}
                 </tbody>
               </table>
             </div>
@@ -30678,6 +35359,7 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
                 <article>
                   <strong>${escapeAttr(item.evidenceType || "Proof")}</strong>
                   <span>${escapeAttr(item.status || "Submitted")}</span>
+                  ${item.photoReference ? `<b>${escapeAttr(item.photoReference)}</b>` : ""}
                   <small>${escapeAttr(item.notes || "No proof note.")}</small>
                 </article>
               `).join("") || `<p class="empty-state">Attach photos, as-builts, video, SOT, or notes before approval.</p>`}
@@ -30689,13 +35371,7 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
               <span>${history.length}</span>
             </div>
             <div class="daily-history-list">
-              ${history.map(item => `
-                <article>
-                  <strong>${formatDateTime(item.at || daily.modifiedAt || daily.createdAt)}</strong>
-                  <span>${escapeAttr(item.note || "Daily updated.")}</span>
-                  <small>${escapeAttr(item.by || daily.submittedBy || "System")}</small>
-                </article>
-              `).join("") || `<p class="empty-state">No history beyond the daily record timestamps.</p>`}
+              ${history.map(item => renderProductionDailyHistoryItem(item, daily)).join("") || `<p class="empty-state">No history beyond the daily record timestamps.</p>`}
             </div>
           </section>
         </div>
@@ -30706,7 +35382,7 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
           </div>
           <dl class="daily-arcgis-attributes">
             <div><dt>OBJECTID</dt><dd>${escapeAttr(firstLine.objectId || firstFeature.objectId || "Future ArcGIS")}</dd></div>
-            <div><dt>client</dt><dd>${escapeAttr(project?.customer || "SQUAN")}</dd></div>
+            <div><dt>client</dt><dd>${escapeAttr(project?.customer || "Customer")}</dd></div>
             <div><dt>CLLI / node</dt><dd>${escapeAttr(firstLine.clli || daily.clli || firstFeature.clli || "Pending")}</dd></div>
             <div><dt>Feeder / DTAP</dt><dd>${escapeAttr(firstLine.feeder || daily.feeder || firstFeature.feeder || "Pending")}</dd></div>
             <div><dt>Foreman</dt><dd>${escapeAttr(daily.tech || daily.submittedBy || "Pending")}</dd></div>
@@ -30725,6 +35401,29 @@ function renderProductionDailyDetailView(rows = productionLedgerRows()) {
         </aside>
       </div>
     </section>
+  `;
+}
+
+function renderProductionDailyHistoryItem(item, daily) {
+  const changes = Array.isArray(item.changes) ? item.changes : [];
+  return `
+    <article class="${changes.length ? "expanded" : ""}">
+      <strong>${formatDateTime(item.at || daily.modifiedAt || daily.createdAt)}</strong>
+      <span>${escapeAttr(item.note || "Daily updated.")}</span>
+      <small>${escapeAttr(item.by || daily.submittedBy || "System")}</small>
+      ${changes.length ? `
+        <div class="daily-history-changes">
+          <div><b>Field Name</b><b>Old Value</b><b>New Value</b></div>
+          ${changes.map(change => `
+            <div>
+              <span>${escapeAttr(change.field || "")}</span>
+              <span>${escapeAttr(change.oldValue || "")}</span>
+              <span>${escapeAttr(change.newValue || "")}</span>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+    </article>
   `;
 }
 
@@ -30877,6 +35576,82 @@ function renderProductionLedger(rows) {
             `).join("") || `<tr><td colspan="10">No production lines match this search.</td></tr>`}
           </tbody>
         </table>
+      </div>
+    </section>
+  `;
+}
+
+function productionBillingReadyLineRows(rows = productionLedgerRows()) {
+  const allowedLineIds = new Set(rows.map(row => row.id));
+  const lines = state.data.productionLines || [];
+  const dailies = state.data.productionDailies || [];
+  return (state.data.billingLedger || [])
+    .filter(item => item.billingStatus === "Ready to Bill")
+    .map(item => {
+      const line = lines.find(row => row.id === item.productionLineId) || {};
+      const daily = dailies.find(row => row.id === line.dailyId) || {};
+      return {
+        ...item,
+        line,
+        daily,
+        proofState: productionProofState(line),
+        quantity: Number(line.quantity || 0),
+        uom: line.uom || "",
+        responsible: daily.submittedBy || line.submittedBy || "Unassigned",
+        dailyId: daily.externalDailyId || daily.id || line.dailyId || "",
+        workedDate: item.workedDate || line.workedDate || daily.workedDate || "",
+        code: item.code || line.code || "",
+        project: item.project || line.project || daily.project || ""
+      };
+    })
+    .filter(row => allowedLineIds.has(row.productionLineId))
+    .sort((a, b) => String(b.workedDate || "").localeCompare(String(a.workedDate || "")) || a.responsible.localeCompare(b.responsible));
+}
+
+function renderProductionBillingReadyLineView(rows = productionLedgerRows()) {
+  const readyRows = productionBillingReadyLineRows(rows);
+  const totalBillable = readyRows.reduce((total, row) => total + Number(row.squanBillableAmount || 0), 0);
+  const totalPayable = readyRows.reduce((total, row) => total + Number(row.contractorPayableAmount || 0), 0);
+  return `
+    <section class="panel production-panel production-billing-ready-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Billing handoff</span>
+          <h2>Ready for SQUAN billing</h2>
+          <p>Approved Daily Capture lines with accepted proof appear here for Billing to package, export, and reconcile against SQUAN.</p>
+        </div>
+        <div class="production-accumulation-summary">
+          ${metric("Ready lines", readyRows.length, "Approved billables")}
+          ${metric("Billable", currency(totalBillable), "SQUAN support")}
+          ${metric("Payable", currency(totalPayable), "Contractor support")}
+        </div>
+      </div>
+      <div class="billing-ready-list">
+        ${readyRows.map(row => `
+          <article class="billing-ready-row">
+            <div>
+              <strong>${escapeAttr(row.dailyId || row.productionLineId)}</strong>
+              <small>${escapeAttr(row.responsible)} · ${formatDate(row.workedDate)} · ${escapeAttr(row.project)}</small>
+            </div>
+            <div>
+              <strong>${escapeAttr(row.code)}</strong>
+              <small>${Number(row.quantity || 0).toLocaleString()} ${escapeAttr(row.uom)}</small>
+            </div>
+            <div>
+              <strong>${currency(row.squanBillableAmount || 0)}</strong>
+              <small>SQUAN billable</small>
+            </div>
+            <div>
+              <strong>${currency(row.contractorPayableAmount || row.inHouseCostAmount || 0)}</strong>
+              <small>${row.contractorPayableAmount ? "Contractor payable" : "Job cost"}</small>
+            </div>
+            <span class="status ${statusClass(row.proofState)}">${escapeAttr(row.proofState)}</span>
+            <div class="row-actions">
+              ${row.daily?.id ? `<button class="secondary-btn" data-production-daily-open="${escapeAttr(row.daily.id)}">Open daily</button>` : ""}
+              <button class="secondary-btn" data-workflow-action="Reports" data-workflow-target="reports" data-workflow-focus="Daily Production" data-report-scope="Daily / Production Audit Trail">Report</button>
+            </div>
+          </article>
+        `).join("") || `<p class="empty-state">No approved billable production lines match the current Admin filters.</p>`}
       </div>
     </section>
   `;
@@ -31377,6 +36152,9 @@ async function handleProductionCsvImport(input, importType) {
   }
 
   if (importType === "price-sheet") {
+    const sourceType = /squan|brightspeed|mi_pricing|prime sheet/i.test(file.name)
+      ? "SQUAN / Brightspeed prime sheet"
+      : "Imported price sheet";
     rows.forEach((row, index) => {
       const code = csvValue(row, ["code", "unit code", "item code", "work code"]);
       if (!code) return;
@@ -31389,6 +36167,7 @@ async function handleProductionCsvImport(input, importType) {
         subRate: Number(csvValue(row, ["contractor rate", "subcontractor rate", "sub rate", "rate", "price"], 0)) || 0,
         aspect: csvValue(row, ["aspect", "category", "work aspect"], "Production"),
         sourceFile: file.name,
+        sourceType,
         status: "Imported",
         notes: `Price sheet CSV row ${index + 1} imported from ${file.name}.`,
         activityLog: [{ at: now, by: state.user?.name || "User", note: "Imported price sheet item." }],
@@ -31437,6 +36216,10 @@ async function handleProductionCsvImport(input, importType) {
       pointY: csvValue(row, ["point_y", "point y", "y", "latitude"]),
       arcgisNotes: csvValue(row, ["notes", "arcgis notes", "comments"]),
       status: "Imported",
+      locked: true,
+      dataClassification: "Real Imported",
+      sourceLock: "Original import read-only. Corrections are linked as Jackson resubmissions.",
+      resubmissionStatus: "Needs Jackson Review",
       notes: `Parsed from SQUAN CSV ${file.name}.`,
       activityLog: [{ at: now, by: state.user?.name || "User", note: "Imported SQUAN production line." }],
       createdAt: now,
@@ -31463,9 +36246,157 @@ async function handleProductionCsvImport(input, importType) {
   render();
 }
 
+function sourceSubmissionSlug(id = "") {
+  return String(id || "SOURCE").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase();
+}
+
+function createJacksonResubmissionFromSource(sourceId, options = {}) {
+  if (!guardRoleAction("operational.cleanup", { sourceId })) return;
+  const source = (state.data.squanProductionLines || []).find(item => item.id === sourceId);
+  if (!source) {
+    alert("Original imported submission was not found.");
+    return;
+  }
+  const existing = realSubmissionRows().find(row => row.id === sourceId);
+  const isRevision = options.revision === true;
+  if (existing?.linkedDaily && !isRevision) {
+    alert("A Jackson daily is already linked to this original. Use New revision if this is a correction.");
+    return;
+  }
+  const now = new Date().toISOString();
+  const slug = sourceSubmissionSlug(sourceId);
+  const previousVersion = Number(existing?.resubmissionVersion || source.resubmissionVersion || 0);
+  const version = isRevision ? previousVersion + 1 || 2 : 1;
+  const suffix = version > 1 ? `-V${version}` : "";
+  const dailyId = `PD-JACKSON-${slug}${suffix}`;
+  const lineId = `PL-JACKSON-${slug}${suffix}`;
+  const project = source.project || source.ntp || source.jobId || state.selectedProjectId || "";
+  const code = source.code || "";
+  const price = productionPriceForCode(code) || {};
+  const quantity = Number(source.quantity || 0);
+  const unitRate = Number(source.unitRate || price.subRate || price.price || 0);
+  const submittedBy = state.user?.name || "Jackson Admin";
+  const sourcePatch = {
+    ...source,
+    locked: true,
+    sourceLock: "Original import read-only. Corrections are linked as Jackson resubmissions.",
+    dataClassification: "Real Imported",
+    resubmissionStatus: "Jackson Daily Created",
+    resubmissionVersion: version,
+    linkedJacksonDailyId: dailyId,
+    modifiedAt: now,
+    activityLog: [
+      ...(source.activityLog || []),
+      { at: now, by: submittedBy, note: `${isRevision ? "Revision" : "Jackson daily"} ${dailyId} linked to original imported submission.` }
+    ]
+  };
+  productionCollectionUpsert("squanProductionLines", sourcePatch);
+  productionCollectionUpsert("productionDailies", {
+    id: dailyId,
+    externalDailyId: source.externalDailyId || `JACKSON-${sourceId}`,
+    project,
+    ntp: project,
+    sourceType: "Jackson Resubmission",
+    dataClassification: "Live Jackson Submission",
+    sourceSubmissionId: sourceId,
+    resubmissionOf: sourceId,
+    resubmissionStatus: "Jackson Daily Created",
+    resubmissionVersion: version,
+    resubmittedBy: submittedBy,
+    resubmittedAt: now,
+    submittedBy,
+    tech: source.tech || submittedBy,
+    workedDate: source.workedDate || isoDate(new Date()),
+    clli: source.clli || source.node || "",
+    feeder: source.feeder || source.street || "",
+    status: "Submitted",
+    sourceLocked: true,
+    notes: `Linked Jackson resubmission for imported source ${sourceId}. Original remains read-only.`,
+    activityLog: [{ at: now, by: submittedBy, note: `Jackson resubmission v${version} created from imported source ${sourceId}.` }],
+    createdAt: now,
+    modifiedAt: now
+  });
+  productionCollectionUpsert("productionLines", {
+    id: lineId,
+    dailyId,
+    sourceType: "Jackson Resubmission",
+    dataClassification: "Live Jackson Submission",
+    sourceSubmissionId: sourceId,
+    resubmissionOf: sourceId,
+    resubmissionStatus: "Jackson Daily Created",
+    resubmissionVersion: version,
+    resubmittedBy: submittedBy,
+    resubmittedAt: now,
+    submittedBy,
+    project,
+    ntp: project,
+    workedDate: source.workedDate || isoDate(new Date()),
+    code,
+    quantity,
+    uom: source.uom || price.uom || "Unit",
+    unitRate,
+    submittedAmount: Math.round(quantity * unitRate * 100) / 100,
+    squanAmount: Number(source.squanAmount || 0),
+    clli: source.clli || source.node || "",
+    feeder: source.feeder || source.street || "",
+    objectId: source.objectId || "",
+    globalId: source.globalId || "",
+    pointX: source.pointX || "",
+    pointY: source.pointY || "",
+    reviewStatus: "Submitted",
+    payableStatus: "Pending Review",
+    billableStatus: "Pending Review",
+    proofStatus: source.proofStatus || "Missing",
+    mapOverrideReason: "",
+    workedDateOverrideReason: "",
+    notes: `Validate code, quantity, map/date match, and proof before billing. Source ${sourceId} is preserved.`,
+    activityLog: [{ at: now, by: submittedBy, note: `Production line created from imported source ${sourceId}.` }],
+    createdAt: now,
+    modifiedAt: now
+  });
+  appendAuditLocal("production.jackson-resubmission", { sourceId, dailyId, lineId, version, by: submittedBy });
+  state.selectedProductionDailyId = dailyId;
+  persist(`Jackson resubmission ${dailyId} created`);
+  render();
+}
+
+function handleRealSubmissionAction(button) {
+  const action = button.dataset.realSubmissionAction;
+  const sourceId = button.dataset.sourceId;
+  const source = (state.data.squanProductionLines || []).find(item => item.id === sourceId);
+  if (!source) return;
+  if (action === "resubmit") {
+    createJacksonResubmissionFromSource(sourceId);
+    return;
+  }
+  if (action === "revision") {
+    createJacksonResubmissionFromSource(sourceId, { revision: true });
+    return;
+  }
+  if (action === "archive-demo") {
+    if (!guardRoleAction("operational.cleanup", { sourceId })) return;
+    const now = new Date().toISOString();
+    productionCollectionUpsert("squanProductionLines", {
+      ...source,
+      dataClassification: "Archived Demo",
+      status: source.status || "Archived Demo",
+      notes: `${source.notes || ""} Archived as demo/training data; excluded from live operational readiness.`,
+      activityLog: [
+        ...(source.activityLog || []),
+        { at: now, by: state.user?.name || "Admin", note: "Classified as archived demo/training data." }
+      ],
+      modifiedAt: now
+    });
+    appendAuditLocal("production.source-classified", { sourceId, classification: "Archived Demo", by: state.user?.name || "Admin" });
+    persist("Source moved to demo archive");
+    render();
+  }
+}
+
 function productionDailyFormValues() {
   const sourceType = document.getElementById("productionSourceType")?.value || "Contractor Daily";
   const submittedBy = document.getElementById("productionSubmittedBy")?.value?.trim() || state.user?.name || "Jackson Telcom";
+  const codeOption = document.getElementById("productionCode")?.selectedOptions?.[0];
   return {
     sourceType,
     submittedBy,
@@ -31478,6 +36409,8 @@ function productionDailyFormValues() {
     vehicle: document.getElementById("productionVehicle")?.value?.trim() || "",
     crewAllocation: document.getElementById("productionCrewAllocation")?.value?.trim() || "100%",
     code: document.getElementById("productionCode")?.value || "",
+    codeDescription: codeOption?.dataset.description || "",
+    codeUom: codeOption?.dataset.uom || "",
     quantity: Number(document.getElementById("productionQuantity")?.value || 0),
     objectId: document.getElementById("productionObjectId")?.value?.trim() || "",
     globalId: document.getElementById("productionGlobalId")?.value?.trim() || "",
@@ -31488,15 +36421,43 @@ function productionDailyFormValues() {
   };
 }
 
+function currentProductionDraftLine() {
+  const values = productionDailyFormValues();
+  const price = productionPriceForCode(values.code);
+  return {
+    id: `DRAFT-LINE-${Date.now()}`,
+    code: values.code,
+    description: values.codeDescription || price?.description || price?.unitName || values.code,
+    unitName: price?.unitName || values.codeDescription || values.code,
+    uom: values.code === "TS01" ? "Hours" : values.codeUom || price?.uom || "Units",
+    quantity: values.quantity,
+    unitRate: Number(price?.subRate || price?.price || 0),
+    rateSource: price ? "Rate sheet" : "Missing rate",
+    proofNote: values.proofNote
+  };
+}
+
+function validateProductionDraftLine(line) {
+  const blockers = [];
+  if (!line.code) blockers.push("Production code is required.");
+  if (Number(line.quantity || 0) <= 0) blockers.push("Quantity must be greater than zero.");
+  return blockers;
+}
+
 function validateProductionDailyCapture(values, status = "Submitted") {
   if (status === "Draft") return [];
+  const draftLines = state.productionDraftLines || [];
   const blockers = [];
   if (!values.project) blockers.push("Map / NTP is required.");
   if (!values.workedDate) blockers.push("Work date is required.");
   if (!values.submittedBy) blockers.push("Submitter / tech / foreman is required.");
-  if (!values.code) blockers.push("Production code is required.");
-  if (Number(values.quantity || 0) <= 0) blockers.push("Quantity must be greater than zero.");
-  if (!values.proofNote) blockers.push("Proof note is required before submit. Reference the photo, as-built, video, pole tag, or SQUAN evidence.");
+  if (!draftLines.length) {
+    if (!values.code) blockers.push("Production code is required.");
+    if (Number(values.quantity || 0) <= 0) blockers.push("Quantity must be greater than zero.");
+    if (!values.proofNote) blockers.push("Proof note is required before submit. Reference the photo, as-built, video, pole tag, or SQUAN evidence.");
+  } else if (draftLines.some(line => !line.proofNote)) {
+    blockers.push("Every added code line needs a proof note or reference before submit.");
+  }
   return blockers;
 }
 
@@ -31510,12 +36471,10 @@ function saveProductionDailyFromForm(status = "Submitted") {
   }
   const now = new Date().toISOString();
   const { sourceType, submittedBy, project, workedDate, externalDailyId, clli, feeder, hours, vehicle, crewAllocation, code, quantity, objectId, globalId, pointX, pointY, arcgisNotes, proofNote } = values;
-  const price = productionPriceForCode(code);
-  const unitRate = Number(price?.subRate || price?.price || 0);
+  const submittedLines = (state.productionDraftLines || []).length
+    ? state.productionDraftLines
+    : [currentProductionDraftLine()];
   const dailyId = `PD-${Date.now()}`;
-  const lineId = `PL-${Date.now()}`;
-  const proofStatus = proofNote ? "Attached" : "Missing";
-  const reviewStatus = status === "Draft" ? "Draft" : proofNote ? "Submitted" : "Needs Proof";
 
   const daily = {
     id: dailyId,
@@ -31532,80 +36491,90 @@ function saveProductionDailyFromForm(status = "Submitted") {
     vehicle,
     crewAllocation,
     status,
-    notes: proofNote || arcgisNotes || `${sourceType} ${status === "Draft" ? "saved as draft" : "submitted for Jackson review"}.`,
+    notes: proofNote || arcgisNotes || `${sourceType} ${status === "Draft" ? "saved as draft" : "submitted for Jackson review"} with ${submittedLines.length} production line(s).`,
     activityLog: [{ at: now, by: submittedBy, note: status === "Draft" ? "Production daily draft saved." : "Production daily submitted." }],
     createdAt: now,
     modifiedAt: now
   };
-  const line = {
-    id: lineId,
-    dailyId,
-    sourceType,
-    submittedBy,
-    project,
-    ntp: project,
-    workedDate,
-    code,
-    quantity,
-    uom: code === "TS01" ? "Hours" : price?.uom || "Units",
-    unitRate,
-    submittedAmount: Math.round(quantity * unitRate * 100) / 100,
-    clli,
-    feeder,
-    hours,
-    vehicle,
-    objectId,
-    globalId,
-    pointX,
-    pointY,
-    arcgisNotes,
-    reviewStatus,
-    payableStatus: status === "Draft" ? "Draft" : sourceType.includes("Contractor") ? "Pending Review" : "Job Cost",
-    billableStatus: status === "Draft" ? "Draft" : "Pending Review",
-    proofStatus,
-    notes: proofNote || "Proof required before approval.",
-    activityLog: [{ at: now, by: submittedBy, note: status === "Draft" ? "Production line draft saved." : "Production line submitted for review." }],
-    createdAt: now,
-    modifiedAt: now
-  };
   productionCollectionUpsert("productionDailies", daily);
-  productionCollectionUpsert("productionLines", line);
-  if (sourceType.includes("Tech")) {
-    productionCollectionUpsert("techWorkEntries", {
-      id: `TECH-${lineId}`,
-      productionLineId: lineId,
+
+  submittedLines.forEach((draftLine, index) => {
+    const price = productionPriceForCode(draftLine.code);
+    const unitRate = Number(draftLine.unitRate || price?.subRate || price?.price || 0);
+    const lineId = `PL-${Date.now()}-${index + 1}`;
+    const lineProofNote = draftLine.proofNote || proofNote;
+    const proofStatus = lineProofNote ? "Attached" : "Missing";
+    const reviewStatus = status === "Draft" ? "Draft" : lineProofNote ? "Submitted" : "Needs Proof";
+    const line = {
+      id: lineId,
+      dailyId,
+      sourceType,
+      submittedBy,
       project,
-      employee: submittedBy,
+      ntp: project,
       workedDate,
-      code,
-      hours: code === "TS01" ? quantity : 0,
-      quantity,
-      status: "Submitted",
-      notes: proofNote || "In-house production/time submitted.",
-      activityLog: [{ at: now, by: submittedBy, note: "Tech work entry created from production daily." }],
-      createdAt: now,
-      modifiedAt: now
-    });
-  }
-  if (proofNote) {
-    productionCollectionUpsert("fieldEvidence", {
-      id: `FE-${lineId}`,
-      project,
-      productionLineId: lineId,
-      source: sourceType,
-      evidenceType: "Note / field proof",
-      status: status === "Draft" ? "Draft" : "Submitted",
-      productionDailyId: dailyId,
-      notes: proofNote,
+      code: draftLine.code,
+      quantity: Number(draftLine.quantity || 0),
+      uom: draftLine.code === "TS01" ? "Hours" : draftLine.uom || price?.uom || "Units",
+      unitRate,
+      submittedAmount: Math.round(Number(draftLine.quantity || 0) * unitRate * 100) / 100,
+      clli,
+      feeder,
+      hours,
+      vehicle,
       objectId,
       globalId,
-      activityLog: [{ at: now, by: submittedBy, note: "Field evidence note linked to production line." }],
+      pointX,
+      pointY,
+      arcgisNotes,
+      reviewStatus,
+      payableStatus: status === "Draft" ? "Draft" : sourceType.includes("Contractor") ? "Pending Review" : "Job Cost",
+      billableStatus: status === "Draft" ? "Draft" : "Pending Review",
+      proofStatus,
+      notes: lineProofNote || "Proof required before approval.",
+      activityLog: [{ at: now, by: submittedBy, note: status === "Draft" ? "Production line draft saved." : "Production line submitted for review." }],
       createdAt: now,
       modifiedAt: now
-    });
-  }
-  appendAuditLocal(status === "Draft" ? "production.daily-draft" : "production.daily-submitted", { daily: dailyId, line: lineId, project, by: submittedBy });
+    };
+    productionCollectionUpsert("productionLines", line);
+    if (sourceType.includes("Tech")) {
+      productionCollectionUpsert("techWorkEntries", {
+        id: `TECH-${lineId}`,
+        productionLineId: lineId,
+        project,
+        employee: submittedBy,
+        workedDate,
+        code: draftLine.code,
+        hours: draftLine.code === "TS01" ? Number(draftLine.quantity || 0) : 0,
+        quantity: Number(draftLine.quantity || 0),
+        status: "Submitted",
+        notes: lineProofNote || "In-house production/time submitted.",
+        activityLog: [{ at: now, by: submittedBy, note: "Tech work entry created from production daily." }],
+        createdAt: now,
+        modifiedAt: now
+      });
+    }
+    if (lineProofNote) {
+      productionCollectionUpsert("fieldEvidence", {
+        id: `FE-${lineId}`,
+        project,
+        productionLineId: lineId,
+        source: sourceType,
+        evidenceType: "Note / field proof",
+        status: status === "Draft" ? "Draft" : "Submitted",
+        productionDailyId: dailyId,
+        notes: lineProofNote,
+        objectId,
+        globalId,
+        activityLog: [{ at: now, by: submittedBy, note: "Field evidence note linked to production line." }],
+        createdAt: now,
+        modifiedAt: now
+      });
+    }
+  });
+  appendAuditLocal(status === "Draft" ? "production.daily-draft" : "production.daily-submitted", { daily: dailyId, lines: submittedLines.length, project, by: submittedBy });
   state.selectedProductionDailyId = dailyId;
+  state.productionDraftLines = [];
   persist(status === "Draft" ? "Production daily draft saved" : "Production daily submitted for Jackson review");
   render();
 }
@@ -31847,6 +36816,10 @@ function handleProductionReview(button) {
     line.payableStatus = line.sourceType?.includes("Contractor") ? "Ready to Pay" : "Job Cost";
     line.billableStatus = "Ready to Bill";
     line.proofStatus = proofState;
+    if (line.code !== "TS01" && Number(line.unitRate || 0) <= 0) {
+      line.billableStatus = "Rate Review";
+      line.notes = appendInlineNote(line.notes, `Billing code rate is missing for ${line.code}. Admin/Billing must import or confirm the rate before handoff.`);
+    }
   } else if (action === "needs-proof") {
     line.reviewStatus = "Needs Proof";
     line.payableStatus = "Hold";
@@ -31882,23 +36855,27 @@ function handleProductionReview(button) {
         modifiedAt: now
       });
     }
-    productionCollectionUpsert("billingLedger", {
-      id: `BILL-${line.id}`,
-      productionLineId: line.id,
-      project: line.project,
-      workedDate: line.workedDate,
-      code: line.code,
-      squanBillableAmount: ledgerRow.squanAmount || ledgerRow.submittedAmount || 0,
-      contractorPayableAmount: line.sourceType?.includes("Contractor") ? ledgerRow.submittedAmount || 0 : 0,
-      inHouseCostAmount: line.sourceType?.includes("Tech") ? ledgerRow.submittedAmount || 0 : 0,
-      proofStatus: line.proofStatus,
-      paymentStatus: "Open",
-      billingStatus: "Ready to Bill",
-      notes: "Approved line available for SQUAN package and audit trail.",
-      activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Billing ledger row created from approved production." }],
-      createdAt: now,
-      modifiedAt: now
-    });
+    if (line.billableStatus === "Ready to Bill") {
+      productionCollectionUpsert("billingLedger", {
+        id: `BILL-${line.id}`,
+        productionLineId: line.id,
+        project: line.project,
+        workedDate: line.workedDate,
+        code: line.code,
+        squanBillableAmount: ledgerRow.squanAmount || ledgerRow.submittedAmount || 0,
+        contractorPayableAmount: line.sourceType?.includes("Contractor") ? ledgerRow.submittedAmount || 0 : 0,
+        inHouseCostAmount: line.sourceType?.includes("Tech") ? ledgerRow.submittedAmount || 0 : 0,
+        proofStatus: line.proofStatus,
+        paymentStatus: "Open",
+        billingStatus: "Ready to Bill",
+        notes: "Approved line available for SQUAN package and audit trail.",
+        activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Billing ledger row created from approved production." }],
+        createdAt: now,
+        modifiedAt: now
+      });
+    } else {
+      createProductionRateReviewTask(line);
+    }
   }
   productionCollectionUpsert("quantityReconciliation", {
     id: `QTY-${line.id}`,
@@ -31922,6 +36899,195 @@ function handleProductionReview(button) {
   render();
 }
 
+function createProductionDailyCorrectionTask(daily, reasons = []) {
+  const project = (state.data.projects || []).find(item => item.id === daily.project);
+  if (!project) return null;
+  const taskId = `TASK-PROD-DAILY-CORRECT-${daily.id}`.replace(/[^A-Z0-9-]/gi, "-").toUpperCase();
+  return createAdminTask(
+    project,
+    `Correct returned Daily Capture ${daily.externalDailyId || daily.id}`,
+    "Field Operations",
+    `${daily.externalDailyId || daily.id} was returned by Admin/Ops. Fix: ${reasons.join("; ") || "Review returned daily and resubmit."}`,
+    {
+      id: taskId,
+      owner: daily.submittedBy || daily.tech || project.crew || roleConfig.Foreman.person,
+      role: "Foreman",
+      priority: "High",
+      source: "Daily Capture correction",
+      dueDate: isoDate(today),
+      extra: {
+        dailyId: daily.id,
+        productionDailyId: daily.id,
+        workflowFocus: "Returned daily correction",
+        correctionReasons: reasons
+      },
+      activityLog: [{ at: new Date().toISOString(), by: state.user?.name || "Admin", note: `Correction task created for returned Daily Capture ${daily.id}.` }]
+    }
+  );
+}
+
+function ensureBillingLedgerForApprovedLine(line, now = new Date().toISOString()) {
+  const ledgerRow = productionLedgerRows().find(row => row.id === line.id) || line;
+  if (!["Approved"].includes(line.reviewStatus || line.status)) return null;
+  if (!["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)) line.billableStatus = "Ready to Bill";
+  return productionCollectionUpsert("billingLedger", {
+    id: `BILL-${line.id}`,
+    productionLineId: line.id,
+    project: line.project,
+    workedDate: line.workedDate,
+    code: line.code,
+    squanBillableAmount: ledgerRow.squanAmount || ledgerRow.submittedAmount || 0,
+    contractorPayableAmount: line.sourceType?.includes("Contractor") ? ledgerRow.submittedAmount || 0 : 0,
+    inHouseCostAmount: line.sourceType?.includes("Tech") ? ledgerRow.submittedAmount || 0 : 0,
+    proofStatus: line.proofStatus || productionProofState(line),
+    paymentStatus: "Open",
+    billingStatus: "Ready to Bill",
+    notes: "Approved Daily Capture line available for SQUAN package and audit trail.",
+    activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Billing ledger row ensured from accepted daily." }],
+    createdAt: now,
+    modifiedAt: now
+  });
+}
+
+function handleProductionDailyReviewAction(button) {
+  const daily = (state.data.productionDailies || []).find(item => item.id === button.dataset.dailyId);
+  if (!daily) return;
+  const action = button.dataset.productionDailyAction;
+  const selected = productionDailyDetailRows(productionLedgerRows()).find(row => row.daily.id === daily.id);
+  if (!selected) return;
+  const now = new Date().toISOString();
+  const checklist = productionDailyReviewChecklist(selected);
+  const blockers = checklist.filter(item => !item.ok);
+  const lines = selected.lines || [];
+
+  if (action === "approve-valid") {
+    lines.forEach(line => {
+      if (["Accepted", "Accepted Exception"].includes(productionProofState(line)) && Number(line.quantity || 0) > 0) {
+        line.reviewStatus = "Approved";
+        line.status = line.status === "Draft" ? "Submitted" : line.status;
+        line.proofStatus = productionProofState(line);
+        line.payableStatus = line.sourceType?.includes("Contractor") ? "Ready to Pay" : "Job Cost";
+        line.billableStatus = Number(line.unitRate || 0) > 0 || line.code === "TS01" ? "Ready to Bill" : "Rate Review";
+        line.modifiedAt = now;
+        line.activityLog = [...(line.activityLog || []), { at: now, by: state.user?.name || "Operations", note: "Line approved by daily-level Admin review." }];
+        if (line.billableStatus === "Ready to Bill") ensureBillingLedgerForApprovedLine(line, now);
+        else createProductionRateReviewTask(line);
+      }
+    });
+    daily.reviewStatus = "In Review";
+    daily.status = "In Review";
+    daily.modifiedAt = now;
+    daily.activityLog = [...(daily.activityLog || []), { at: now, by: state.user?.name || "Operations", note: "Admin approved all valid Daily Capture lines." }];
+    appendAuditLocal("production.daily.approve-valid-lines", { daily: daily.id, project: daily.project, by: state.user?.name || "Operations" });
+    persist("Valid Daily Capture lines approved");
+    render();
+    return;
+  }
+
+  if (action === "return") {
+    const suggestedReasons = productionDailyReturnReasons(selected);
+    const reason = prompt("Why is this daily being returned?", suggestedReasons.join("; ")) || "";
+    if (!reason.trim()) return;
+    daily.reviewStatus = "Returned";
+    daily.status = "Returned";
+    daily.returnedBy = state.user?.name || "Operations";
+    daily.returnedAt = now;
+    daily.returnReason = reason.trim();
+    daily.activityLog = [...(daily.activityLog || []), { at: now, by: state.user?.name || "Operations", note: `Daily returned: ${reason.trim()}` }];
+    lines.forEach(line => {
+      if (!["Approved"].includes(line.reviewStatus || line.status)) {
+        line.reviewStatus = "Needs Proof";
+        line.billableStatus = "Hold";
+        line.payableStatus = "Hold";
+        line.modifiedAt = now;
+        line.activityLog = [...(line.activityLog || []), { at: now, by: state.user?.name || "Operations", note: `Daily returned for correction: ${reason.trim()}` }];
+      }
+    });
+    const task = createProductionDailyCorrectionTask(daily, [reason.trim()]);
+    appendAuditLocal("production.daily.returned", { daily: daily.id, project: daily.project, task: task?.id || "", reason: reason.trim(), by: state.user?.name || "Operations" });
+    persist("Daily Capture returned for correction");
+    render();
+    return;
+  }
+
+  if (blockers.length) {
+    alert(`Daily is not ready yet:\n\n${blockers.map(item => `${item.label}: ${item.detail}`).join("\n")}`);
+    appendAuditLocal("production.daily.review-blocked", { daily: daily.id, project: daily.project, blockers: blockers.map(item => item.label), action, by: state.user?.name || "Operations" });
+    return;
+  }
+
+  lines.forEach(line => {
+    line.reviewStatus = "Approved";
+    line.status = line.status === "Draft" ? "Submitted" : line.status;
+    line.proofStatus = productionProofState(line);
+    line.payableStatus = line.sourceType?.includes("Contractor") ? "Ready to Pay" : "Job Cost";
+    line.billableStatus = "Ready to Bill";
+    line.modifiedAt = now;
+    line.activityLog = [...(line.activityLog || []), { at: now, by: state.user?.name || "Operations", note: action === "billing-ready" ? "Daily moved to Billing Ready." : "Daily accepted by Admin review." }];
+    ensureBillingLedgerForApprovedLine(line, now);
+  });
+  daily.reviewStatus = action === "billing-ready" ? "Ready for Billing" : "Accepted";
+  daily.status = action === "billing-ready" ? "Ready for Billing" : "Accepted";
+  daily.reviewedBy = state.user?.name || "Operations";
+  daily.reviewedAt = now;
+  daily.usedForBilling = action === "billing-ready";
+  if (action === "billing-ready") {
+    daily.usedForBillingAt = now;
+    daily.usedForBillingBy = state.user?.name || "Operations";
+  }
+  daily.activityLog = [...(daily.activityLog || []), { at: now, by: state.user?.name || "Operations", note: action === "billing-ready" ? "Daily accepted and handed to Billing Ready." : "Daily accepted by Admin review." }];
+  appendAuditLocal(action === "billing-ready" ? "production.daily.billing-ready" : "production.daily.accepted", { daily: daily.id, project: daily.project, by: state.user?.name || "Operations" });
+  persist(action === "billing-ready" ? "Daily Capture moved to Billing Ready" : "Daily Capture accepted");
+  render();
+}
+
+function handleAdminReviewChecklistFix(button) {
+  const dailyId = button.dataset.dailyId || state.selectedProductionDailyId;
+  const daily = (state.data.productionDailies || []).find(item => item.id === dailyId);
+  const fix = button.dataset.adminReviewFix || "";
+  const lineId = button.dataset.lineId || "";
+  const targetId = button.dataset.targetId || "";
+  if (daily) {
+    state.selectedProductionDailyId = daily.id;
+    if (daily.project) state.selectedProjectId = daily.project;
+  }
+  state.workflowFocus = `Admin Review: ${fix}`;
+
+  if (fix === "safety") {
+    state.view = "risk";
+    state.search = daily?.project || "";
+    if (targetId) state.selectedRecord = { collection: "safety", id: targetId };
+    render();
+    return;
+  }
+
+  if (fix === "rate") {
+    state.view = "production";
+    state.productionMode = "Billing Handoff";
+    render();
+    return;
+  }
+
+  if (fix === "map") {
+    state.view = "projects";
+    state.search = daily?.project || "";
+    render();
+    return;
+  }
+
+  state.view = "production";
+  state.productionMode = "Review";
+  render();
+  requestAnimationFrame(() => {
+    const target = lineId
+      ? document.querySelector(`[data-admin-review-line-id="${selectorEscape(lineId)}"]`)
+      : ["proof", "lineReview", "holds", "codes", "quantity"].includes(fix)
+        ? document.querySelector(".admin-review-line-list")
+        : document.querySelector("[data-admin-daily-review-workstation]");
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
 function requestProductionProofCorrection(line, note = "Proof is missing or not accepted.") {
   const now = new Date().toISOString();
   state.data.tasks = state.data.tasks || [];
@@ -31942,6 +37108,34 @@ function requestProductionProofCorrection(line, note = "Proof is missing or not 
     source: "Production proof checklist",
     notes: `${line.project} ${line.code}: ${note}`,
     activityLog: [{ at: now, by: state.user?.name || "Operations", note }],
+    createdAt: existing?.createdAt || now,
+    modifiedAt: now
+  };
+  if (existing) Object.assign(existing, task);
+  else state.data.tasks.push(task);
+  void saveToApi("tasks", task, !existing);
+}
+
+function createProductionRateReviewTask(line) {
+  const now = new Date().toISOString();
+  state.data.tasks = state.data.tasks || [];
+  const taskId = `TASK-PROD-RATE-${line.id}`.replace(/[^A-Z0-9-]/gi, "-").toUpperCase();
+  const existing = state.data.tasks.find(item => item.id === taskId);
+  const task = {
+    id: taskId,
+    title: `Rate review needed: ${line.code}`,
+    role: "Billing",
+    owner: "Billing",
+    workflowArea: "Production",
+    relatedType: "Production Line",
+    relatedId: line.id,
+    project: line.project,
+    status: "Open",
+    priority: "High",
+    dueDate: addDays(line.workedDate || isoDate(new Date()), 1),
+    source: "Daily Capture rate validation",
+    notes: `${line.project} ${line.code}: Import or confirm the billing code rate before SQUAN handoff.`,
+    activityLog: [{ at: now, by: state.user?.name || "Operations", note: "Rate review task created before billing handoff." }],
     createdAt: existing?.createdAt || now,
     modifiedAt: now
   };
@@ -32418,7 +37612,7 @@ function renderEquipmentReleaseBlockers(project) {
 function renderTasks() {
   const baseRows = scopedRows("tasks").filter(matches);
   const selectedProject = selectedMapContext();
-  const rows = baseRows.filter(taskMatchesFilter);
+  const rows = sortTaskRows(baseRows.filter(taskMatchesFilter));
   const openRows = baseRows.filter(item => item.status !== "Closed");
   const overdue = baseRows.filter(item => {
     const days = daysUntil(item.dueDate);
@@ -32458,10 +37652,10 @@ function renderTasks() {
     ${renderBillingTaskInbox(baseRows)}
     ${renderCloseoutReadinessTaskDashboard(baseRows)}
     <section class="task-toolbar panel">
-      <button class="secondary-btn">Filter</button>
-      <button class="secondary-btn">Sort</button>
-      <button class="secondary-btn">List</button>
-      <button class="secondary-btn">Board</button>
+      <button class="secondary-btn" data-task-toolbar="filter">Filter</button>
+      <button class="secondary-btn" data-task-toolbar="sort">Sort: ${escapeAttr(state.taskSortMode)}</button>
+      <button class="secondary-btn ${state.taskViewMode === "List" ? "active" : ""}" data-task-toolbar="list">List</button>
+      <button class="secondary-btn ${state.taskViewMode === "Board" ? "active" : ""}" data-task-toolbar="board">Board</button>
       ${canCreate("tasks") ? `<button class="primary-btn" data-create-task>Create Task</button>` : ""}
     </section>
     <section class="task-layout">
@@ -32480,7 +37674,7 @@ function renderTasks() {
           <label><input type="checkbox"> ${label}</label>
         `).join("")}
       </aside>
-      <div class="panel task-table-panel">
+      <div class="panel task-table-panel ${state.taskViewMode === "Board" ? "board-mode" : ""}">
         <div class="panel-header">
           <h2>My Open Tasks</h2>
           <span>${state.taskFilter} · ${rows.length} records</span>
@@ -32846,6 +38040,7 @@ function displayWorkflowArea(value) {
   return {
     "Project & Map Hub": "Maps",
     "Field Operations": "Field Daily",
+    Production: "Daily Capture",
     "Time Tracking": "Crew Time",
     "Safety & Risk": "Safety",
     Money: "Billing",
@@ -32853,6 +38048,7 @@ function displayWorkflowArea(value) {
     projects: "Maps",
     documents: "Documents",
     field: "Field Daily",
+    production: "Daily Capture",
     time: "Crew Time",
     people: "People",
     equipment: "Equipment",
@@ -32878,6 +38074,19 @@ function taskMatchesFilter(task) {
   if (state.taskFilter === "Closeout readiness") return taskCategory(task) === "Closeout readiness";
   if (state.taskFilter === "Map 3 blockers") return task.project === "PO-SQ-24031" && task.status !== "Closed";
   return taskCategory(task) === state.taskFilter;
+}
+
+function sortTaskRows(rows) {
+  const priorityRank = { High: 0, Medium: 1, Low: 2 };
+  return [...rows].sort((a, b) => {
+    if (state.taskSortMode === "Priority") {
+      const priorityCompare = (priorityRank[a.priority] ?? 3) - (priorityRank[b.priority] ?? 3);
+      if (priorityCompare) return priorityCompare;
+    }
+    const dueCompare = String(a.dueDate || "9999-12-31").localeCompare(String(b.dueDate || "9999-12-31"));
+    if (dueCompare) return dueCompare;
+    return String(a.title || "").localeCompare(String(b.title || ""));
+  });
 }
 
 function taskResolveLabel(task) {
@@ -33456,7 +38665,7 @@ function renderDocumentLibraryPanel(allRows, folderRows, folderCounts) {
             <tbody>
               ${folderRows.map(document => `
                 <tr>
-                  <td><button class="star-button" title="Favorite">${document.pinned === "Yes" ? "*" : "o"}</button></td>
+                  <td><button class="star-button" title="Favorite" data-document-pin="${escapeAttr(document.id)}">${document.pinned === "Yes" ? "*" : "o"}</button></td>
                   <td>
                     <div class="file-cell">
                       <span class="file-icon ${String(document.fileType || document.type).toLowerCase()}">${fileBadge(document)}</span>
@@ -33855,7 +39064,13 @@ function renderMoney() {
   const context = billingSliceContext(projects, invoices, retainageLedger);
   return `
     ${renderBillingCommandCenterSlice(context)}
+    ${renderOwnerExceptionDashboard(context)}
     ${selectedProject ? renderSelectedMapBillingPanel(selectedProject, context) : ""}
+    ${renderBillingSubmitTodayDashboard(context)}
+    ${renderBillingPackageCommandView(context)}
+    ${selectedProject ? renderBillingPackageDetailView(selectedProject) : ""}
+    ${renderBillingPackageAdminVisibility(context)}
+    ${renderContractorSettlementWorkbench(context)}
     ${selectedProject ? renderBillingCodeBreakdownPanel(selectedProject, context) : ""}
     ${selectedProject ? renderBillingFiveStepSlice(selectedProject, context) : ""}
     ${renderBillingQueueTabs(context)}
@@ -33877,6 +39092,74 @@ function renderMoney() {
         ${renderTablePanel(tableConfig().money)}
       </div>
     </details>
+  `;
+}
+
+function renderOwnerExceptionDashboard(context = billingSliceContext()) {
+  const packageRows = billingPackageWorkflowRows(context.projects);
+  const submittedValue = packageRows.reduce((total, row) => total + Number(row.snapshot?.squanSubmittedValue || row.billableAmount || 0), 0);
+  const approvedValue = packageRows.reduce((total, row) => total + Number(row.submission?.approvedAmount || row.snapshot?.approvedAmount || 0), 0);
+  const paidValue = (state.data.cashReceipts || [])
+    .filter(item => ["SQUAN Package Payment", "SQUAN Holdback", "Retainage"].includes(item.type || ""))
+    .reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const holdback = packageRows.reduce((total, row) => total + Number(row.snapshot?.squanHoldbackSnapshot || row.submission?.retainage10 || 0), 0);
+  const contractorExposure = packageRows.reduce((total, row) => {
+    const summary = billingPackagePaymentSummary(row);
+    return total + Math.max(0, Number(summary.contractorOpen || 0));
+  }, 0);
+  const exceptions = [
+    ...packageRows.filter(row => row.blockers?.length).map(row => ({
+      label: `${row.projectId} ${row.code}`,
+      status: "Needs Review",
+      detail: row.blockers.join("; "),
+      action: "Billing",
+      project: row.projectId
+    })),
+    ...packageRows.filter(row => row.status === "Rejected by SQUAN" || row.snapshot?.correctionRequested === "Yes").map(row => ({
+      label: `${row.projectId} correction`,
+      status: "Rejected by SQUAN",
+      detail: row.submission?.rejectionReason || row.snapshot?.responseNote || "Correction package needed.",
+      action: "Billing",
+      project: row.projectId
+    })),
+    ...arAgingRows().filter(row => row.risk === "High").slice(0, 5).map(row => ({
+      label: row.map,
+      status: row.status,
+      detail: `${row.displayKind || row.kind} · ${currency(row.amount)} · due ${row.dueDate || "not set"}`,
+      action: "Billing",
+      project: row.project
+    }))
+  ];
+  return `
+    <section class="panel owner-exception-dashboard">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Owner exceptions</span>
+          <h2>Money at risk and blockers only</h2>
+          <p>High-level view of submitted value, SQUAN approval/payment, holdback, contractor exposure, and items that need attention.</p>
+        </div>
+        <button class="primary-btn" data-workflow-action="Reports" data-report-scope="Executive Report">Executive report</button>
+      </div>
+      <div class="workflow-count-strip">
+        ${metric("Submitted value", currency(submittedValue), "SQUAN package value")}
+        ${metric("Approved value", currency(approvedValue), "SQUAN response")}
+        ${metric("Paid value", currency(paidValue), "Cash received")}
+        ${metric("Holdback", currency(holdback), "Tracked separately")}
+        ${metric("Contractor exposure", currency(contractorExposure), "Separate from SQUAN payment")}
+      </div>
+      <div class="owner-exception-list">
+        ${exceptions.slice(0, 8).map(item => `
+          <article>
+            <span class="status ${statusClass(item.status)}">${plainStatus(item.status)}</span>
+            <div>
+              <strong>${escapeAttr(item.label)}</strong>
+              <small>${escapeAttr(item.detail)}</small>
+            </div>
+            <button class="secondary-btn" data-workflow-action="${item.action}" data-workflow-id="${escapeAttr(item.project)}">Open</button>
+          </article>
+        `).join("") || `<p class="empty-state">No owner-level billing or cash exceptions are open.</p>`}
+      </div>
+    </section>
   `;
 }
 
@@ -33936,6 +39219,57 @@ function renderBillingCommandCenterSlice(context) {
   `;
 }
 
+function billingPackageSubmitTodayRows(rows = billingPackageWorkflowRows(scopedRows("projects"))) {
+  return [
+    { label: "Ready today", status: "Ready", rows: rows.filter(row => ["Ready for Package Prep", "Ready to Submit"].includes(row.status) && !row.blockers.length) },
+    { label: "Blocked", status: "Needs Review", rows: rows.filter(row => row.blockers.length) },
+    { label: "Already submitted", status: "Submitted", rows: rows.filter(row => row.submission && !["Paid / holdback", "Closed"].includes(row.status)) },
+    { label: "Waiting on SQUAN", status: "Pending", rows: rows.filter(row => ["Submitted to SQUAN", "Pending SQUAN Review", "Acknowledged / payment pending", "Approved by SQUAN", "Partially approved by SQUAN"].includes(row.status)) },
+    { label: "Waiting on payment", status: "Open", rows: rows.filter(row => {
+      const summary = billingPackagePaymentSummary(row);
+      return row.submission && (summary.squanVariance > 0 || summary.contractorOpen > 0);
+    }) }
+  ];
+}
+
+function renderBillingSubmitTodayDashboard(context) {
+  const rows = billingPackageWorkflowRows(context.projects);
+  const lanes = billingPackageSubmitTodayRows(rows);
+  const readyValue = lanes[0].rows.reduce((total, row) => total + Number(row.billableAmount || 0), 0);
+  return `
+    <section class="panel billing-submit-today">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Submit today</span>
+          <h2>Billing package work queue</h2>
+          <p>Use this queue to decide what Billing submits today, what is blocked, what already went to SQUAN, and what is waiting on response or payment.</p>
+        </div>
+        <div class="billing-package-stats">
+          ${metric("Ready value", currency(readyValue), "Can move today")}
+          ${metric("Blocked", lanes[1].rows.length, "Needs owner")}
+          ${metric("Submitted", lanes[2].rows.length, "With SQUAN")}
+        </div>
+      </div>
+      <div class="billing-submit-lanes">
+        ${lanes.map(lane => `
+          <article>
+            <div class="card-topline">
+              <h3>${escapeAttr(lane.label)}</h3>
+              <span class="status ${statusClass(lane.status)}">${lane.rows.length}</span>
+            </div>
+            ${lane.rows.slice(0, 5).map(row => `
+              <button data-billing-package="${escapeAttr(row.key)}" data-project-id="${escapeAttr(row.projectId)}">
+                <strong>${escapeAttr(row.projectId)} · ${escapeAttr(row.code)}</strong>
+                <small>${formatDate(row.workedDate)} · ${currency(row.billableAmount)} · ${row.readinessScore || 0}% ready</small>
+              </button>
+            `).join("") || `<p class="empty-state">No package rows in this lane.</p>`}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderSelectedMapBillingPanel(project, context) {
   const readiness = context.readiness.find(item => item.project === project.id);
   const invoice = context.invoices.find(item => item.project === project.id);
@@ -33970,6 +39304,1113 @@ function renderSelectedMapBillingPanel(project, context) {
         <span>SQUAN submission<strong>${plainStatus(submission?.status || "Not sent")}</strong></span>
       </div>
       <p class="readiness-note">Next: ${nextAction.detail}</p>
+    </section>
+  `;
+}
+
+function billingPackageWorkflowRows(projects = scopedRows("projects")) {
+  const lines = state.data.productionLines || [];
+  const dailies = state.data.productionDailies || [];
+  const submissions = state.data.invoiceSubmissions || [];
+  const invoices = state.data.invoices || [];
+  const snapshots = state.data.packageSnapshots || [];
+  const grouped = new Map();
+  (state.data.billingLedger || [])
+    .filter(item => item.billingStatus === "Ready to Bill")
+    .forEach(item => {
+      const line = lines.find(row => row.id === item.productionLineId) || {};
+      const daily = dailies.find(row => row.id === line.dailyId) || {};
+      const projectId = item.project || line.project || daily.project || "";
+      const workedDate = item.workedDate || line.workedDate || daily.workedDate || "";
+      const code = item.code || line.code || "";
+      const key = [projectId, workedDate, code].join("|");
+      const existing = grouped.get(key) || {
+        key,
+        projectId,
+        project: projects.find(project => project.id === projectId) || { id: projectId, map: projectId },
+        workedDate,
+        code,
+        lines: [],
+        lineCount: 0,
+        quantity: 0,
+        billableAmount: 0,
+        payableAmount: 0,
+        jobCostAmount: 0,
+        proofAccepted: 0,
+        owners: new Set(),
+        dailyIds: new Set()
+      };
+      const proofState = productionProofState(line);
+      existing.lines.push({ ledger: item, line, daily, proofState });
+      existing.lineCount += 1;
+      existing.quantity += Number(line.quantity || item.quantity || 0);
+      existing.billableAmount += Number(item.squanBillableAmount || 0);
+      existing.payableAmount += Number(item.contractorPayableAmount || 0);
+      existing.jobCostAmount += Number(item.inHouseCostAmount || 0);
+      if (["Accepted", "Accepted Exception"].includes(proofState)) existing.proofAccepted += 1;
+      if (daily.submittedBy || line.submittedBy) existing.owners.add(daily.submittedBy || line.submittedBy);
+      if (daily.id || line.dailyId) existing.dailyIds.add(daily.externalDailyId || daily.id || line.dailyId);
+      grouped.set(key, existing);
+    });
+  return [...grouped.values()].map(row => {
+    const snapshot = snapshots
+      .filter(item => item.scope === "SQUAN Billing Package" && item.packageKey === row.key && item.status !== "Superseded")
+      .sort((a, b) => String(b.preparedAt || "").localeCompare(String(a.preparedAt || "")))[0];
+    const invoice = snapshot?.invoice
+      ? invoices.find(item => item.id === snapshot.invoice)
+      : invoices.find(item => item.project === row.projectId && item.packageKey === row.key);
+    const submission = submissions.find(item => snapshot?.id && item.packageSnapshot === snapshot.id)
+      || submissions.find(item => invoice?.id && item.invoice === invoice.id && item.status !== "Rejected by SQUAN" && item.status !== "Correction Superseded")
+      || submissions.find(item => item.packageKey === row.key && item.status !== "Rejected by SQUAN" && item.status !== "Correction Superseded");
+    const rateAuditRows = billingPackageRateAuditRows(row);
+    const packagedRow = {
+      ...row,
+      owners: [...row.owners],
+      dailyIds: [...row.dailyIds],
+      invoice,
+      submission,
+      snapshot,
+      rateAuditRows,
+      blockers: [],
+      status: submission ? submission.status || "Submitted to SQUAN" : snapshot || invoice ? "Ready to Submit" : "Ready for Package Prep"
+    };
+    packagedRow.blockerDetails = billingPackageBlockerDetails(packagedRow);
+    packagedRow.blockers = packagedRow.blockerDetails.map(item => item.detail);
+    packagedRow.readinessChecklist = billingPackageReadinessChecklist(packagedRow);
+    packagedRow.readinessScore = billingPackageReadinessScore(packagedRow.readinessChecklist);
+    if (!packagedRow.submission && packagedRow.blockers.length) packagedRow.status = "Needs Review";
+    packagedRow.status = billingPackageDerivedStatus(packagedRow);
+    return packagedRow;
+  }).sort((a, b) => String(b.workedDate || "").localeCompare(String(a.workedDate || "")) || a.projectId.localeCompare(b.projectId) || a.code.localeCompare(b.code));
+}
+
+function billingPackageDerivedStatus(row) {
+  if (!row.submission) return row.status;
+  if (row.submission.status === "Rejected by SQUAN") return "Rejected by SQUAN";
+  const summary = billingPackagePaymentSummary(row);
+  const squanClosed = summary.submittedValue > 0 && Math.abs(summary.squanVariance) <= 0.01;
+  const contractorClosed = summary.contractorPayable <= 0 || summary.contractorOpen <= 0;
+  if (squanClosed && contractorClosed) return "Closed";
+  if (summary.squanPaid > 0 || summary.holdback > 0) return "Paid / holdback";
+  if (["Approved by SQUAN", "Partially approved by SQUAN"].includes(row.submission.status)) return row.submission.status;
+  return row.submission.status || "Submitted to SQUAN";
+}
+
+function billingPackageCommandStats(rows = billingPackageWorkflowRows()) {
+  return {
+    ready: rows.filter(row => ["Ready for Package Prep", "Ready to Submit"].includes(row.status)).length,
+    blocked: rows.filter(row => row.blockers.length).length,
+    submitted: rows.filter(row => row.submission).length,
+    billable: rows.reduce((total, row) => total + Number(row.billableAmount || 0), 0),
+    payable: rows.reduce((total, row) => total + Number(row.payableAmount || 0), 0)
+  };
+}
+
+function renderBillingPackageCommandView(context) {
+  const rows = billingPackageWorkflowRows(context.projects);
+  const stats = billingPackageCommandStats(rows);
+  if (!state.selectedBillingPackageKey && rows.length) state.selectedBillingPackageKey = rows[0].key;
+  const groups = [
+    ["Ready", rows.filter(row => ["Ready for Package Prep", "Ready to Submit"].includes(row.status))],
+    ["Blocked", rows.filter(row => row.blockers.length)],
+    ["Submitted", rows.filter(row => row.submission && !["Paid / holdback", "Closed"].includes(row.status))],
+    ["Paid / Holdback", rows.filter(row => ["Paid / holdback", "Closed"].includes(row.status))]
+  ];
+  return `
+    <section class="panel billing-package-command">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">SQUAN billing packages</span>
+          <h2>Approved Daily Capture ready for billing</h2>
+          <p>Packages are grouped by Map/NTP, work date, and billing code so Billing can see exactly what will be submitted to SQUAN.</p>
+        </div>
+        <div class="billing-package-export-actions">
+          <a class="secondary-btn" href="/api/reports/approved-production.csv" target="_blank" rel="noreferrer">Export approved</a>
+          <a class="secondary-btn" href="/api/reports/ready-to-submit.csv" target="_blank" rel="noreferrer">Export ready to submit</a>
+          <a class="secondary-btn" href="/api/reports/billing-package-payments.csv" target="_blank" rel="noreferrer">Export payment ledger</a>
+        </div>
+        <div class="billing-package-stats">
+          ${metric("Ready", stats.ready, "Package groups")}
+          ${metric("Blocked", stats.blocked, "Needs action")}
+          ${metric("Billable", currency(stats.billable), "SQUAN amount")}
+          ${metric("Payable", currency(stats.payable), "Contractor amount")}
+        </div>
+      </div>
+      <div class="billing-package-groups">
+        ${groups.map(([title, groupRows]) => `
+          <article>
+            <div class="card-topline">
+              <h3>${title}</h3>
+              <span>${groupRows.length}</span>
+            </div>
+            <div class="billing-package-list">
+              ${groupRows.slice(0, 5).map(row => `
+                <button class="${state.selectedBillingPackageKey === row.key ? "selected" : ""}" data-billing-package="${escapeAttr(row.key)}" data-project-id="${escapeAttr(row.projectId)}">
+                  <span>
+                    <strong>${escapeAttr(row.code)} · ${escapeAttr(row.projectId)}</strong>
+                    <small>${formatDate(row.workedDate)} · ${row.lineCount} line(s) · ${row.owners.map(escapeAttr).join(", ") || "No owner"}</small>
+                  </span>
+                  <span>
+                    <strong>${currency(row.billableAmount)}</strong>
+                    <small>${escapeAttr(row.status)}</small>
+                  </span>
+                </button>
+              `).join("") || `<p class="empty-state">No packages in this lane.</p>`}
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function selectedBillingPackage(project) {
+  const rows = billingPackageWorkflowRows(scopedRows("projects"));
+  return rows.find(row => row.key === state.selectedBillingPackageKey)
+    || rows.find(row => row.projectId === project?.id)
+    || rows[0]
+    || null;
+}
+
+function renderBillingPackageDetailView(project) {
+  const selected = selectedBillingPackage(project);
+  if (!selected) {
+    return `
+      <section class="panel billing-package-detail">
+        <div class="panel-header">
+          <div>
+            <h2>Package detail</h2>
+            <p>No approved Daily Capture lines are ready for SQUAN billing yet.</p>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+  const canPrepare = !selected.blockers.length;
+  const trackerValidation = validateSquanTrackerRecordRows(selected);
+  const canSubmit = selected.status === "Ready to Submit" && trackerValidation.ready;
+  const nextAction = selected.blockers.length
+    ? { label: "Clear package blockers", detail: selected.blockers.join("; "), status: "Blocked" }
+    : !selected.snapshot && !selected.invoice
+      ? { label: "Prepare package", detail: "Lock the rate audit and package snapshot before SQUAN submission.", status: "Ready" }
+      : canSubmit
+      ? { label: "Record manual SQUAN Tracker submission", detail: "Package is prepared for manual entry into the outside SQUAN Tracker.", status: "Ready to Submit" }
+        : selected.submission
+          ? { label: "Track response / payment", detail: selected.submission.status || "Submission exists. Log SQUAN response, payment, holdback, or contractor payout.", status: selected.status }
+          : { label: "Review package status", detail: `Current package status: ${selected.status}.`, status: selected.status };
+  const packageExportUrl = `/api/reports/billing-package.csv?key=${encodeURIComponent(selected.key)}`;
+  const packageExportName = billingPackageExportFileName(selected);
+  return `
+    <section class="panel billing-package-detail">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Package detail</span>
+          <h2>${escapeAttr(selected.projectId)} · ${escapeAttr(selected.code)}</h2>
+          <p>${formatDate(selected.workedDate)} · ${selected.lineCount} approved line(s) · ${selected.owners.map(escapeAttr).join(", ") || "No owner"}</p>
+        </div>
+        <span class="status ${statusClass(selected.status)}">${escapeAttr(selected.status)}</span>
+      </div>
+      <div class="billing-package-detail-summary">
+        <span>Quantity<strong>${Number(selected.quantity || 0).toLocaleString()}</strong></span>
+        <span>SQUAN billable<strong>${currency(selected.billableAmount)}</strong></span>
+        <span>Contractor payable<strong>${currency(selected.payableAmount)}</strong></span>
+        <span>Proof<strong>${selected.proofAccepted}/${selected.lineCount}</strong></span>
+        <span>Submission<strong>${escapeAttr(selected.submission?.confirmationNumber || selected.submission?.status || "Not sent")}</strong></span>
+      </div>
+      ${selected.blockers.length ? `<div class="billing-package-blockers">${selected.blockers.map(item => `<span>${escapeAttr(item)}</span>`).join("")}</div>` : ""}
+      <div class="billing-next-action">
+        <div>
+          <span class="eyebrow">Next best action</span>
+          <strong>${escapeAttr(nextAction.label)}</strong>
+          <small>${escapeAttr(nextAction.detail)}</small>
+        </div>
+        <span class="status ${statusClass(nextAction.status)}">${plainStatus(nextAction.status)}</span>
+      </div>
+      <div class="billing-package-actions">
+        ${renderBillingPackageActionButton(selected, "prepare-squan-package", "Prepare package", { enabled: canPrepare })}
+        ${renderBillingPackageActionButton(selected, "submit-squan", "Record SQUAN Tracker submission", { primary: true, enabled: canSubmit })}
+        ${renderBillingPackageActionButton(selected, "record-squan-response", "Log SQUAN response", { enabled: Boolean(selected.submission) })}
+        ${renderBillingPackageActionButton(selected, "reject-squan", "Rejected", { enabled: Boolean(selected.submission) })}
+        ${renderBillingPackageActionButton(selected, "create-squan-correction", "Create correction", { enabled: selected.status === "Rejected by SQUAN" || selected.snapshot?.correctionRequested === "Yes" })}
+        ${renderBillingPackageActionButton(selected, "record-squan-package-payment", "Record SQUAN payment", { enabled: Boolean(selected.submission) })}
+        ${renderBillingPackageActionButton(selected, "record-squan-holdback", "Record reserve / holdback", { enabled: Boolean(selected.submission) })}
+        ${renderBillingPackageActionButton(selected, "record-contractor-package-payment", "Record contractor payment", { enabled: Boolean(selected.payableAmount) })}
+        ${renderBillingPackageExportLink(selected)}
+      </div>
+      ${renderBillingPackagePreview(selected, packageExportName)}
+      ${renderBillingPackageActionReadiness(selected)}
+      ${renderBillingPackagePaymentPreview(selected)}
+      ${renderBillingPackageRateAudit(selected)}
+      ${renderBillingPackageTimeline(selected)}
+      <div class="table-wrap billing-package-lines">
+        <table>
+          <thead>
+            <tr>
+              <th>Daily</th>
+              <th>Owner</th>
+              <th>Code</th>
+              <th>Qty</th>
+              <th>SQUAN billable</th>
+              <th>Payable / cost</th>
+              <th>Proof</th>
+              <th>Status</th>
+              <th>Trace</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${selected.lines.map(row => `
+              <tr>
+                <td>${escapeAttr(row.daily.externalDailyId || row.daily.id || row.line.dailyId || "")}</td>
+                <td>${escapeAttr(row.daily.submittedBy || row.line.submittedBy || "")}</td>
+                <td><strong>${escapeAttr(row.line.code || selected.code)}</strong><br><small>${escapeAttr(row.line.unitName || row.line.uom || "")}</small></td>
+                <td>${Number(row.line.quantity || 0).toLocaleString()} ${escapeAttr(row.line.uom || "")}</td>
+                <td>${currency(row.ledger.squanBillableAmount || 0)}</td>
+                <td>${currency(Number(row.ledger.contractorPayableAmount || 0) + Number(row.ledger.inHouseCostAmount || 0))}</td>
+                <td><span class="status ${statusClass(row.proofState)}">${escapeAttr(row.proofState)}</span></td>
+                <td><span class="status ${statusClass(row.line.billableStatus || row.ledger.billingStatus)}">${escapeAttr(row.line.billableStatus || row.ledger.billingStatus || "Ready")}</span></td>
+                <td>
+                  <div class="row-actions">
+                    <button class="secondary-btn mini-btn" data-production-daily-open="${escapeAttr(row.daily.id || row.line.dailyId || "")}">Daily</button>
+                    <button class="secondary-btn mini-btn" data-open-record="billingLedger" data-record-id="${escapeAttr(row.ledger.id || "")}">Ledger</button>
+                  </div>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function billingPackageExportFileName(row) {
+  const clean = value => String(value || "package").replace(/[^a-z0-9-]+/gi, "-").replace(/^-|-$/g, "");
+  const version = Number(row.snapshot?.version || 1);
+  const isCorrection = Number(version) > 1 || row.snapshot?.correctionOf || row.snapshot?.correctionRequested === "Yes";
+  const prefix = isCorrection ? "SQUAN_CORRECTION" : row.submission ? "SQUAN_SUBMITTED" : row.status === "Ready to Submit" ? "SQUAN_RECORD" : "SQUAN_PREVIEW";
+  return `${prefix}_${clean(row.projectId)}_${clean(row.workedDate)}_${clean(row.code)}_V${version}.csv`;
+}
+
+function squanTrackerFieldMap() {
+  return [
+    { key: "mapNtp", label: "Map / NTP", required: true, source: "Package project/NTP" },
+    { key: "dailyId", label: "Daily ID", required: true, source: "Foreman daily / production daily" },
+    { key: "productionLineId", label: "Production Line ID", required: true, source: "Jackson production line trace" },
+    { key: "workedDate", label: "Worked Date", required: true, source: "Daily worked date" },
+    { key: "foreman", label: "Foreman / Tech", required: true, source: "Daily owner" },
+    { key: "nodeClli", label: "Node / CLLI", required: false, source: "Daily or ArcGIS reference" },
+    { key: "streetFeeder", label: "Street / Feeder", required: false, source: "Daily or ArcGIS reference" },
+    { key: "billingCode", label: "Billing Code", required: true, source: "SQUAN/Brightspeed price sheet" },
+    { key: "description", label: "Description", required: true, source: "Price sheet / production line" },
+    { key: "quantity", label: "Quantity", required: true, source: "Foreman submitted quantity" },
+    { key: "uom", label: "UOM", required: true, source: "Price sheet / production line" },
+    { key: "rate", label: "Rate", required: true, source: "Imported rate sheet" },
+    { key: "extendedAmount", label: "Extended Amount", required: true, source: "Quantity x rate / billing ledger" },
+    { key: "proofStatus", label: "Proof Status", required: true, source: "Accepted proof state" },
+    { key: "adminReviewStatus", label: "Admin Review Status", required: true, source: "Production review status" },
+    { key: "packageId", label: "Package ID", required: true, source: "SQUAN package snapshot" },
+    { key: "packageVersion", label: "Package Version", required: true, source: "Package version" },
+    { key: "correctionOf", label: "Correction Of", required: false, source: "Prior package snapshot" },
+    { key: "manualTrackerReference", label: "Manual Tracker Reference", required: false, source: "Outside SQUAN Tracker/manual entry" }
+  ];
+}
+
+function squanTrackerRecordRows(row) {
+  const snapshot = row.snapshot || {};
+  const version = Number(snapshot.version || 1);
+  return row.lines.map(item => {
+    const audit = billingPackageRateAuditRows({ ...row, lines: [item] })[0] || {};
+    const rate = Number(audit.squanRate || item.line.unitRate || 0);
+    const quantity = Number(item.line.quantity || item.ledger.quantity || 0);
+    const extendedAmount = Number(item.ledger.squanBillableAmount || Math.round(quantity * rate * 100) / 100);
+    return {
+      mapNtp: row.projectId,
+      dailyId: item.daily.externalDailyId || item.daily.id || item.line.dailyId || "",
+      productionLineId: item.line.id || "",
+      billingLedgerId: item.ledger.id || "",
+      workedDate: row.workedDate,
+      foreman: item.daily.submittedBy || item.line.submittedBy || "",
+      nodeClli: item.line.clli || item.daily.clli || "",
+      streetFeeder: item.line.feeder || item.daily.feeder || "",
+      billingCode: item.line.code || row.code,
+      description: audit.description || item.line.unitName || "",
+      quantity,
+      uom: item.line.uom || audit.uom || "",
+      rate,
+      extendedAmount,
+      proofStatus: item.proofState,
+      adminReviewStatus: item.line.reviewStatus || "",
+      packageId: snapshot.id || billingPackageRecordId("PKG", row.key),
+      packageVersion: version,
+      correctionOf: snapshot.correctionOf || "",
+      manualTrackerReference: row.submission?.confirmationNumber || "",
+      recordkeepingNote: "CSV supports Jackson recordkeeping and manual entry into the outside SQUAN Tracker."
+    };
+  });
+}
+
+function validateSquanTrackerRecordRows(row) {
+  const fields = squanTrackerFieldMap();
+  const rows = squanTrackerRecordRows(row);
+  const failures = [];
+  rows.forEach((record, index) => {
+    fields.filter(field => field.required).forEach(field => {
+      const value = record[field.key];
+      if (value === undefined || value === null || value === "") failures.push(`Line ${index + 1}: ${field.label} is required`);
+    });
+    const price = productionPriceForCode(record.billingCode);
+    if (!price) failures.push(`Line ${index + 1}: ${record.billingCode || "Code"} is missing from imported price sheet`);
+    if (Number(record.quantity || 0) <= 0) failures.push(`Line ${index + 1}: quantity must be greater than zero`);
+    if (Number(record.rate || 0) <= 0) failures.push(`Line ${index + 1}: rate must be present`);
+    const calculated = Math.round(Number(record.quantity || 0) * Number(record.rate || 0) * 100) / 100;
+    if (Math.abs(Number(record.extendedAmount || 0) - calculated) > 0.01) failures.push(`Line ${index + 1}: extended amount does not match quantity x rate`);
+    if (!["Accepted", "Accepted Exception"].includes(record.proofStatus)) failures.push(`Line ${index + 1}: proof must be accepted`);
+    if (record.adminReviewStatus !== "Approved") failures.push(`Line ${index + 1}: Admin/Operations review must be approved`);
+  });
+  return { rows, failures, ready: failures.length === 0 };
+}
+
+function renderBillingPackagePreview(selected, fileName = billingPackageExportFileName(selected)) {
+  const validation = validateSquanTrackerRecordRows(selected);
+  const rows = validation.rows;
+  return `
+    <section class="billing-package-preview" data-billing-package-preview>
+      <div class="card-topline">
+        <div>
+          <h3>SQUAN Tracker recordkeeping preview</h3>
+          <small>${escapeAttr(fileName)}</small>
+        </div>
+        <span class="status ${statusClass(validation.ready ? "Ready" : "Blocked")}">${validation.ready ? "Ready" : `${validation.failures.length} blocker(s)`}</span>
+      </div>
+      <p class="readiness-note">This CSV is for Jackson recordkeeping and manual entry into the outside SQUAN Tracker. It does not submit directly to SQUAN.</p>
+      <div class="billing-package-preview-grid">
+        ${metric("Map / NTP", escapeAttr(selected.projectId), "SQUAN package")}
+        ${metric("Worked date", formatDate(selected.workedDate), "Daily production")}
+        ${metric("Code", escapeAttr(selected.code), "Billing code")}
+        ${metric("Quantity", Number(selected.quantity || 0).toLocaleString(), "Submitted units")}
+        ${metric("Extended", currency(selected.billableAmount), "SQUAN value")}
+        ${metric("Readiness", `${selected.readinessScore || 0}%`, selected.blockers.length ? "Needs attention" : "Clear")}
+      </div>
+      ${validation.failures.length ? `<div class="billing-package-blockers">${validation.failures.slice(0, 8).map(item => `<span>${escapeAttr(item)}</span>`).join("")}</div>` : ""}
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr><th>Daily</th><th>Foreman</th><th>Code</th><th>Qty</th><th>Rate</th><th>Extended</th><th>Proof</th><th>Review</th></tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                <td>${escapeAttr(row.dailyId)}</td>
+                <td>${escapeAttr(row.foreman)}</td>
+                <td>${escapeAttr(row.billingCode)}</td>
+                <td>${Number(row.quantity || 0).toLocaleString()} ${escapeAttr(row.uom)}</td>
+                <td>${currency(row.rate)}</td>
+                <td>${currency(row.extendedAmount)}</td>
+                <td><span class="status ${statusClass(row.proofStatus)}">${escapeAttr(row.proofStatus)}</span></td>
+                <td><span class="status ${statusClass(row.adminReviewStatus)}">${escapeAttr(row.adminReviewStatus || "Missing")}</span></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderBillingPackageActionReadiness(selected) {
+  const paymentSummary = billingPackagePaymentSummary(selected);
+  const checklist = selected.readinessChecklist || billingPackageReadinessChecklist(selected);
+  const actionItems = [
+    { label: "Prepare package", ready: !selected.blockers.length, detail: selected.blockers.length ? selected.blockers.join("; ") : "Proof and rate audit are clear.", owner: "Billing" },
+    { label: "Record SQUAN Tracker submission", ready: selected.status === "Ready to Submit" && validateSquanTrackerRecordRows(selected).ready, detail: selected.status === "Ready to Submit" ? "CSV is for recordkeeping and manual entry into the outside SQUAN Tracker." : selected.snapshot || selected.invoice ? `Current status: ${selected.status}` : "Prepare the package first.", owner: "Billing" },
+    { label: "Log response / payment", ready: Boolean(selected.submission), detail: selected.submission ? selected.submission.status || "Submission exists." : "Record SQUAN submission before response or payment.", owner: "Billing" },
+    { label: "Contractor payment", ready: Number(selected.payableAmount || 0) > 0, detail: Number(selected.payableAmount || 0) > 0 ? `${currency(paymentSummary.contractorOpen)} contractor AP open.` : "No contractor payable is tied to this package.", owner: "Billing" }
+  ];
+  return `
+    <div class="billing-readiness-score">
+      <strong>${selected.readinessScore || billingPackageReadinessScore(checklist)}%</strong>
+      <span>Package readiness</span>
+      <small>${selected.blockerDetails?.length ? `${selected.blockerDetails.length} blocker(s) need owner action` : "Ready checklist is clear"}</small>
+    </div>
+    <div class="billing-package-readiness">
+      ${checklist.map(item => `
+        <article class="${item.ok ? "ready" : "blocked"}">
+          <strong>${escapeAttr(item.label)}</strong>
+          <span>${item.ok ? "Ready" : "Blocked"}</span>
+          <small>${escapeAttr(item.owner || "Billing")}</small>
+        </article>
+      `).join("")}
+      ${actionItems.map(item => `
+        <article class="${item.ready ? "ready" : "blocked"}">
+          <strong>${escapeAttr(item.label)}</strong>
+          <span>${item.ready ? "Ready" : "Blocked"}</span>
+          <small>${escapeAttr(item.detail)}</small>
+        </article>
+      `).join("")}
+    </div>
+    ${selected.blockerDetails?.length ? `
+      <div class="billing-blocker-owner-list">
+        ${selected.blockerDetails.map(item => `
+          <article>
+            <strong>${escapeAttr(item.type)}</strong>
+            <span>${escapeAttr(item.owner)} · due ${formatDate(item.dueDate)}</span>
+            <small>${escapeAttr(item.detail)}</small>
+          </article>
+        `).join("")}
+      </div>
+    ` : ""}
+  `;
+}
+
+function renderBillingPackageTimeline(selected) {
+  const events = billingPackageTimelineEvents(selected);
+  return `
+    <div class="billing-package-timeline">
+      <div class="card-topline">
+        <h3>Package audit timeline</h3>
+        <span>${events.length} event(s)</span>
+      </div>
+      <div class="billing-package-timeline-list">
+        ${events.map(event => `
+          <article>
+            <strong>${escapeAttr(event.label)}</strong>
+            <span>${escapeAttr(event.at ? formatDateTime(event.at) : "")}</span>
+            <small>${escapeAttr(event.detail || "")}</small>
+          </article>
+        `).join("") || `<p class="empty-state">No package events yet.</p>`}
+      </div>
+    </div>
+  `;
+}
+
+function billingPackageTimelineEvents(selected) {
+  const events = [];
+  selected.lines.forEach(item => {
+    if (item.daily?.createdAt) events.push({ at: item.daily.createdAt, label: "Daily submitted", detail: `${item.daily.submittedBy || item.line.submittedBy || "Foreman"} submitted ${item.daily.externalDailyId || item.daily.id || item.line.dailyId}.` });
+    if (item.line?.modifiedAt && item.line.reviewStatus === "Approved") events.push({ at: item.line.modifiedAt, label: "Production approved", detail: `${item.line.code || selected.code} ${Number(item.line.quantity || 0).toLocaleString()} ${item.line.uom || ""}.` });
+    if (item.ledger?.createdAt) events.push({ at: item.ledger.createdAt, label: "Billing ledger created", detail: `${currency(item.ledger.squanBillableAmount || 0)} SQUAN billable; ${currency(item.ledger.contractorPayableAmount || 0)} contractor payable.` });
+    if (item.ledger?.rateOverride?.at) events.push({ at: item.ledger.rateOverride.at, label: "Rate override", detail: item.ledger.rateOverride.reason || "Billing override recorded." });
+  });
+  if (selected.snapshot?.rateLockedAt) events.push({ at: selected.snapshot.rateLockedAt, label: "Rate audit locked", detail: `${selected.snapshot.rateAuditStatus || "Matched"} by ${selected.snapshot.rateLockedBy || "Billing"}.` });
+  if (selected.snapshot?.preparedAt) events.push({ at: selected.snapshot.preparedAt, label: "Package prepared", detail: `${selected.snapshot.id || "Package"} prepared for ${currency(selected.snapshot.squanSubmittedValue || selected.billableAmount)}.` });
+  if (selected.submission?.submissionDate) events.push({ at: `${selected.submission.submissionDate}T12:00:00`, label: "Submitted to SQUAN", detail: `${selected.submission.confirmationNumber || "No confirmation"} via ${selected.submission.deliveryMethod || "tracked handoff"}.` });
+  if (selected.submission?.modifiedAt && selected.submission.status && selected.submission.status !== "Submitted to SQUAN") events.push({ at: selected.submission.modifiedAt, label: "SQUAN response", detail: `${selected.submission.status}: ${selected.submission.rejectionReason || selected.submission.followUpStatus || ""}` });
+  billingPackagePaymentRows(selected).forEach(receipt => {
+    events.push({ at: receipt.receivedAt || `${receipt.actualDate}T12:00:00`, label: receipt.type || "Payment recorded", detail: `${currency(receipt.actualAmount || 0)} ${receipt.reference || ""} ${receipt.notes || ""}` });
+  });
+  (state.data.auditLog || [])
+    .filter(item => item.detail?.packageKey === selected.key)
+    .forEach(item => events.push({ at: item.at, label: item.action, detail: JSON.stringify(item.detail || {}) }));
+  return events.sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+}
+
+function renderBillingPackageRateAudit(selected) {
+  const rows = selected.rateAuditRows || billingPackageRateAuditRows(selected);
+  return `
+    <div class="billing-rate-audit">
+      <div class="card-topline">
+        <h3>Rate audit</h3>
+        <span>${rows.filter(row => row.status !== "Matched").length ? "Needs Review" : "Matched"}</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Qty</th>
+              <th>SQUAN rate</th>
+              <th>SQUAN extended</th>
+              <th>Contractor rate</th>
+              <th>Contractor extended</th>
+              <th>Source</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                <td><strong>${escapeAttr(row.code)}</strong><br><small>${escapeAttr(row.description || "")}</small></td>
+                <td>${Number(row.quantity || 0).toLocaleString()} ${escapeAttr(row.uom || "")}</td>
+                <td>${currency(row.squanRate || 0)}</td>
+                <td>${currency(row.ledgerSquanAmount || 0)}<br><small>Calc ${currency(row.calculatedSquanAmount || 0)} · Var ${currency(row.squanVariance || 0)}</small></td>
+                <td>${currency(row.contractorRate || 0)}</td>
+                <td>${currency(row.ledgerContractorAmount || 0)}<br><small>Calc ${currency(row.calculatedContractorAmount || 0)} · Var ${currency(row.contractorVariance || 0)}</small></td>
+                <td>${escapeAttr(row.rateSource)}<br><small>${escapeAttr(row.rateVersion || row.rateSourceId || "")}</small></td>
+                <td>
+                  <span class="status ${statusClass(row.status)}">${escapeAttr(row.status)}</span><br>
+                  <small>${row.issues.map(escapeAttr).join("; ") || "Rate and ledger match"}</small>
+                  <button class="secondary-btn mini-btn" data-billing-rate-override="${escapeAttr(row.productionLineId)}" data-billing-package-key="${escapeAttr(selected.key)}">Override</button>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderBillingPackagePaymentPreview(selected) {
+  const receipts = state.data.cashReceipts || [];
+  const paymentRows = receipts.filter(item => item.packageKey === selected.key || (selected.submission?.id && item.submission === selected.submission.id) || (selected.invoice?.id && item.invoice === selected.invoice.id));
+  const paidAmount = paymentRows
+    .filter(item => item.type === "SQUAN Package Payment")
+    .reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const holdbackAmount = paymentRows
+    .filter(item => item.type === "SQUAN Holdback")
+    .reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const contractorPaid = paymentRows
+    .filter(item => item.type === "Contractor Package Payment")
+    .reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const variance = Number(selected.billableAmount || 0) - paidAmount;
+  const contractorPayable = Number(selected.snapshot?.contractorPayableSnapshot ?? selected.payableAmount ?? 0);
+  const contractorOpen = contractorPayable - contractorPaid;
+  const followUp = selected.submission?.followUpDate || selected.submission?.receipt?.followUpDate || addDays(isoDate(today), 30);
+  return `
+    <div class="billing-payment-preview">
+      <article>
+        <span>SQUAN submitted</span>
+        <strong>${currency(selected.billableAmount)}</strong>
+        <small>${selected.submission ? `Follow up ${formatDate(followUp)}` : "Actual payment is recorded after SQUAN responds"}</small>
+      </article>
+      <article>
+        <span>SQUAN paid</span>
+        <strong>${currency(paidAmount)}</strong>
+        <small>${paidAmount ? `${currency(variance)} remaining or variance` : "No customer payment recorded yet"}</small>
+      </article>
+      <article>
+        <span>SQUAN held</span>
+        <strong>${currency(holdbackAmount)}</strong>
+        <small>Recorded only when SQUAN/customer actually holds money.</small>
+      </article>
+      <article>
+        <span>Contractor payable</span>
+        <strong>${currency(contractorPayable)}</strong>
+        <small>Separate from SQUAN payment timing.</small>
+      </article>
+      <article>
+        <span>Contractor paid / open</span>
+        <strong>${currency(contractorPaid)}</strong>
+        <small>${currency(contractorOpen)} open</small>
+      </article>
+    </div>
+  `;
+}
+
+function contractorAgreementId(contractor = "Default Contractor", effectiveDate = "2026-01-01") {
+  return `AGREE-${String(contractor || "DEFAULT").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}-${String(effectiveDate || "ACTIVE").replace(/[^0-9]/g, "") || "ACTIVE"}`;
+}
+
+function defaultContractorAgreement(contractor = "Default Contractor") {
+  return {
+    id: contractorAgreementId(contractor, "2026-01-01"),
+    contractor,
+    status: "Active",
+    effectiveDate: "2026-01-01",
+    contractorShare: 80,
+    jacksonShare: 20,
+    basis: "Percent of approved SQUAN production",
+    rateVisibility: "Hidden until settlement issued unless Admin/Billing",
+    notes: "Default current agreement only. Update with a new effective-date version when terms change.",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    modifiedAt: "2026-01-01T00:00:00.000Z"
+  };
+}
+
+function contractorAgreements() {
+  return state.data.contractorAgreements || [];
+}
+
+function agreementForContractor(contractor = "Default Contractor", workedDate = isoDate(today)) {
+  const agreements = contractorAgreements()
+    .filter(item => (item.contractor === contractor || item.contractor === "Default Contractor") && item.status !== "Inactive")
+    .filter(item => !item.effectiveDate || item.effectiveDate <= workedDate)
+    .sort((a, b) => String(b.effectiveDate || "").localeCompare(String(a.effectiveDate || "")));
+  return agreements[0] || defaultContractorAgreement(contractor);
+}
+
+function contractorAgreementRows(settlementRows = []) {
+  const rows = contractorAgreements();
+  const settlementByContractor = new Map();
+  settlementRows.forEach(row => {
+    const existing = settlementByContractor.get(row.contractor) || { open: 0, unpaid: 0, deductions: 0, lastIssued: "" };
+    existing.open += Number(row.balance || 0);
+    existing.unpaid += row.paymentStatus !== "Paid" ? 1 : 0;
+    existing.deductions += Number(row.deductionTotal || 0);
+    if (row.issuedAt && row.issuedAt > existing.lastIssued) existing.lastIssued = row.issuedAt;
+    settlementByContractor.set(row.contractor, existing);
+  });
+  const contractors = uniqueList([...rows.map(item => item.contractor), ...settlementRows.map(item => item.contractor)]).filter(Boolean);
+  return contractors.flatMap(contractor => {
+    const contractorRows = rows.filter(item => item.contractor === contractor || item.contractor === "Default Contractor");
+    return (contractorRows.length ? contractorRows : [defaultContractorAgreement(contractor)]).map(agreement => ({
+      ...agreement,
+      activeForContractor: agreementForContractor(contractor, isoDate(today)).id === agreement.id ? "Yes" : "No",
+      summary: settlementByContractor.get(contractor) || { open: 0, unpaid: 0, deductions: 0, lastIssued: "" }
+    }));
+  });
+}
+
+function contractorSettlementId(packageKey = "", contractor = "Contractor") {
+  return `SETTLE-${String(packageKey || "PACKAGE").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}-${String(contractor || "CONTRACTOR").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}`;
+}
+
+function canViewSettlementRates(row = {}) {
+  if (canPerform("settlement.rate.view")) return true;
+  return row.status && ["Issued", "Partially Paid", "Paid", "Closed"].includes(row.status);
+}
+
+function settlementDeductionRows(settlementId = "") {
+  return (state.data.contractorSettlementDeductions || []).filter(item => item.settlementId === settlementId);
+}
+
+function settlementPaymentRows(settlementId = "") {
+  return [
+    ...(state.data.contractorSettlementPayments || []).filter(item => item.settlementId === settlementId),
+    ...(state.data.cashReceipts || []).filter(item => item.settlementId === settlementId || item.type === "Contractor Settlement Payment" && item.settlementId === settlementId)
+  ];
+}
+
+function settlementHoldbackContext(row = {}) {
+  return (state.data.cashReceipts || [])
+    .filter(item => item.packageKey === row.packageKey && item.type === "SQUAN Holdback")
+    .reduce((summary, item) => {
+      summary.amount += Number(item.actualAmount || 0);
+      if (item.expectedReleaseDate && (!summary.expectedReleaseDate || item.expectedReleaseDate > summary.expectedReleaseDate)) summary.expectedReleaseDate = item.expectedReleaseDate;
+      if (item.holdbackReason) summary.reason = item.holdbackReason;
+      return summary;
+    }, { amount: 0, expectedReleaseDate: "", reason: "" });
+}
+
+function settlementExceptions(row = {}) {
+  const failures = [];
+  if (!row.agreementId) failures.push("Missing contractor agreement");
+  if (!row.lines?.length) failures.push("No approved production lines");
+  if (row.proofStatus !== "Accepted") failures.push("Proof is not fully accepted");
+  if (Number(row.grossAmount || 0) <= 0) failures.push("Gross contractor share is zero");
+  if (Number(row.deductionTotal || 0) > Number(row.grossAmount || 0)) failures.push("Deductions exceed gross settlement");
+  if (Number(row.netDue || 0) < 0) failures.push("Net settlement is negative");
+  if (row.deductions?.some(item => item.status === "Disputed")) failures.push("Disputed deduction is open");
+  if (["Issued", "Partially Paid"].includes(row.status) && Number(row.balance || 0) > 0) failures.push("Issued settlement has unpaid balance");
+  return failures;
+}
+
+function settlementIssueValidation(row = {}) {
+  const blockers = settlementExceptions(row).filter(item => !["Issued settlement has unpaid balance"].includes(item));
+  if (!["Approved", "Under Review"].includes(row.status)) blockers.push("Settlement must be approved or under review before issuing");
+  return { ready: blockers.length === 0, blockers };
+}
+
+function settlementStatusLanes(rows = []) {
+  return ["Draft", "Under Review", "Approved", "Issued", "Partially Paid", "Paid", "Disputed", "Closed"].map(status => ({
+    status,
+    rows: rows.filter(row => row.status === status)
+  }));
+}
+
+function filteredSettlementRows(rows = []) {
+  const filters = state.settlementFilters || {};
+  return rows.filter(row => {
+    if (filters.contractor && filters.contractor !== "All" && row.contractor !== filters.contractor) return false;
+    if (filters.status && filters.status !== "All" && row.status !== filters.status) return false;
+    if (filters.project && filters.project !== "All" && row.projectId !== filters.project) return false;
+    if (filters.payment && filters.payment !== "All" && row.paymentStatus !== filters.payment) return false;
+    return true;
+  });
+}
+
+function contractorSettlementRows(packages = billingPackageWorkflowRows(scopedRows("projects"))) {
+  const persisted = state.data.contractorSettlements || [];
+  const packageRows = packages.filter(row => row.lines?.length && Number(row.billableAmount || 0) > 0);
+  return packageRows.flatMap(row => {
+    const owners = row.owners?.length ? row.owners : uniqueList(row.lines.map(item => item.daily?.submittedBy || item.line?.submittedBy || "Contractor"));
+    return owners.map(owner => {
+      const ownerLines = row.lines.filter(item => (item.daily?.submittedBy || item.line?.submittedBy || owner) === owner);
+      const lineSource = ownerLines.length ? ownerLines : row.lines;
+      const billable = lineSource.reduce((total, item) => total + Number(item.ledger?.squanBillableAmount || item.line?.submittedAmount || 0), 0);
+      const existing = persisted.find(item => item.packageKey === row.key && item.contractor === owner) || {};
+      const agreement = existing.agreementSnapshot || agreementForContractor(owner, row.workedDate);
+      const share = Number(agreement.contractorShare || 0);
+      const gross = Number(existing.grossAmount ?? Math.round(billable * share) / 100);
+      const id = existing.id || contractorSettlementId(row.key, owner);
+      const deductions = settlementDeductionRows(id);
+      const approvedDeductions = deductions.filter(item => item.status !== "Disputed" && item.status !== "Void");
+      const deductionTotal = approvedDeductions.reduce((total, item) => total + Number(item.amount || 0), 0);
+      const payments = settlementPaymentRows(id);
+      const paidAmount = payments.reduce((total, item) => total + Number(item.actualAmount || item.amount || 0), 0);
+      const netDue = Math.max(0, Math.round((gross - deductionTotal) * 100) / 100);
+      const balance = Math.round((netDue - paidAmount) * 100) / 100;
+      const status = existing.status || (balance <= 0 && paidAmount > 0 ? "Paid" : deductions.some(item => item.status === "Disputed") ? "Disputed" : "Draft");
+      return {
+        ...existing,
+        id,
+        packageKey: row.key,
+        projectId: row.projectId,
+        workedDate: row.workedDate,
+        contractor: owner,
+        packageStatus: row.status,
+        billingCode: row.code,
+        lines: lineSource,
+        lineCount: lineSource.length,
+        billableAmount: billable,
+        agreement,
+        agreementId: agreement.id,
+        contractorShare: share,
+        jacksonShare: Number(agreement.jacksonShare || Math.max(0, 100 - share)),
+        grossAmount: gross,
+        deductions,
+        deductionTotal,
+        netDue,
+        paidAmount,
+        balance,
+        status,
+        paymentStatus: balance <= 0 && paidAmount > 0 ? "Paid" : paidAmount > 0 ? "Partially Paid" : "Unpaid",
+        proofStatus: row.proofAccepted === row.lineCount ? "Accepted" : "Needs Review",
+        readiness: row.blockers?.length ? "Blocked" : "Ready",
+        blockers: row.blockers || [],
+        issuedAt: existing.issuedAt || "",
+        approvedAt: existing.approvedAt || "",
+        activityLog: existing.activityLog || []
+      };
+    });
+  }).sort((a, b) => String(b.workedDate || "").localeCompare(String(a.workedDate || "")) || a.contractor.localeCompare(b.contractor));
+}
+
+function ensureContractorSettlement(row) {
+  state.data.contractorSettlements = state.data.contractorSettlements || [];
+  const existing = state.data.contractorSettlements.find(item => item.id === row.id);
+  const now = new Date().toISOString();
+  const record = {
+    ...(existing || {}),
+    id: row.id,
+    packageKey: row.packageKey,
+    project: row.projectId,
+    contractor: row.contractor,
+    workedDate: row.workedDate,
+    status: existing?.status || row.status || "Draft",
+    agreementId: row.agreementId,
+    agreementSnapshot: row.agreement,
+    grossAmount: row.grossAmount,
+    deductionTotal: row.deductionTotal,
+    netDue: row.netDue,
+    paidAmount: row.paidAmount,
+    balance: row.balance,
+    lineCount: row.lineCount,
+    billingCode: row.billingCode,
+    productionLineIds: row.lines.map(item => item.line?.id).filter(Boolean),
+    notes: existing?.notes || "Settlement generated from approved production package. Deductions are tracked as separate line items.",
+    activityLog: existing?.activityLog || [{ at: now, by: state.user?.name || "Billing", note: "Settlement created from package production." }],
+    createdAt: existing?.createdAt || now,
+    modifiedAt: now
+  };
+  if (existing) Object.assign(existing, record);
+  else state.data.contractorSettlements.push(record);
+  return record;
+}
+
+function renderSettlementActionButton(row, action, label, { primary = false, enabled = true } = {}) {
+  const permission = ["add-deduction", "edit-deduction", "void-deduction", "dispute-deduction", "clear-deduction-dispute"].includes(action) ? "settlement.deduction" : action === "record-payment" ? "settlement.payment" : "settlement.manage";
+  if (!canPerform(permission)) return "";
+  return `<button class="${primary ? "primary-btn" : "secondary-btn"} mini-btn" data-settlement-action="${action}" data-settlement-id="${escapeAttr(row.id)}" ${enabled ? "" : "disabled"}>${label}</button>`;
+}
+
+function renderAgreementManager(settlementRows = []) {
+  if (!canPerform("agreement.manage")) return "";
+  const agreements = contractorAgreementRows(settlementRows);
+  return `
+    <section class="settlement-agreement-manager" data-agreement-manager>
+      <div class="card-topline">
+        <div>
+          <h3>Contractor agreement management</h3>
+          <small>Agreement changes create new effective-date versions. Prior settlements keep their original snapshot.</small>
+        </div>
+        <button class="secondary-btn" data-agreement-action="new">New agreement</button>
+      </div>
+      <div class="table-wrap compact">
+        <table>
+          <thead><tr><th>Contractor</th><th>Status</th><th>Effective</th><th>Split</th><th>Open</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${agreements.slice(0, 8).map(row => `
+              <tr>
+                <td><strong>${escapeAttr(row.contractor)}</strong><br><small>${escapeAttr(row.id)}</small></td>
+                <td><span class="status ${statusClass(row.status)}">${escapeAttr(row.status)}</span><br><small>${row.activeForContractor === "Yes" ? "Active for new work" : "Historical/versioned"}</small></td>
+                <td>${formatDate(row.effectiveDate)}</td>
+                <td>${Number(row.contractorShare || 0)} / ${Number(row.jacksonShare || 0)}<br><small>${escapeAttr(row.basis || "")}</small></td>
+                <td>${currency(row.summary.open || 0)}<br><small>${row.summary.unpaid || 0} unpaid settlement(s)</small></td>
+                <td><button class="secondary-btn mini-btn" data-agreement-action="version" data-agreement-id="${escapeAttr(row.id)}">New version</button></td>
+              </tr>
+            `).join("") || `<tr><td colspan="6">No contractor agreements found.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderSettlementFilters(rows = []) {
+  const filters = state.settlementFilters || {};
+  const contractors = ["All", ...uniqueList(rows.map(row => row.contractor)).sort()];
+  const statuses = ["All", ...uniqueList(rows.map(row => row.status)).sort()];
+  const projects = ["All", ...uniqueList(rows.map(row => row.projectId)).sort()];
+  const payments = ["All", ...uniqueList(rows.map(row => row.paymentStatus)).sort()];
+  const select = (key, values) => `
+    <label>${key[0].toUpperCase()}${key.slice(1)}
+      <select data-settlement-filter="${key}">
+        ${values.map(value => `<option ${filters[key] === value ? "selected" : ""}>${escapeAttr(value)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+  return `
+    <div class="settlement-filter-bar">
+      ${select("contractor", contractors)}
+      ${select("status", statuses)}
+      ${select("project", projects)}
+      ${select("payment", payments)}
+    </div>
+  `;
+}
+
+function renderSettlementLanes(rows = []) {
+  return `
+    <div class="billing-admin-status-lanes settlement-lanes" data-settlement-lanes>
+      ${settlementStatusLanes(rows).map(lane => `
+        <article>
+          <div class="card-topline"><h3>${escapeAttr(lane.status)}</h3><span>${lane.rows.length}</span></div>
+          ${lane.rows.slice(0, 3).map(row => `
+            <button class="${state.selectedSettlementId === row.id ? "selected" : ""}" data-settlement-select="${escapeAttr(row.id)}">
+              <strong>${escapeAttr(row.contractor)}</strong>
+              <small>${escapeAttr(row.projectId)} · ${currency(row.netDue)} net · ${escapeAttr(row.paymentStatus)}</small>
+            </button>
+          `).join("") || `<p class="empty-state">No settlements.</p>`}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderSettlementDetail(row) {
+  if (!row) return `<section class="settlement-detail-panel"><p class="empty-state">Select a settlement to review detail.</p></section>`;
+  const showMoney = canViewSettlementRates(row);
+  const validation = settlementIssueValidation(row);
+  const exceptions = settlementExceptions(row);
+  const holdback = settlementHoldbackContext(row);
+  const audit = [
+    ...(row.activityLog || []),
+    ...row.deductions.flatMap(item => item.activityLog || []),
+    ...settlementPaymentRows(row.id).flatMap(item => item.activityLog || [])
+  ].sort((a, b) => String(b.at || "").localeCompare(String(a.at || ""))).slice(0, 8);
+  return `
+    <section class="settlement-detail-panel" data-settlement-detail>
+      <div class="card-topline">
+        <div>
+          <h3>${escapeAttr(row.contractor)} settlement</h3>
+          <small>${escapeAttr(row.projectId)} · ${formatDate(row.workedDate)} · ${escapeAttr(row.id)}</small>
+        </div>
+        <span class="status ${statusClass(row.status)}">${escapeAttr(row.status)}</span>
+      </div>
+      <div class="workflow-count-strip">
+        ${metric("Agreement", showMoney ? `${row.contractorShare}/${row.jacksonShare}` : "Hidden", row.agreementId)}
+        ${metric("Gross", showMoney ? currency(row.grossAmount) : "Hidden", "Contractor share")}
+        ${metric("Deductions", showMoney ? currency(row.deductionTotal) : "Hidden", `${row.deductions.length} line(s)`)}
+        ${metric("Net due", showMoney ? currency(row.netDue) : "Hidden until issued", row.paymentStatus)}
+        ${metric("Paid", showMoney ? currency(row.paidAmount) : "Hidden", `${currency(row.balance)} open`)}
+      </div>
+      ${holdback.amount ? `<p class="readiness-note">SQUAN/customer reserve held: ${currency(holdback.amount)}. ${escapeAttr(holdback.reason || "Manual holdback decision required.")} Expected release ${formatDate(holdback.expectedReleaseDate)}.</p>` : ""}
+      ${exceptions.length ? `<div class="billing-package-blockers">${exceptions.map(item => `<span>${escapeAttr(item)}</span>`).join("")}</div>` : ""}
+      <div class="billing-package-actions">
+        ${renderSettlementActionButton(row, "add-deduction", "Add deduction")}
+        ${renderSettlementActionButton(row, "approve", "Approve", { enabled: !["Approved", "Issued", "Paid", "Closed"].includes(row.status) })}
+        ${renderSettlementActionButton(row, "issue", "Issue settlement", { primary: true, enabled: validation.ready })}
+        ${renderSettlementActionButton(row, "dispute", "Mark disputed", { enabled: !["Paid", "Closed"].includes(row.status) })}
+        ${renderSettlementActionButton(row, "record-payment", "Record payment", { enabled: row.netDue > 0 })}
+        ${renderSettlementActionButton(row, "close", "Close", { enabled: ["Paid", "Disputed"].includes(row.status) })}
+        ${canPerform("settlement.export") ? `<a class="secondary-btn" href="/api/reports/contractor-settlement-statement.csv?settlement=${encodeURIComponent(row.id)}" target="_blank" rel="noreferrer">Statement CSV</a>` : ""}
+      </div>
+      <div class="table-wrap compact">
+        <table>
+          <thead><tr><th>Code</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th>Proof</th></tr></thead>
+          <tbody>
+            ${row.lines.map(item => {
+              const audit = billingPackageRateAuditRows({ ...row, code: row.billingCode, lines: [item] })[0] || {};
+              return `<tr>
+                <td><strong>${escapeAttr(item.line?.code || row.billingCode)}</strong></td>
+                <td>${escapeAttr(audit.description || item.line?.unitName || "")}</td>
+                <td>${Number(item.line?.quantity || item.ledger?.quantity || 0).toLocaleString()} ${escapeAttr(item.line?.uom || "")}</td>
+                <td>${showMoney ? currency(audit.squanRate || item.line?.unitRate || 0) : "Hidden"}</td>
+                <td>${showMoney ? currency(item.ledger?.squanBillableAmount || 0) : "Hidden"}</td>
+                <td><span class="status ${statusClass(item.proofState)}">${escapeAttr(item.proofState)}</span></td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap compact">
+        <table>
+          <thead><tr><th>Deduction</th><th>Amount</th><th>Date</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${row.deductions.map(item => `<tr>
+              <td>${escapeAttr(item.category)}</td>
+              <td>${showMoney ? currency(item.amount) : "Hidden"}</td>
+              <td>${formatDate(item.deductionDate)}</td>
+              <td><span class="status ${statusClass(item.status)}">${escapeAttr(item.status)}</span></td>
+              <td>${escapeAttr(item.reason || item.reference || "")}<br><small>${escapeAttr(item.enteredBy || "")}</small></td>
+              <td><div class="daily-row-actions">
+                ${canPerform("settlement.deduction") ? `<button class="secondary-btn mini-btn" data-settlement-deduction-action="edit" data-deduction-id="${escapeAttr(item.id)}" data-settlement-id="${escapeAttr(row.id)}">Edit</button>` : ""}
+                ${canPerform("settlement.deduction") ? `<button class="secondary-btn mini-btn" data-settlement-deduction-action="void" data-deduction-id="${escapeAttr(item.id)}" data-settlement-id="${escapeAttr(row.id)}">Void</button>` : ""}
+                ${canPerform("settlement.deduction") ? `<button class="secondary-btn mini-btn" data-settlement-deduction-action="${item.status === "Disputed" ? "clear-dispute" : "dispute"}" data-deduction-id="${escapeAttr(item.id)}" data-settlement-id="${escapeAttr(row.id)}">${item.status === "Disputed" ? "Clear" : "Dispute"}</button>` : ""}
+              </div></td>
+            </tr>`).join("") || `<tr><td colspan="6">No settlement deductions recorded.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="billing-package-timeline-list">
+        ${audit.map(item => `<article><strong>${escapeAttr(item.note || "Settlement event")}</strong><span>${escapeAttr(formatDateTime(item.at || ""))}</span><small>${escapeAttr(item.by || state.user?.name || "")}</small></article>`).join("") || `<p class="empty-state">No settlement audit events yet.</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderContractorSettlementWorkbench(context = billingSliceContext()) {
+  if (!canPerform("settlement.view")) return "";
+  const rows = contractorSettlementRows(billingPackageWorkflowRows(context.projects));
+  const scopedSettlementRows = state.role === "Foreman"
+    ? rows.filter(row => row.contractor === (state.user?.name || roleConfig.Foreman.person))
+    : rows;
+  const visibleRows = filteredSettlementRows(scopedSettlementRows);
+  const selected = visibleRows.find(row => row.id === state.selectedSettlementId) || visibleRows[0] || scopedSettlementRows[0] || null;
+  if (selected && state.selectedSettlementId !== selected.id) state.selectedSettlementId = selected.id;
+  const gross = visibleRows.reduce((total, row) => total + Number(row.grossAmount || 0), 0);
+  const deductions = visibleRows.reduce((total, row) => total + Number(row.deductionTotal || 0), 0);
+  const net = visibleRows.reduce((total, row) => total + Number(row.netDue || 0), 0);
+  const open = visibleRows.reduce((total, row) => total + Math.max(0, Number(row.balance || 0)), 0);
+  const rateVisible = canPerform("settlement.rate.view");
+  return `
+    <section class="panel contractor-settlement-workbench" data-contractor-settlement-workbench>
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Contractor settlements</span>
+          <h2>Gross, deductions, net settlement</h2>
+          <p>Contractors bill with the same SQUAN codes and quantities. Admin/Billing controls agreement terms, deductions, settlement status, and payments.</p>
+        </div>
+        <div class="daily-row-actions">
+          ${canPerform("agreement.manage") ? `<button class="secondary-btn" data-agreement-action="new">New agreement</button>` : ""}
+          ${canPerform("settlement.export") ? `<a class="secondary-btn" href="/api/reports/contractor-agreements.csv" target="_blank" rel="noreferrer">Export agreements</a>` : ""}
+          ${canPerform("settlement.export") ? `<a class="secondary-btn" href="/api/reports/contractor-settlements.csv" target="_blank" rel="noreferrer">Export settlements</a>` : ""}
+          ${canPerform("settlement.export") ? `<a class="secondary-btn" href="/api/reports/contractor-deductions.csv" target="_blank" rel="noreferrer">Export deductions</a>` : ""}
+          ${canPerform("settlement.export") ? `<a class="secondary-btn" href="/api/reports/contractor-disputed.csv" target="_blank" rel="noreferrer">Export disputes</a>` : ""}
+        </div>
+      </div>
+      <div class="workflow-count-strip">
+        ${metric("Gross contractor share", rateVisible ? currency(gross) : "Hidden", "Agreement-based")}
+        ${metric("Deductions", rateVisible ? currency(deductions) : "Hidden", "Payroll / expense lines")}
+        ${metric("Net settlement", rateVisible ? currency(net) : "Issued view", "Gross minus deductions")}
+        ${metric("Open balance", rateVisible ? currency(open) : "Issued view", "Unpaid settlement")}
+      </div>
+      <div class="billing-package-preview-grid">
+        <article><span>Agreement versioning</span><strong>80 / 20 current</strong><small>Default only; future changes use new effective dates.</small></article>
+        <article><span>Foreman entry</span><strong>SQUAN codes + qty</strong><small>Rates hidden during daily capture.</small></article>
+        <article><span>Deductions</span><strong>Line item ledger</strong><small>Payroll and expenses net from settlement.</small></article>
+        <article><span>Status lifecycle</span><strong>Draft to Closed</strong><small>Approval, issue, payment, dispute, close.</small></article>
+      </div>
+      ${renderAgreementManager(scopedSettlementRows)}
+      ${renderSettlementFilters(scopedSettlementRows)}
+      ${renderSettlementLanes(visibleRows)}
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr><th>Contractor</th><th>Map / Code</th><th>Agreement</th><th>Gross</th><th>Deductions</th><th>Net</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            ${visibleRows.slice(0, 12).map(row => {
+              const showMoney = canViewSettlementRates(row);
+              return `
+                <tr>
+                  <td><strong>${escapeAttr(row.contractor)}</strong><br><small>${formatDate(row.workedDate)} · ${row.lineCount} line(s)</small></td>
+                  <td>${escapeAttr(row.projectId)}<br><small>${escapeAttr(row.billingCode)} · ${escapeAttr(row.packageStatus)}</small></td>
+                  <td>${showMoney ? `${Number(row.contractorShare || 0)} / ${Number(row.jacksonShare || 0)}` : "Hidden"}<br><small>${escapeAttr(row.agreementId)}</small></td>
+                  <td>${showMoney ? currency(row.grossAmount) : "Hidden"}</td>
+                  <td>${showMoney ? currency(row.deductionTotal) : "Hidden"}<br><small>${row.deductions.length} deduction(s)</small></td>
+                  <td>${showMoney ? currency(row.netDue) : "Hidden until issued"}</td>
+                  <td><span class="status ${statusClass(row.status)}">${escapeAttr(row.status)}</span><br><small>${escapeAttr(row.paymentStatus)}</small></td>
+                  <td>
+                    <div class="daily-row-actions">
+                      ${renderSettlementActionButton(row, "add-deduction", "Add deduction")}
+                      ${renderSettlementActionButton(row, "approve", "Approve", { enabled: !["Approved", "Issued", "Paid", "Closed"].includes(row.status) })}
+                      ${renderSettlementActionButton(row, "issue", "Issue", { primary: true, enabled: settlementIssueValidation(row).ready })}
+                      ${renderSettlementActionButton(row, "dispute", "Dispute", { enabled: !["Paid", "Closed"].includes(row.status) })}
+                      ${renderSettlementActionButton(row, "record-payment", "Record payment", { enabled: row.netDue > 0 })}
+                      ${renderSettlementActionButton(row, "close", "Close", { enabled: ["Paid", "Disputed"].includes(row.status) })}
+                      ${canPerform("settlement.export") ? `<a class="secondary-btn mini-btn" href="/api/reports/contractor-settlement-statement.csv?settlement=${encodeURIComponent(row.id)}" target="_blank" rel="noreferrer">Statement</a>` : ""}
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join("") || `<tr><td colspan="8">No contractor settlement rows are ready yet.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      ${renderSettlementDetail(selected)}
+    </section>
+  `;
+}
+
+function renderBillingPackageAdminVisibility(context) {
+  const rows = billingPackageWorkflowRows(context.projects);
+  const money = rows.map(row => ({ row, summary: billingPackagePaymentSummary(row) }));
+  const lanes = [
+    ["Ready to package", rows.filter(row => row.status === "Ready for Package Prep")],
+    ["Ready to submit", rows.filter(row => row.status === "Ready to Submit")],
+    ["Submitted", rows.filter(row => ["Submitted to SQUAN", "Pending SQUAN Review", "Acknowledged / payment pending"].includes(row.status))],
+    ["Approved by SQUAN", rows.filter(row => ["Approved by SQUAN", "Partially approved by SQUAN"].includes(row.status))],
+    ["Paid / holdback", rows.filter(row => row.status === "Paid / holdback")],
+    ["Contractor open", money.filter(item => item.summary.contractorPayable > 0 && item.summary.contractorOpen > 0).map(item => item.row)],
+    ["Closed", rows.filter(row => row.status === "Closed")]
+  ];
+  const ownerRows = [...new Map(rows.flatMap(row => row.owners.map(owner => [owner, owner])).filter(Boolean))].map(([, owner]) => {
+    const ownerPackages = rows.filter(row => row.owners.includes(owner));
+    return {
+      owner,
+      packages: ownerPackages.length,
+      blockers: ownerPackages.reduce((total, row) => total + row.blockers.length, 0),
+      billable: ownerPackages.reduce((total, row) => total + Number(row.billableAmount || 0), 0),
+      statuses: uniqueList(ownerPackages.map(row => row.status))
+    };
+  });
+  return `
+    <section class="panel billing-admin-visibility">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Admin visibility</span>
+          <h2>Billing ownership and blockers</h2>
+          <p>Admin can see package owner, billing status, blocker count, Daily Capture source, export readiness, and SQUAN response from the same package rows.</p>
+        </div>
+        <span>${rows.length} package group(s)</span>
+      </div>
+      <div class="billing-admin-status-lanes billing-package-lifecycle-lanes" data-billing-package-lifecycle-lanes>
+        ${lanes.map(([title, laneRows]) => `
+          <article>
+            <div class="card-topline">
+              <h3>${title}</h3>
+              <span>${laneRows.length}</span>
+            </div>
+            ${laneRows.slice(0, 4).map(row => `
+              <button class="${state.selectedBillingPackageKey === row.key ? "selected" : ""}" data-billing-package="${escapeAttr(row.key)}" data-project-id="${escapeAttr(row.projectId)}">
+                <strong>${escapeAttr(row.code)} · ${escapeAttr(row.projectId)}</strong>
+                <small>${formatDate(row.workedDate)} · ${currency(row.billableAmount)} · ${row.owners.map(escapeAttr).join(", ") || "No owner"}</small>
+              </button>
+            `).join("") || `<p class="empty-state">No packages.</p>`}
+          </article>
+        `).join("")}
+      </div>
+      <div class="billing-admin-owner-grid">
+        ${ownerRows.map(row => `
+          <article class="${row.blockers ? "needs-review" : "ready"}">
+            <strong>${escapeAttr(row.owner)}</strong>
+            <span>${row.packages} package(s) · ${currency(row.billable)}</span>
+            <small>${row.blockers ? `${row.blockers} blocker(s)` : "No blockers"} · ${row.statuses.map(escapeAttr).join(", ")}</small>
+          </article>
+        `).join("") || `<p class="empty-state">No package owners yet.</p>`}
+      </div>
     </section>
   `;
 }
@@ -34859,6 +41300,13 @@ function formatDateRisk(value) {
   return `<span class="status ${cls}">${value}</span>`;
 }
 
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(`${String(value).slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString();
+}
+
 function formatDateTime(value) {
   if (!value) return "";
   return String(value).replace("T", " ").replace(".000Z", "");
@@ -35022,6 +41470,22 @@ function workflowTarget(actionText, recordId) {
   return "projects";
 }
 
+function productionModeForWorkflow(actionText = "", focusText = "") {
+  const text = `${actionText || ""} ${focusText || ""}`.toLowerCase();
+  if (text.includes("export") || text.includes("report") || text.includes("audit") || text.includes("import") || text.includes("tool") || text.includes("csv") || text.includes("ledger")) return "Reports & Tools";
+  if (text.includes("billing") || text.includes("handoff") || text.includes("package") || text.includes("squan") || text.includes("ready to bill") || text.includes("ready")) return "Billing Handoff";
+  if (text.includes("proof") || text.includes("review") || text.includes("approve") || text.includes("detail") || text.includes("correction") || text.includes("hold")) return "Review";
+  if (text.includes("new") || text.includes("submit") || text.includes("foreman") || text.includes("entry") || text.includes("capture")) return "Submit Daily";
+  return "Command";
+}
+
+function reportModeForWorkflow(scopeText = "", focusText = "") {
+  const text = `${scopeText || ""} ${focusText || ""}`.toLowerCase();
+  if (text.includes("packet") && !text.includes("payment")) return "Packet Readiness";
+  if (text.includes("audit") || text.includes("export") || text.includes("csv") || text.includes("lifecycle") || text.includes("exception") || text.includes("payment") || text.includes("billing closeout") || text.includes("closeout") || text.includes("collection")) return "Audit / Exports";
+  return "Daily Production";
+}
+
 function roleWorkflowActionLabel(label, target) {
   const text = String(label || "").trim();
   const byRole = {
@@ -35107,6 +41571,11 @@ function configureWorkflowRoute(target, id, actionText, focusText) {
     state.search = "";
   }
 
+  if (target === "production") {
+    state.search = "";
+    state.productionMode = productionModeForWorkflow(actionText, focusText);
+  }
+
   if (target === "field" || target === "time" || target === "risk") {
     state.search = id.startsWith("PO-") ? id : "";
   }
@@ -35121,11 +41590,13 @@ function configureWorkflowRoute(target, id, actionText, focusText) {
   if (target === "reports") {
     state.search = "";
     state.reportExceptionFilter = "Selected Map";
+    state.reportMode = reportModeForWorkflow(state.reportPrintScope, focusText || actionText);
     if (focus.includes("collection") && focus.includes("decision")) state.reportPrintScope = "Collections Decision Audit";
     else if (focus.includes("collection")) state.reportPrintScope = "Collections Packet";
     else if (focus.includes("closeout")) state.reportPrintScope = "Closeout Package";
     else if (focus.includes("billing") || focus.includes("invoice")) state.reportPrintScope = "Billing Packet";
     else if (focus.includes("retainage") || focus.includes("held back") || focus.includes("payment")) state.reportPrintScope = "Payment Ledger";
+    state.reportMode = reportModeForWorkflow(state.reportPrintScope, focusText || actionText);
   }
 
   if (target === "tasks") {
@@ -35143,14 +41614,54 @@ function configureWorkflowRoute(target, id, actionText, focusText) {
 }
 
 function handleWorkflowClick(button) {
-  const target = workflowTarget(button.dataset.workflowAction, button.dataset.workflowId);
+  const target = button.dataset.workflowTarget || workflowTarget(button.dataset.workflowAction, button.dataset.workflowId);
   const id = button.dataset.workflowId || "";
+  if (button.dataset.blockerId) {
+    appendAuditLocal("blocker.opened", {
+      blocker: button.dataset.blockerId,
+      project: id,
+      action: button.dataset.workflowAction || "",
+      focus: button.dataset.workflowFocus || "",
+      by: state.user?.name || "User"
+    });
+  }
   configureWorkflowRoute(target, id, button.dataset.workflowAction, button.dataset.workflowFocus);
-  if (button.dataset.reportScope) state.reportPrintScope = button.dataset.reportScope;
+  if (button.dataset.reportScope) {
+    state.reportPrintScope = button.dataset.reportScope;
+    if (target === "reports") state.reportMode = reportModeForWorkflow(button.dataset.reportScope, button.dataset.workflowFocus || button.dataset.workflowAction);
+  }
   if (canView(target)) {
     state.view = target;
     render();
   }
+}
+
+function handleWorkflowHashRoute() {
+  const target = decodeURIComponent(String(window.location.hash || "").replace(/^#/, ""));
+  if (!target || !canView(target)) return false;
+  configureWorkflowRoute(target, state.selectedProjectId || "", target, "");
+  state.view = target;
+  render();
+  return true;
+}
+
+function routeWorkflowRailElement(element) {
+  if (!element) return false;
+  const target = element.dataset.workflowTarget || element.dataset.view || "";
+  if (!target || !canView(target)) return false;
+  configureWorkflowRoute(target, element.dataset.workflowId || state.selectedProjectId || "", element.dataset.workflowAction || target, element.dataset.workflowFocus || "");
+  if (element.dataset.reportScope) state.reportPrintScope = element.dataset.reportScope;
+  state.view = target;
+  if (window.history?.replaceState) {
+    window.history.replaceState(null, "", `#${target}`);
+  }
+  render();
+  return true;
+}
+
+function isProjectNavigationOnly(element) {
+  const datasetKeys = Object.keys(element?.dataset || {});
+  return datasetKeys.length === 1 && datasetKeys[0] === "projectId";
 }
 
 function openTaskWorkflow(taskId) {
@@ -39051,6 +45562,15 @@ async function handleDataControlAction(action) {
   if (action === "download-json") {
     downloadLocalDataSnapshot();
   }
+  if (action === "download-server-backup") {
+    await downloadServerBackup();
+  }
+  if (action === "save-go-live-mode") {
+    await saveGoLiveMode();
+  }
+  if (action === "restore-backup") {
+    await restoreBackupFromFile();
+  }
 }
 
 function downloadLocalDataSnapshot() {
@@ -39071,6 +45591,129 @@ function downloadLocalDataSnapshot() {
   URL.revokeObjectURL(url);
   appendAuditLocal("data.download-local-json", { by: state.user?.name || "User" });
   persist("Local JSON snapshot downloaded");
+  render();
+}
+
+async function downloadServerBackup() {
+  if (!state.apiOnline) {
+    downloadLocalDataSnapshot();
+    return;
+  }
+  try {
+    const response = await fetch(`/api/admin/backup?by=${encodeURIComponent(state.user?.name || "Admin")}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Server backup failed");
+    const payload = await response.json();
+    state.data.company = {
+      ...(state.data.company || {}),
+      lastBackupAt: payload.exportedAt,
+      lastBackupBy: state.user?.name || "Admin"
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `jackson-telcom-server-backup-${payload.exportedAt.slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    appendAuditLocal("admin.download-server-backup", { by: state.user?.name || "Admin", exportedAt: payload.exportedAt });
+    persist("Server backup downloaded");
+    render();
+  } catch (error) {
+    alert("Server backup failed. Downloading local browser snapshot instead.");
+    downloadLocalDataSnapshot();
+  }
+}
+
+async function saveGoLiveMode() {
+  if (!guardAction("dataControl")) return;
+  const mode = document.getElementById("goLiveModeSelect")?.value || "Review Mode";
+  const readiness = operationalDataReadiness();
+  if (mode === "Live Mode" && readiness.status !== "Operational Ready") {
+    alert(`Live Mode is blocked until readiness is clean:\n\n${readiness.hardBlockers.join("\n") || readiness.source.label}`);
+    return;
+  }
+  state.data.company = {
+    ...(state.data.company || {}),
+    goLiveMode: mode,
+    goLiveModeUpdatedAt: new Date().toISOString(),
+    goLiveModeUpdatedBy: state.user?.name || "Admin",
+    persistencePlan: "Node server with JSON backup now; MAMP MySQL migration next"
+  };
+  appendAuditLocal("admin.go-live-mode", { mode, by: state.user?.name || "Admin" });
+  persist(`Go-live mode set to ${mode}`);
+  if (state.apiOnline) {
+    try {
+      const response = await fetch("/api/admin/go-live-mode", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          by: state.user?.name || "Admin",
+          persistencePlan: state.data.company.persistencePlan
+        })
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Go-live mode save failed");
+      }
+      const payload = await response.json();
+      if (payload.company) state.data.company = payload.company;
+    } catch (error) {
+      state.apiOnline = false;
+      alert(`${error.message}. Saved locally only.`);
+    }
+  }
+  render();
+}
+
+async function restoreBackupFromFile() {
+  if (!guardAction("dataControl")) return;
+  const file = document.getElementById("restoreBackupFile")?.files?.[0];
+  if (!file) {
+    alert("Choose a JSON backup file first.");
+    return;
+  }
+  const text = await file.text();
+  let backup;
+  try {
+    backup = JSON.parse(text);
+  } catch (error) {
+    alert("That file is not valid JSON.");
+    return;
+  }
+  const source = backup.data && typeof backup.data === "object" ? backup.data : backup;
+  const required = ["projects", "tasks", "productionDailies", "productionLines", "priceSheetItems", "billingLedger", "roles", "users", "auditLog"];
+  const failures = required.filter(key => !Array.isArray(source[key]));
+  if (!source.company) failures.push("company");
+  if (!source.meta) failures.push("meta");
+  if (failures.length) {
+    alert(`Backup validation failed:\n\n${failures.map(item => `Missing ${item}`).join("\n")}`);
+    return;
+  }
+  if (!confirm("Restore this backup and replace the current working data? Type RESTORE on the next server validation step is handled automatically.")) return;
+  if (state.apiOnline) {
+    try {
+      const response = await fetch("/api/admin/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backup, confirm: "RESTORE", by: state.user?.name || "Admin" })
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Server restore failed");
+      }
+      await syncFromApi();
+      return;
+    } catch (error) {
+      state.apiOnline = false;
+      alert(`${error.message}. Restoring locally only.`);
+    }
+  }
+  state.data = normalizeDataShape(source);
+  appendAuditLocal("admin.restore-backup-local", { by: state.user?.name || "Admin", file: file.name });
+  persist("Backup restored locally");
   render();
 }
 
@@ -43769,10 +50412,1422 @@ function updateReadinessAfterQC(project, note) {
   readiness.modifiedAt = new Date().toISOString();
 }
 
+function billingPackageActionRow(key = "") {
+  const packageKey = key || state.selectedBillingPackageKey || "";
+  return billingPackageWorkflowRows(scopedRows("projects")).find(row => row.key === packageKey) || null;
+}
+
+function billingPackageRecordId(prefix, key) {
+  return `${prefix}-${String(key || "PACKAGE").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}`;
+}
+
+function packageSubmissionAttachmentList(row) {
+  return [
+    ...row.lines.map(item => `productionLines:${item.line.id}`),
+    ...row.lines.map(item => item.ledger?.id ? `billingLedger:${item.ledger.id}` : "").filter(Boolean),
+    ...row.dailyIds.map(id => `productionDailies:${id}`)
+  ];
+}
+
+function rateSourceForCode(code) {
+  const price = (state.data.priceSheetItems || []).find(item => item.code === code);
+  if (price) return { ...price, source: "priceSheetItems", sourceId: price.id || price.code || code };
+  const unit = (state.data.unitPrices || []).find(item => item.id === code || item.unitCode === code);
+  if (unit) return { ...unit, source: "unitPrices", sourceId: unit.id || unit.unitCode || code };
+  return null;
+}
+
+function amountVariance(actual, calculated) {
+  return Math.round((Number(actual || 0) - Number(calculated || 0)) * 100) / 100;
+}
+
+function billingPackageRateAuditRows(row) {
+  return row.lines.map(item => {
+    const line = item.line || {};
+    const ledger = item.ledger || {};
+    const rate = rateSourceForCode(line.code || ledger.code || row.code);
+    const quantity = Number(line.quantity || ledger.quantity || 0);
+    const squanRate = Number(line.unitRate || rate?.subRate || rate?.price || 0);
+    const contractorRate = line.sourceType?.includes("Contractor") ? Number(line.unitRate || rate?.subRate || 0) : 0;
+    const calculatedSquanAmount = Math.round(quantity * squanRate * 100) / 100;
+    const calculatedContractorAmount = Math.round(quantity * contractorRate * 100) / 100;
+    const squanAmount = Number(ledger.squanBillableAmount || line.submittedAmount || 0);
+    const contractorAmount = Number(ledger.contractorPayableAmount || 0);
+    const squanVariance = amountVariance(squanAmount, calculatedSquanAmount);
+    const contractorVariance = amountVariance(contractorAmount, calculatedContractorAmount);
+    const issues = [
+      !rate ? "Missing rate source" : "",
+      squanRate <= 0 ? "Missing SQUAN/customer rate" : "",
+      Math.abs(squanVariance) > 0.01 ? "SQUAN amount mismatch" : "",
+      line.sourceType?.includes("Contractor") && contractorAmount <= 0 ? "Missing contractor payable" : "",
+      line.sourceType?.includes("Contractor") && Math.abs(contractorVariance) > 0.01 ? "Contractor amount mismatch" : ""
+    ].filter(Boolean);
+    return {
+      productionLineId: line.id || "",
+      billingLedgerId: ledger.id || "",
+      dailyId: item.daily?.externalDailyId || item.daily?.id || line.dailyId || "",
+      code: line.code || ledger.code || row.code,
+      description: rate?.description || rate?.unitName || line.unitName || line.mapLayer || "",
+      quantity,
+      uom: line.uom || rate?.uom || "",
+      squanRate,
+      contractorRate,
+      calculatedSquanAmount,
+      ledgerSquanAmount: squanAmount,
+      squanVariance,
+      calculatedContractorAmount,
+      ledgerContractorAmount: contractorAmount,
+      contractorVariance,
+      inHouseCostAmount: Number(ledger.inHouseCostAmount || 0),
+      rateSource: rate?.source || "Unknown",
+      rateSourceId: rate?.sourceId || "",
+      rateVersion: rate?.version || rate?.rateVersion || rate?.effectiveDate || "",
+      calculation: `${quantity} x ${squanRate} = ${calculatedSquanAmount}`,
+      status: issues.length ? "Needs Review" : "Matched",
+      issues
+    };
+  });
+}
+
+function billingPackageRateBlockers(row) {
+  return billingPackageRateAuditRows(row).flatMap(item => item.issues.map(issue => `${item.code}: ${issue}`));
+}
+
+function billingPackageDuplicateRisk(row) {
+  const submissions = (state.data.invoiceSubmissions || []).filter(item => item.packageKey === row.key);
+  const active = submissions.filter(item => !["Rejected by SQUAN", "Correction Superseded", "Voided"].includes(item.status || ""));
+  if (!active.length) return null;
+  return active[0];
+}
+
+function billingPackagePriorApprovalCodes(row) {
+  return row.lines
+    .map(item => item.line?.code || row.code)
+    .filter(code => code === "HRS" || productionPriceForCode(code)?.readiness === "Prior Approval" || productionPriceForCode(code)?.status === "Prior Approval");
+}
+
+function billingPackageBlockerDetails(row) {
+  const rateBlockers = billingPackageRateBlockers(row);
+  const duplicate = billingPackageDuplicateRisk(row);
+  const priorApprovalCodes = billingPackagePriorApprovalCodes(row);
+  const details = [
+    row.proofAccepted < row.lineCount ? { type: "Proof", detail: "Proof not fully accepted", owner: "Admin", dueDate: addDays(isoDate(today), 1) } : null,
+    !row.billableAmount ? { type: "Amount", detail: "No billable amount", owner: "Billing", dueDate: addDays(isoDate(today), 1) } : null,
+    row.lines.some(item => Number(item.line?.quantity || item.ledger?.quantity || 0) <= 0) ? { type: "Quantity", detail: "Zero or blank quantity", owner: "Foreman", dueDate: addDays(isoDate(today), 1) } : null,
+    priorApprovalCodes.length ? { type: "Prior approval", detail: `Prior approval needed: ${uniqueList(priorApprovalCodes).join(", ")}`, owner: "Billing", dueDate: addDays(isoDate(today), 1) } : null,
+    duplicate && !row.submission ? { type: "Duplicate", detail: `Duplicate submission risk: ${duplicate.id}`, owner: "Billing", dueDate: isoDate(today) } : null,
+    row.submission?.status === "Rejected by SQUAN" ? { type: "SQUAN rejection", detail: "Rejected by SQUAN", owner: "Billing", dueDate: isoDate(today) } : null,
+    ...rateBlockers.map(detail => ({ type: "Rate audit", detail, owner: "Billing", dueDate: addDays(isoDate(today), 1) }))
+  ].filter(Boolean);
+  return details;
+}
+
+function billingPackageReadinessChecklist(row) {
+  const priorApprovalCodes = billingPackagePriorApprovalCodes(row);
+  const duplicate = billingPackageDuplicateRisk(row);
+  return [
+    { key: "codes", label: "Codes valid", ok: row.lines.every(item => Boolean(rateSourceForCode(item.line?.code || row.code))), owner: "Billing" },
+    { key: "quantities", label: "Quantities valid", ok: row.lines.every(item => Number(item.line?.quantity || item.ledger?.quantity || 0) > 0), owner: "Foreman" },
+    { key: "proof", label: "Proof accepted", ok: row.proofAccepted === row.lineCount && row.lineCount > 0, owner: "Admin" },
+    { key: "approval", label: "Admin approved", ok: row.lines.every(item => item.line?.reviewStatus === "Approved"), owner: "Admin" },
+    { key: "rates", label: "Rates valid", ok: !billingPackageRateBlockers(row).length, owner: "Billing" },
+    { key: "prior-approval", label: "No prior approval blocker", ok: !priorApprovalCodes.length, owner: "Billing" },
+    { key: "duplicate", label: "No duplicate risk", ok: !duplicate || Boolean(row.submission), owner: "Billing" }
+  ];
+}
+
+function billingPackageReadinessScore(items = []) {
+  if (!items.length) return 0;
+  return Math.round((items.filter(item => item.ok).length / items.length) * 100);
+}
+
+function billingPackageMoneySnapshot(row) {
+  const submittedValue = Math.round(Number(row.billableAmount || 0) * 100) / 100;
+  const contractorPayable = Math.round(Number(row.payableAmount || 0) * 100) / 100;
+  const inHouseCost = Math.round(Number(row.jobCostAmount || 0) * 100) / 100;
+  return {
+    squanSubmittedValue: submittedValue,
+    squanPaidAmount: 0,
+    squanPaymentVariance: submittedValue,
+    squanHoldbackAmount: 0,
+    squanHoldbackPolicy: "Not automatic. Record actual SQUAN holdback, retainage, short-pay, or variance when payment is received.",
+    contractorPayableSnapshot: contractorPayable,
+    contractorPaidAmount: 0,
+    contractorPaymentStatus: contractorPayable ? "Unpaid" : "No contractor payable",
+    inHouseCostSnapshot: inHouseCost,
+    contractorTermsSnapshot: "Calculated from the current rate sheet/payable rules at package preparation; terms may change for future packages."
+  };
+}
+
+function createDailyBillingPackageSnapshot(row) {
+  state.data.packageSnapshots = state.data.packageSnapshots || [];
+  state.data.invoices = state.data.invoices || [];
+  const now = new Date().toISOString();
+  const priorSnapshots = state.data.packageSnapshots.filter(item => item.scope === "SQUAN Billing Package" && item.packageKey === row.key);
+  const activeSnapshot = priorSnapshots.find(item => item.status !== "Superseded");
+  const shouldCreateNewVersion = activeSnapshot?.status === "Rejected by SQUAN" || activeSnapshot?.correctionRequested === "Yes";
+  const nextVersion = shouldCreateNewVersion ? Math.max(1, ...priorSnapshots.map(item => Number(item.version || 1))) + 1 : Number(activeSnapshot?.version || 1);
+  const baseSnapshotId = billingPackageRecordId("PKG", row.key);
+  const snapshotId = nextVersion > 1 ? `${baseSnapshotId}-V${nextVersion}` : baseSnapshotId;
+  const invoiceId = billingPackageRecordId("INV", row.key);
+  if (shouldCreateNewVersion && activeSnapshot) {
+    activeSnapshot.status = "Superseded";
+    activeSnapshot.supersededBy = snapshotId;
+    activeSnapshot.modifiedAt = now;
+    activeSnapshot.activityLog = [...(activeSnapshot.activityLog || []), { at: now, by: state.user?.name || "Billing", note: `Superseded by correction package v${nextVersion}.` }];
+    void saveToApi("packageSnapshots", activeSnapshot, false);
+  }
+  const existingSnapshot = state.data.packageSnapshots.find(item => item.id === snapshotId);
+  const money = billingPackageMoneySnapshot(row);
+  const rateAuditRows = billingPackageRateAuditRows(row);
+  const rateBlockers = rateAuditRows.flatMap(item => item.issues.map(issue => `${item.code}: ${issue}`));
+  const existingInvoice = state.data.invoices.find(item => item.id === invoiceId);
+  const invoice = existingInvoice || {
+    id: invoiceId,
+    project: row.projectId,
+    packageKey: row.key,
+    submitted: "",
+    paid90: 0,
+    retainageRelease: "",
+    activityLog: [],
+    createdAt: now
+  };
+  invoice.gross = row.billableAmount;
+  invoice.squanSubmittedValue = money.squanSubmittedValue;
+  invoice.squanPaidAmount = Number(existingInvoice?.squanPaidAmount || 0);
+  invoice.squanPaymentVariance = money.squanSubmittedValue - invoice.squanPaidAmount;
+  invoice.squanHoldbackAmount = Number(existingInvoice?.squanHoldbackAmount || 0);
+  invoice.squanHoldbackPolicy = money.squanHoldbackPolicy;
+  invoice.contractorPayableSnapshot = money.contractorPayableSnapshot;
+  invoice.contractorPaidAmount = Number(existingInvoice?.contractorPaidAmount || 0);
+  invoice.contractorPaymentStatus = existingInvoice?.contractorPaymentStatus || money.contractorPaymentStatus;
+  invoice.inHouseCostSnapshot = money.inHouseCostSnapshot;
+  invoice.contractorTermsSnapshot = money.contractorTermsSnapshot;
+  invoice.rateAuditStatus = rateBlockers.length ? "Needs Review" : "Matched";
+  invoice.rateAuditBlockers = rateBlockers;
+  invoice.retainage10 = Number(existingInvoice?.retainage10 || 0);
+  invoice.status = "Ready to Submit";
+  invoice.support = "Prepared from approved Daily Capture billing package.";
+  invoice.notes = appendInlineNote(invoice.notes, `Prepared package ${snapshotId} for ${row.code} on ${row.workedDate}.`);
+  invoice.modifiedAt = now;
+  if (!existingInvoice) state.data.invoices.push(invoice);
+  const snapshot = {
+    ...(existingSnapshot || {}),
+    id: snapshotId,
+    scope: "SQUAN Billing Package",
+    packageKey: row.key,
+    project: row.projectId,
+    map: row.project?.map || row.projectId,
+    code: row.code,
+    workedDate: row.workedDate,
+    invoice: invoice.id,
+    version: existingSnapshot?.version || nextVersion,
+    status: "Ready to Submit",
+    locked: existingSnapshot?.locked || "No",
+    correctionOf: shouldCreateNewVersion ? activeSnapshot?.id || "" : existingSnapshot?.correctionOf || "",
+    preparedBy: state.user?.name || "Billing",
+    preparedAt: existingSnapshot?.preparedAt || now,
+    gross: row.billableAmount,
+    netDue: money.squanSubmittedValue,
+    retainageAmount: Number(existingSnapshot?.retainageAmount || 0),
+    ...money,
+    quantity: row.quantity,
+    uom: row.lines[0]?.line?.uom || "",
+    lineCount: row.lineCount,
+    proofAccepted: row.proofAccepted,
+    owners: row.owners,
+    dailyIds: row.dailyIds,
+    productionLineIds: row.lines.map(item => item.line.id).filter(Boolean),
+    billingLedgerIds: row.lines.map(item => item.ledger.id).filter(Boolean),
+    submittedLineSnapshots: row.lines.map(item => {
+      const audit = rateAuditRows.find(auditRow => auditRow.productionLineId === item.line.id) || {};
+      return {
+        productionLineId: item.line.id || "",
+        billingLedgerId: item.ledger.id || "",
+        dailyId: item.daily.externalDailyId || item.daily.id || item.line.dailyId || "",
+        foreman: item.daily.submittedBy || item.line.submittedBy || "",
+        mapNtp: row.projectId,
+        workedDate: row.workedDate,
+        code: item.line.code || row.code,
+        description: audit.description || item.line.unitName || "",
+        quantity: Number(item.line.quantity || item.ledger.quantity || 0),
+        uom: item.line.uom || audit.uom || "",
+        rate: Number(audit.squanRate || item.line.unitRate || 0),
+        extendedAmount: Number(item.ledger.squanBillableAmount || item.line.submittedAmount || 0),
+        contractorPayableAmount: Number(item.ledger.contractorPayableAmount || 0),
+        proofStatus: item.proofState,
+        reviewStatus: item.line.reviewStatus || "",
+        billingStatus: item.ledger.billingStatus || item.line.billableStatus || "",
+        rateSource: audit.rateSource || "",
+        rateSourceId: audit.rateSourceId || "",
+        rateVersion: audit.rateVersion || ""
+      };
+    }),
+    squanTrackerRecordRows: squanTrackerRecordRows({ ...row, snapshot: existingSnapshot || { id: snapshotId, version: existingSnapshot?.version || nextVersion, correctionOf: shouldCreateNewVersion ? activeSnapshot?.id || "" : existingSnapshot?.correctionOf || "" } }),
+    squanTrackerValidation: validateSquanTrackerRecordRows({ ...row, snapshot: existingSnapshot || { id: snapshotId, version: existingSnapshot?.version || nextVersion, correctionOf: shouldCreateNewVersion ? activeSnapshot?.id || "" : existingSnapshot?.correctionOf || "" } }),
+    exportPurpose: "Recordkeeping CSV for manual outside SQUAN Tracker entry; not a direct SQUAN integration.",
+    rateAuditRows,
+    rateAuditStatus: rateBlockers.length ? "Needs Review" : "Matched",
+    rateAuditBlockers: rateBlockers,
+    rateLockedAt: existingSnapshot?.rateLockedAt || now,
+    rateLockedBy: existingSnapshot?.rateLockedBy || state.user?.name || "Billing",
+    attachments: packageSubmissionAttachmentList(row),
+    blockers: uniqueList([...(row.blockers || []), ...rateBlockers]),
+    notes: `Ready-to-submit SQUAN billing package for ${row.projectId}, ${row.workedDate}, ${row.code}.`,
+    activityLog: [
+      ...(existingSnapshot?.activityLog || []),
+      { at: now, by: state.user?.name || "Billing", note: "Package prepared for SQUAN submission." }
+    ],
+    createdAt: existingSnapshot?.createdAt || now,
+    modifiedAt: now
+  };
+  if (existingSnapshot) Object.assign(existingSnapshot, snapshot);
+  else state.data.packageSnapshots.push(snapshot);
+  void saveToApi("invoices", invoice, !existingInvoice);
+  void saveToApi("packageSnapshots", snapshot, !existingSnapshot);
+  appendAuditLocal("billing.package.prepare", { packageKey: row.key, project: row.projectId, snapshot: snapshot.id, invoice: invoice.id });
+  persist("SQUAN billing package prepared");
+  render();
+  return snapshot;
+}
+
+function openBillingPackageSubmissionDrawer(row) {
+  const rateBlockers = billingPackageRateBlockers(row);
+  if (rateBlockers.length) {
+    alert(`SQUAN package cannot be submitted until rate audit blockers are cleared:\n\n${rateBlockers.join("\n")}`);
+    appendAuditLocal("billing.package.rate-audit-submit-blocked", { packageKey: row.key, project: row.projectId, blockers: rateBlockers });
+    return;
+  }
+  const validation = validateSquanTrackerRecordRows(row);
+  if (!validation.ready) {
+    alert(`Package cannot be recorded for manual SQUAN Tracker entry until required recordkeeping fields are complete:\n\n${validation.failures.slice(0, 10).join("\n")}`);
+    appendAuditLocal("billing.package.manual-tracker-validation-blocked", { packageKey: row.key, project: row.projectId, blockers: validation.failures });
+    return;
+  }
+  const drawer = document.getElementById("drawer");
+  const backdrop = document.getElementById("drawerBackdrop");
+  const snapshot = row.snapshot;
+  const defaultReference = row.submission?.confirmationNumber || "";
+  const defaultContact = row.submission?.squanBillingContact || "SQUAN PM / AP";
+  const defaultMethod = row.submission?.deliveryMethod || "Manual entry into outside SQUAN Tracker";
+  const defaultSubmissionDate = row.submission?.submissionDate || isoDate(today);
+  drawer.innerHTML = `
+    <header>
+      <div>
+        <h2>Record SQUAN Tracker submission</h2>
+        <span>${escapeAttr(row.projectId)} · ${escapeAttr(row.code)} · ${formatDate(row.workedDate)}</span>
+      </div>
+      <button class="icon-btn" id="closeDrawer" title="Close">×</button>
+    </header>
+    <div class="drawer-body billing-package-drawer">
+      <section>
+        <div class="billing-package-drawer-summary">
+          ${metric("SQUAN amount", currency(row.billableAmount), "Submitted value")}
+          ${metric("Quantity", Number(row.quantity || 0).toLocaleString(), "Approved production")}
+          ${metric("Package", snapshot ? "Prepared" : "Will prepare", snapshot?.id || "Created on submit")}
+          ${metric("Record type", "Manual", "Outside SQUAN Tracker")}
+        </div>
+        <p class="readiness-note">This records that Jackson prepared/submitted the production billing data manually in the outside SQUAN Tracker. The CSV remains backup recordkeeping, not a direct SQUAN integration.</p>
+      </section>
+      <form id="billingPackageSubmissionForm" class="billing-package-drawer-form">
+        <label>Submitted date
+          <input name="submissionDate" type="date" value="${escapeAttr(defaultSubmissionDate)}" required>
+        </label>
+        <label>SQUAN Tracker reference
+          <input name="confirmationNumber" value="${escapeAttr(defaultReference)}" placeholder="Manual tracker ID, portal ref, email ref, or pending">
+        </label>
+        <label>SQUAN contact
+          <input name="contact" value="${escapeAttr(defaultContact)}" required>
+        </label>
+        <label>Delivery method
+          <input name="method" value="${escapeAttr(defaultMethod)}" required>
+        </label>
+        <label>Follow-up date
+          <input name="followUpDate" type="date" value="${escapeAttr(row.submission?.followUpDate || addDays(isoDate(today), 14))}" required>
+        </label>
+        <label>Package value
+          <input name="packageValue" type="number" step="0.01" min="0" value="${escapeAttr(row.billableAmount)}" required>
+        </label>
+        <label class="wide">Submission note
+          <textarea name="note" rows="3">Jackson billing package data prepared for manual entry into the outside SQUAN Tracker. CSV retained for recordkeeping.</textarea>
+        </label>
+      </form>
+    </div>
+    <footer>
+      <button class="secondary-btn" id="cancelDrawer">Cancel</button>
+      <button class="primary-btn" id="saveBillingPackageSubmission">Record manual submission</button>
+    </footer>
+  `;
+  drawer.classList.add("open");
+  backdrop.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("cancelDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("saveBillingPackageSubmission").addEventListener("click", () => {
+    const form = new FormData(document.getElementById("billingPackageSubmissionForm"));
+    submitDailyBillingPackage(row, {
+      confirmationNumber: String(form.get("confirmationNumber") || ""),
+      submissionDate: String(form.get("submissionDate") || ""),
+      contact: String(form.get("contact") || ""),
+      method: String(form.get("method") || ""),
+      followUpDate: String(form.get("followUpDate") || ""),
+      packageValue: Number(form.get("packageValue") || row.billableAmount || 0),
+      note: String(form.get("note") || "")
+    });
+    closeDrawer();
+  });
+}
+
+function submitDailyBillingPackage(row, details = null) {
+  const rateBlockers = billingPackageRateBlockers(row);
+  if (rateBlockers.length) {
+    alert(`SQUAN package cannot be submitted until rate audit blockers are cleared:\n\n${rateBlockers.join("\n")}`);
+    appendAuditLocal("billing.package.rate-audit-submit-blocked", { packageKey: row.key, project: row.projectId, blockers: rateBlockers });
+    return null;
+  }
+  if (!details) {
+    openBillingPackageSubmissionDrawer(row);
+    return null;
+  }
+  const validation = validateSquanTrackerRecordRows(row);
+  if (!validation.ready) {
+    alert(`Package cannot be recorded for manual SQUAN Tracker entry until required fields are complete:\n\n${validation.failures.slice(0, 10).join("\n")}`);
+    appendAuditLocal("billing.package.manual-tracker-validation-blocked", { packageKey: row.key, project: row.projectId, blockers: validation.failures });
+    return null;
+  }
+  const duplicate = billingPackageDuplicateRisk(row);
+  if (duplicate && duplicate.id !== row.submission?.id) {
+    alert(`This package already has an active SQUAN submission: ${duplicate.id}. Create a correction/resubmission version instead of submitting it again.`);
+    appendAuditLocal("billing.package.duplicate-submit-blocked", { packageKey: row.key, existingSubmission: duplicate.id, project: row.projectId });
+    return null;
+  }
+  const snapshot = row.snapshot || createDailyBillingPackageSnapshot(row);
+  const invoice = (state.data.invoices || []).find(item => item.id === snapshot.invoice);
+  const now = new Date().toISOString();
+  const money = billingPackageMoneySnapshot(row);
+  const confirmationNumber = details.confirmationNumber || "";
+  const contact = details.contact || "SQUAN PM / AP";
+  const method = details.method || "Manual entry into outside SQUAN Tracker";
+  const submissionDate = details.submissionDate || isoDate(today);
+  const followUpDate = details.followUpDate || addDays(submissionDate, 14);
+  const packageValue = Number(details.packageValue || money.squanSubmittedValue || 0);
+  const note = details.note || "Jackson billing package data prepared for manual entry into the outside SQUAN Tracker. CSV retained for recordkeeping.";
+  const submissionId = billingPackageRecordId("SUB", row.key);
+  state.data.invoiceSubmissions = state.data.invoiceSubmissions || [];
+  const existing = state.data.invoiceSubmissions.find(item => item.id === submissionId);
+  const submission = {
+    ...(existing || {}),
+    id: submissionId,
+    project: row.projectId,
+    packageKey: row.key,
+    packageSnapshot: snapshot.id,
+    invoice: invoice?.id || snapshot.invoice,
+    invoiceNumber: invoice?.id || snapshot.invoice,
+    submittedTo: "SQUAN",
+    submissionMode: "Manual SQUAN Tracker entry",
+    directIntegration: "No",
+    submissionDate,
+    submittedBy: state.user?.name || "Billing",
+    squanBillingContact: contact,
+    gross: packageValue,
+    squanSubmittedValue: packageValue,
+    squanPaidAmount: Number(existing?.squanPaidAmount || 0),
+    squanPaymentVariance: packageValue - Number(existing?.squanPaidAmount || 0),
+    squanHoldbackAmount: Number(existing?.squanHoldbackAmount || 0),
+    squanHoldbackPolicy: money.squanHoldbackPolicy,
+    contractorPayableSnapshot: money.contractorPayableSnapshot,
+    contractorPaidAmount: Number(existing?.contractorPaidAmount || 0),
+    contractorPaymentStatus: existing?.contractorPaymentStatus || money.contractorPaymentStatus,
+    contractorTermsSnapshot: money.contractorTermsSnapshot,
+    expectedPaymentAmount: packageValue,
+    retainage10: Number(existing?.retainage10 || 0),
+    supportPackageStatus: "Submitted",
+    status: "Submitted to SQUAN",
+    deliveryMethod: method,
+    confirmationNumber,
+    followUpDate,
+    followUpStatus: confirmationNumber ? "Receipt recorded" : "Receipt pending",
+    attachmentsSent: snapshot.attachments || packageSubmissionAttachmentList(row),
+    receipt: {
+      confirmationNumber,
+      submittedBy: state.user?.name || "Billing",
+      receivedBy: contact,
+      method,
+      receivedAt: confirmationNumber ? now : "",
+      packageValue,
+      followUpDate,
+      followUpStatus: confirmationNumber ? "Receipt recorded" : "Receipt pending",
+      notes: note
+    },
+    notes: appendInlineNote(existing?.notes, note),
+    activityLog: [
+      ...(existing?.activityLog || []),
+      { at: now, by: state.user?.name || "Billing", note: `Manual SQUAN Tracker submission recorded by ${method}.` }
+    ],
+    createdAt: existing?.createdAt || now,
+    modifiedAt: now
+  };
+  if (existing) Object.assign(existing, submission);
+  else state.data.invoiceSubmissions.push(submission);
+  if (invoice) {
+    invoice.status = "Submitted to SQUAN";
+    invoice.submitted = submission.submissionDate;
+    invoice.gross = packageValue;
+    invoice.squanSubmittedValue = packageValue;
+    invoice.modifiedAt = now;
+    void saveToApi("invoices", invoice, false);
+  }
+  snapshot.status = "Submitted to SQUAN";
+  snapshot.locked = "Yes";
+  snapshot.lockedAt = snapshot.lockedAt || now;
+  snapshot.lockedBy = snapshot.lockedBy || state.user?.name || "Billing";
+  snapshot.submission = submission.id;
+  snapshot.submittedAt = now;
+  snapshot.modifiedAt = now;
+  snapshot.activityLog = [...(snapshot.activityLog || []), { at: now, by: state.user?.name || "Billing", note: "Package submitted to SQUAN." }];
+  row.lines.forEach(item => {
+    if (item.line) {
+      item.line.billingPackageLock = {
+        packageKey: row.key,
+        snapshot: snapshot.id,
+        submission: submission.id,
+        lockedAt: now,
+        lockedBy: state.user?.name || "Billing"
+      };
+      item.line.modifiedAt = now;
+      void saveToApi("productionLines", item.line, false);
+    }
+    if (item.ledger) {
+      item.ledger.billingPackageLock = {
+        packageKey: row.key,
+        snapshot: snapshot.id,
+        submission: submission.id,
+        lockedAt: now,
+        lockedBy: state.user?.name || "Billing"
+      };
+      item.ledger.modifiedAt = now;
+      void saveToApi("billingLedger", item.ledger, false);
+    }
+  });
+  void saveToApi("packageSnapshots", snapshot, false);
+  void saveToApi("invoiceSubmissions", submission, !existing);
+  appendAuditLocal("billing.package.manual-tracker-submission-recorded", { packageKey: row.key, project: row.projectId, submission: submission.id, confirmationNumber });
+  persist("Manual SQUAN Tracker submission recorded");
+  render();
+  return submission;
+}
+
+function updateDailyBillingPackageResponse(row, action, details = null) {
+  const submission = row.submission;
+  if (!submission) {
+    openBillingPackageSubmissionDrawer(row);
+    return;
+  }
+  const now = new Date().toISOString();
+  const snapshot = row.snapshot || (state.data.packageSnapshots || []).find(item => item.id === submission.packageSnapshot);
+  const invoice = (state.data.invoices || []).find(item => item.id === submission.invoice);
+  const isReject = action === "reject-squan";
+  const status = details?.status || (isReject ? "Rejected by SQUAN" : "Approved by SQUAN");
+  const approvedAmount = Number(details?.approvedAmount ?? submission.squanSubmittedValue ?? row.billableAmount ?? 0);
+  const submittedValue = Number(submission.squanSubmittedValue || row.billableAmount || 0);
+  const variance = submittedValue - approvedAmount;
+  const note = details?.note || "";
+  if (!note.trim()) return;
+  submission.status = isReject ? "Rejected by SQUAN" : status;
+  submission.supportPackageStatus = isReject ? "Needs Correction" : "Approved";
+  submission.approvedAmount = isReject ? 0 : approvedAmount;
+  submission.responseVariance = isReject ? submittedValue : variance;
+  submission.rejectionReason = isReject ? note.trim() : "";
+  submission.followUpDate = details?.followUpDate || submission.followUpDate;
+  submission.followUpStatus = isReject ? "Correction required" : Math.abs(variance) > 0.01 ? "Variance review" : submission.status;
+  submission.modifiedAt = now;
+  submission.notes = appendInlineNote(submission.notes, note.trim());
+  submission.activityLog = [...(submission.activityLog || []), { at: now, by: state.user?.name || "Billing", note: note.trim() }];
+  if (invoice) {
+    invoice.status = submission.status;
+    invoice.approvedAmount = submission.approvedAmount;
+    invoice.responseVariance = submission.responseVariance;
+    invoice.notes = appendInlineNote(invoice.notes, note.trim());
+    invoice.modifiedAt = now;
+    void saveToApi("invoices", invoice, false);
+  }
+  if (snapshot) {
+    snapshot.status = submission.status;
+    snapshot.approvedAmount = submission.approvedAmount;
+    snapshot.responseVariance = submission.responseVariance;
+    snapshot.responseNote = note.trim();
+    snapshot.correctionRequested = isReject || Math.abs(variance) > 0.01 || status === "Partially approved by SQUAN" ? "Yes" : snapshot.correctionRequested || "No";
+    snapshot.locked = snapshot.locked || "Yes";
+    snapshot.modifiedAt = now;
+    snapshot.activityLog = [...(snapshot.activityLog || []), { at: now, by: state.user?.name || "Billing", note: `SQUAN response: ${note.trim()}` }];
+    void saveToApi("packageSnapshots", snapshot, false);
+  }
+  if (isReject || Math.abs(variance) > 0.01 || status === "Partially approved by SQUAN") {
+    const taskTitle = isReject ? "Correct rejected SQUAN billing package" : "Review partial SQUAN approval variance";
+    const taskSource = isReject ? "SQUAN rejection" : "SQUAN partial approval";
+    createAdminTask(row.project, taskTitle, "Billing", `${row.projectId} ${row.code} ${row.workedDate}: ${note.trim()}${!isReject ? ` Variance ${currency(variance)}.` : ""}`, {
+      id: billingPackageRecordId(isReject ? "TASK-SQUAN-REJECT" : "TASK-SQUAN-VARIANCE", row.key),
+      owner: "Office Billing",
+      role: "Billing",
+      source: taskSource,
+      extra: { relatedType: "Invoice Submission", relatedId: submission.id, packageKey: row.key }
+    });
+  }
+  void saveToApi("invoiceSubmissions", submission, false);
+  appendAuditLocal(isReject ? "billing.package.reject-squan" : "billing.package.response", { packageKey: row.key, project: row.projectId, submission: submission.id, status: submission.status });
+  persist(isReject ? "SQUAN rejection recorded" : "SQUAN response recorded");
+  render();
+}
+
+function openBillingPackageResponseDrawer(row, action) {
+  const submission = row.submission;
+  if (!submission) {
+    openBillingPackageSubmissionDrawer(row);
+    return;
+  }
+  const isReject = action === "reject-squan";
+  const drawer = document.getElementById("drawer");
+  const backdrop = document.getElementById("drawerBackdrop");
+  drawer.innerHTML = `
+    <header>
+      <div>
+        <h2>${isReject ? "Record SQUAN rejection" : "Record SQUAN response"}</h2>
+        <span>${escapeAttr(row.projectId)} · ${escapeAttr(row.code)} · ${escapeAttr(submission.confirmationNumber || submission.status || "Submitted")}</span>
+      </div>
+      <button class="icon-btn" id="closeDrawer" title="Close">×</button>
+    </header>
+    <div class="drawer-body billing-package-drawer">
+      <section>
+        <div class="billing-package-drawer-summary">
+          ${metric("Submitted", currency(submission.squanSubmittedValue || row.billableAmount), "SQUAN value")}
+          ${metric("Status", escapeAttr(submission.status || "Submitted"), "Current")}
+          ${metric("Follow-up", escapeAttr(submission.followUpDate || "Not set"), "Current date")}
+        </div>
+      </section>
+      <form id="billingPackageResponseForm" class="billing-package-drawer-form">
+        <label>Response status
+          <select name="status">
+            <option ${isReject ? "" : "selected"}>Approved by SQUAN</option>
+            <option>Partially approved by SQUAN</option>
+            <option>Pending SQUAN Review</option>
+            <option ${isReject ? "selected" : ""}>Rejected by SQUAN</option>
+            <option>Acknowledged / payment pending</option>
+            <option>Needs support</option>
+          </select>
+        </label>
+        <label>Approved amount
+          <input name="approvedAmount" type="number" min="0" step="0.01" value="${escapeAttr(submission.approvedAmount ?? submission.squanSubmittedValue ?? row.billableAmount)}">
+        </label>
+        <label>Next follow-up date
+          <input name="followUpDate" type="date" value="${escapeAttr(submission.followUpDate || addDays(isoDate(today), 3))}">
+        </label>
+        <label class="wide">Response note
+          <textarea name="note" rows="4" required>${escapeAttr(isReject ? "Correction required before resubmission." : "Approved by SQUAN")}</textarea>
+        </label>
+      </form>
+    </div>
+    <footer>
+      <button class="secondary-btn" id="cancelDrawer">Cancel</button>
+      <button class="primary-btn" id="saveBillingPackageResponse">Record response</button>
+    </footer>
+  `;
+  drawer.classList.add("open");
+  backdrop.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("cancelDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("saveBillingPackageResponse").addEventListener("click", () => {
+    const form = new FormData(document.getElementById("billingPackageResponseForm"));
+    const status = String(form.get("status") || "");
+    updateDailyBillingPackageResponse(row, status === "Rejected by SQUAN" ? "reject-squan" : "record-squan-response", {
+      status,
+      approvedAmount: Number(form.get("approvedAmount") || 0),
+      note: String(form.get("note") || ""),
+      followUpDate: String(form.get("followUpDate") || "")
+    });
+    closeDrawer();
+  });
+}
+
+function handleDailyBillingPackageAction(button, action) {
+  const row = billingPackageActionRow(button.dataset.billingPackageKey);
+  if (!row) return false;
+  if (!guardRoleAction(billingPackageActionPermission(action), { packageKey: row.key, project: row.projectId, billingAction: action })) return true;
+  if (action === "prepare-squan-package") {
+    createDailyBillingPackageSnapshot(row);
+    return true;
+  }
+  if (action === "submit-squan") {
+    openBillingPackageSubmissionDrawer(row);
+    return true;
+  }
+  if (["record-squan-response", "reject-squan"].includes(action)) {
+    openBillingPackageResponseDrawer(row, action);
+    return true;
+  }
+  if (action === "create-squan-correction") {
+    createSquanCorrectionPackage(row);
+    return true;
+  }
+  if (["record-squan-package-payment", "record-squan-holdback", "record-contractor-package-payment"].includes(action)) {
+    openBillingPackagePaymentDrawer(row, action);
+    return true;
+  }
+  return false;
+}
+
+function createSquanCorrectionPackage(row) {
+  if (!row.snapshot && !row.submission) return null;
+  const now = new Date().toISOString();
+  if (row.snapshot) {
+    row.snapshot.correctionRequested = "Yes";
+    row.snapshot.modifiedAt = now;
+    row.snapshot.activityLog = [...(row.snapshot.activityLog || []), { at: now, by: state.user?.name || "Billing", note: "Correction package requested." }];
+    void saveToApi("packageSnapshots", row.snapshot, false);
+  }
+  if (row.submission) {
+    row.submission.status = row.submission.status === "Rejected by SQUAN" ? row.submission.status : "Correction Pending";
+    row.submission.followUpStatus = "Correction package being prepared";
+    row.submission.modifiedAt = now;
+    row.submission.activityLog = [...(row.submission.activityLog || []), { at: now, by: state.user?.name || "Billing", note: "Correction/resubmission version opened." }];
+    void saveToApi("invoiceSubmissions", row.submission, false);
+  }
+  const nextSnapshot = createDailyBillingPackageSnapshot({ ...row, snapshot: null, submission: null });
+  appendAuditLocal("billing.package.correction-created", { packageKey: row.key, project: row.projectId, priorSnapshot: row.snapshot?.id || "", correctionSnapshot: nextSnapshot?.id || "" });
+  persist("SQUAN correction package created");
+  render();
+  return nextSnapshot;
+}
+
+function billingPackagePaymentRows(row) {
+  return (state.data.cashReceipts || []).filter(item => item.packageKey === row.key || (row.submission?.id && item.submission === row.submission.id) || (row.invoice?.id && item.invoice === row.invoice.id));
+}
+
+function billingPackagePaymentSummary(row) {
+  const receipts = billingPackagePaymentRows(row);
+  const squanPaid = receipts.filter(item => item.type === "SQUAN Package Payment").reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const holdback = receipts.filter(item => item.type === "SQUAN Holdback").reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const contractorPaid = receipts.filter(item => item.type === "Contractor Package Payment").reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const submittedValue = Number(row.snapshot?.squanSubmittedValue ?? row.billableAmount ?? 0);
+  const contractorPayable = Number(row.snapshot?.contractorPayableSnapshot ?? row.payableAmount ?? 0);
+  return {
+    receipts,
+    submittedValue,
+    squanPaid,
+    squanVariance: submittedValue - squanPaid - holdback,
+    holdback,
+    contractorPayable,
+    contractorPaid,
+    contractorOpen: contractorPayable - contractorPaid
+  };
+}
+
+function packagePaymentStatus(kind, amount, expected) {
+  if (kind === "holdback") return amount > 0 ? "Holdback Recorded" : "Open";
+  if (amount <= 0) return "Open";
+  if (amount < expected) return "Partially Paid";
+  if (amount > expected) return "Overpaid";
+  return "Paid";
+}
+
+function billingPackagePaymentType(action) {
+  const isContractor = action === "record-contractor-package-payment";
+  const isHoldback = action === "record-squan-holdback";
+  return isContractor ? "Contractor Package Payment" : isHoldback ? "SQUAN Holdback" : "SQUAN Package Payment";
+}
+
+function billingPackagePaymentExpected(row, action, summary = billingPackagePaymentSummary(row)) {
+  if (action === "record-contractor-package-payment") return Math.max(0, summary.contractorOpen);
+  if (action === "record-squan-holdback") return 0;
+  return Math.max(0, summary.submittedValue - summary.squanPaid - summary.holdback);
+}
+
+function openBillingPackagePaymentDrawer(row, action) {
+  const summary = billingPackagePaymentSummary(row);
+  const type = billingPackagePaymentType(action);
+  const expected = billingPackagePaymentExpected(row, action, summary);
+  const isContractor = action === "record-contractor-package-payment";
+  const isHoldback = action === "record-squan-holdback";
+  const drawer = document.getElementById("drawer");
+  const backdrop = document.getElementById("drawerBackdrop");
+  drawer.innerHTML = `
+    <header>
+      <div>
+        <h2>${escapeAttr(type)}</h2>
+        <span>${escapeAttr(row.projectId)} · ${escapeAttr(row.code)} · ${formatDate(row.workedDate)}</span>
+      </div>
+      <button class="icon-btn" id="closeDrawer" title="Close">×</button>
+    </header>
+    <div class="drawer-body billing-package-drawer">
+      <section>
+        <div class="billing-package-drawer-summary">
+          ${metric("SQUAN submitted", currency(summary.submittedValue), "Package value")}
+          ${metric("SQUAN paid", currency(summary.squanPaid), `Holdback ${currency(summary.holdback)}`)}
+          ${metric("Contractor open", currency(summary.contractorOpen), "Separate AP")}
+        </div>
+      </section>
+      <form id="billingPackagePaymentForm" class="billing-package-drawer-form">
+        ${isHoldback ? `
+          <label class="checkbox-label wide">
+            <input name="reserveHeld" type="checkbox" checked>
+            Reserve / holdback was held by SQUAN or customer
+          </label>
+        ` : ""}
+        <label>${isHoldback ? "Holdback amount" : "Payment amount"}
+          <input name="actualAmount" type="number" min="0" step="0.01" value="${escapeAttr(expected || "")}" required>
+        </label>
+        <label>${isHoldback ? "Holdback date" : "Payment date"}
+          <input name="actualDate" type="date" value="${isoDate(today)}" required>
+        </label>
+        <label>Reference
+          <input name="reference" value="${escapeAttr(`${type.toUpperCase().replace(/[^A-Z0-9]+/g, "-")}-${billingPackageRecordId("", row.key).replace(/^-/, "")}`)}" required>
+        </label>
+        <label>Bank proof / deposit reference
+          <input name="bankProof" placeholder="${isContractor ? "Check/EFT ref if available" : "Bank deposit proof if available"}">
+        </label>
+        ${isHoldback ? `
+          <label>Expected release date
+            <input name="expectedReleaseDate" type="date" value="${escapeAttr(addDays(isoDate(today), 90))}">
+          </label>
+          <label>Reserve / holdback reason
+            <input name="holdbackReason" value="Manual reserve/holdback held in SQUAN/customer payment">
+          </label>
+        ` : ""}
+        <label class="wide">Notes
+          <textarea name="note" rows="3">${escapeAttr(isHoldback ? "SQUAN/customer held back part of this package." : "Payment recorded from package ledger.")}</textarea>
+        </label>
+      </form>
+    </div>
+    <footer>
+      <button class="secondary-btn" id="cancelDrawer">Cancel</button>
+      <button class="primary-btn" id="saveBillingPackagePayment">Record ${isHoldback ? "holdback" : "payment"}</button>
+    </footer>
+  `;
+  drawer.classList.add("open");
+  backdrop.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("cancelDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("saveBillingPackagePayment").addEventListener("click", () => {
+    const form = new FormData(document.getElementById("billingPackagePaymentForm"));
+    recordBillingPackagePayment(row, action, {
+      actualAmount: Number(form.get("actualAmount") || 0),
+      actualDate: String(form.get("actualDate") || ""),
+      reference: String(form.get("reference") || ""),
+      bankProof: String(form.get("bankProof") || ""),
+      reserveHeld: Boolean(form.get("reserveHeld")),
+      expectedReleaseDate: String(form.get("expectedReleaseDate") || ""),
+      holdbackReason: String(form.get("holdbackReason") || ""),
+      note: String(form.get("note") || "")
+    });
+    closeDrawer();
+  });
+}
+
+function recordBillingPackagePayment(row, action, details = null) {
+  if (!details) {
+    openBillingPackagePaymentDrawer(row, action);
+    return;
+  }
+  state.data.cashReceipts = state.data.cashReceipts || [];
+  const project = row.project || (state.data.projects || []).find(item => item.id === row.projectId) || { id: row.projectId, map: row.projectId };
+  const snapshot = row.snapshot || createDailyBillingPackageSnapshot(row);
+  const invoice = row.invoice || (state.data.invoices || []).find(item => item.id === snapshot.invoice);
+  const submission = row.submission || (state.data.invoiceSubmissions || []).find(item => item.packageKey === row.key || (invoice?.id && item.invoice === invoice.id));
+  const summary = billingPackagePaymentSummary(row);
+  const isContractor = action === "record-contractor-package-payment";
+  const isHoldback = action === "record-squan-holdback";
+  const type = billingPackagePaymentType(action);
+  const expected = billingPackagePaymentExpected(row, action, summary);
+  const actualAmount = Number(details.actualAmount || 0);
+  if (!Number.isFinite(actualAmount) || actualAmount < 0) {
+    alert("Enter a valid payment amount.");
+    return;
+  }
+  const actualDate = details.actualDate || isoDate(today);
+  const reference = details.reference || `${type.toUpperCase().replace(/[^A-Z0-9]+/g, "-")}-${billingPackageRecordId("", row.key).replace(/^-/, "")}`;
+  const note = details.note || (isHoldback ? "SQUAN/customer held back part of this package." : "Payment recorded from package ledger.");
+  const now = new Date().toISOString();
+  const id = `${isContractor ? "PAY-CONTRACTOR" : isHoldback ? "HOLD-SQUAN" : "PAY-SQUAN"}-${String(row.key).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}-${Date.now()}`;
+  const receipt = {
+    id,
+    project: row.projectId,
+    packageKey: row.key,
+    packageSnapshot: snapshot.id,
+    invoice: invoice?.id || snapshot.invoice || "",
+    submission: submission?.id || "",
+    type,
+    expectedDate: submission?.followUpDate || "",
+    actualDate: actualDate.trim(),
+    expectedAmount: expected,
+    actualAmount,
+    variance: isHoldback ? actualAmount : actualAmount - expected,
+    reserveHeld: isHoldback ? (details.reserveHeld ? "Yes" : "No") : "",
+    holdbackReason: isHoldback ? (details.holdbackReason || note).trim() : "",
+    expectedReleaseDate: isHoldback ? String(details.expectedReleaseDate || "").trim() : "",
+    releaseStatus: isHoldback ? "Manual follow-up required" : "",
+    status: packagePaymentStatus(isHoldback ? "holdback" : "payment", actualAmount, expected),
+    reference: reference.trim(),
+    bankProof: String(details.bankProof || "").trim(),
+    depositBatch: isContractor ? "" : `DEP-${actualDate.trim()}`,
+    depositStatus: isContractor ? "Contractor payment recorded" : "Pending Bank Proof",
+    receivedBy: state.user?.name || "Billing",
+    receivedAt: now,
+    notes: note.trim(),
+    activityLog: [{ at: now, by: state.user?.name || "Billing", note: `${type} recorded for ${currency(actualAmount)}.` }],
+    createdAt: now,
+    modifiedAt: now
+  };
+  state.data.cashReceipts.push(receipt);
+  const nextSummary = {
+    ...summary,
+    squanPaid: summary.squanPaid + (type === "SQUAN Package Payment" ? actualAmount : 0),
+    holdback: summary.holdback + (type === "SQUAN Holdback" ? actualAmount : 0),
+    contractorPaid: summary.contractorPaid + (type === "Contractor Package Payment" ? actualAmount : 0)
+  };
+  nextSummary.squanVariance = nextSummary.submittedValue - nextSummary.squanPaid - nextSummary.holdback;
+  nextSummary.contractorOpen = nextSummary.contractorPayable - nextSummary.contractorPaid;
+  const squanStatus = nextSummary.squanVariance === 0 && nextSummary.squanPaid > 0 ? "Paid" : nextSummary.squanPaid > 0 || nextSummary.holdback > 0 ? "Partially Paid" : row.status;
+  const contractorStatus = nextSummary.contractorPayable <= 0 ? "No contractor payable" : nextSummary.contractorOpen <= 0 ? "Paid" : nextSummary.contractorPaid > 0 ? "Partially Paid" : "Unpaid";
+  [snapshot, invoice, submission].filter(Boolean).forEach(record => {
+    record.squanPaidAmount = nextSummary.squanPaid;
+    record.squanHoldbackAmount = nextSummary.holdback;
+    record.squanPaymentVariance = nextSummary.squanVariance;
+    record.contractorPaidAmount = nextSummary.contractorPaid;
+    record.contractorPaymentStatus = contractorStatus;
+    record.paymentStatus = squanStatus;
+    if (isHoldback) {
+      record.reserveHeld = details.reserveHeld ? "Yes" : "No";
+      record.reserveHeldAmount = nextSummary.holdback;
+      record.reserveHeldReason = (details.holdbackReason || note).trim();
+      record.reserveExpectedReleaseDate = String(details.expectedReleaseDate || "").trim();
+      record.reserveNotes = note.trim();
+    }
+    record.modifiedAt = now;
+  });
+  if (invoice) invoice.status = squanStatus;
+  if (submission) submission.status = squanStatus === "Paid" ? "Paid by SQUAN" : submission.status || "Submitted to SQUAN";
+  void saveToApi("cashReceipts", receipt, true);
+  if (snapshot) void saveToApi("packageSnapshots", snapshot, false);
+  if (invoice) void saveToApi("invoices", invoice, false);
+  if (submission) void saveToApi("invoiceSubmissions", submission, false);
+  appendAuditLocal(`billing.package.${isContractor ? "contractor-payment" : isHoldback ? "holdback" : "squan-payment"}`, {
+    packageKey: row.key,
+    project: project.id,
+    amount: actualAmount,
+    reference: reference.trim()
+  });
+  persist(`${type} recorded`);
+  render();
+}
+
+function handleBillingRateOverride(button) {
+  const row = billingPackageActionRow(button.dataset.billingPackageKey);
+  if (!row) return;
+  const lineId = button.dataset.billingRateOverride || "";
+  const lineRow = row.lines.find(item => item.line.id === lineId);
+  if (!lineRow) return;
+  const currentSquan = Number(lineRow.ledger.squanBillableAmount || 0);
+  const currentContractor = Number(lineRow.ledger.contractorPayableAmount || 0);
+  const nextSquan = Number(prompt("Override SQUAN/customer extended amount", currentSquan) || currentSquan);
+  const nextContractor = Number(prompt("Override contractor payable extended amount", currentContractor) || currentContractor);
+  const reason = prompt("Override reason", "Rate sheet/customer amount correction") || "";
+  if (!reason.trim()) return;
+  const now = new Date().toISOString();
+  const ledger = lineRow.ledger;
+  ledger.originalSquanBillableAmount = ledger.originalSquanBillableAmount ?? currentSquan;
+  ledger.originalContractorPayableAmount = ledger.originalContractorPayableAmount ?? currentContractor;
+  ledger.squanBillableAmount = Math.round(nextSquan * 100) / 100;
+  ledger.contractorPayableAmount = Math.round(nextContractor * 100) / 100;
+  ledger.rateOverride = {
+    by: state.user?.name || "Billing",
+    at: now,
+    reason: reason.trim(),
+    originalSquanBillableAmount: ledger.originalSquanBillableAmount,
+    originalContractorPayableAmount: ledger.originalContractorPayableAmount,
+    squanBillableAmount: ledger.squanBillableAmount,
+    contractorPayableAmount: ledger.contractorPayableAmount
+  };
+  ledger.notes = appendInlineNote(ledger.notes, `Rate/amount override: ${reason.trim()}`);
+  ledger.modifiedAt = now;
+  ledger.activityLog = [...(ledger.activityLog || []), { at: now, by: state.user?.name || "Billing", note: `Rate override recorded: ${reason.trim()}` }];
+  void saveToApi("billingLedger", ledger, false);
+  appendAuditLocal("billing.package.rate-override", { packageKey: row.key, project: row.projectId, line: lineId, reason: reason.trim() });
+  persist("Billing rate override recorded");
+  render();
+}
+
+function settlementRowById(id = "") {
+  return contractorSettlementRows(billingPackageWorkflowRows(scopedRows("projects"))).find(row => row.id === id) || null;
+}
+
+function agreementById(id = "") {
+  return contractorAgreements().find(item => item.id === id) || null;
+}
+
+function openAgreementDrawer(action = "new", agreementId = "") {
+  if (!guardRoleAction("agreement.manage", { agreementAction: action, agreementId })) return;
+  const source = agreementById(agreementId) || {};
+  const nextEffective = action === "version" ? addDays(isoDate(today), 1) : source.effectiveDate || isoDate(today);
+  const contractor = source.contractor || uniqueList(contractorSettlementRows().map(row => row.contractor)).sort()[0] || "Default Contractor";
+  const drawer = document.getElementById("drawer");
+  const backdrop = document.getElementById("drawerBackdrop");
+  drawer.innerHTML = `
+    <header>
+      <div>
+        <h2>${action === "version" ? "Version contractor agreement" : "New contractor agreement"}</h2>
+        <span>Do not overwrite historical settlement terms.</span>
+      </div>
+      <button class="icon-btn" id="closeDrawer" title="Close">×</button>
+    </header>
+    <div class="drawer-body billing-package-drawer">
+      <form id="agreementForm" class="billing-package-drawer-form">
+        <label>Contractor
+          <input name="contractor" value="${escapeAttr(contractor)}" required>
+        </label>
+        <label>Effective date
+          <input name="effectiveDate" type="date" value="${escapeAttr(nextEffective)}" required>
+        </label>
+        <label>Contractor share %
+          <input name="contractorShare" type="number" min="0" max="100" step="0.01" value="${escapeAttr(source.contractorShare ?? 80)}" required>
+        </label>
+        <label>Jackson share %
+          <input name="jacksonShare" type="number" min="0" max="100" step="0.01" value="${escapeAttr(source.jacksonShare ?? 20)}" required>
+        </label>
+        <label>Status
+          <select name="status">
+            ${["Active", "Scheduled", "Inactive", "Superseded", "Expired", "Historical"].map(status => `<option ${status === (source.status || "Active") ? "selected" : ""}>${status}</option>`).join("")}
+          </select>
+        </label>
+        <label>Basis
+          <input name="basis" value="${escapeAttr(source.basis || "Percent of approved SQUAN production")}" required>
+        </label>
+        <label class="wide">Notes / reason
+          <textarea name="notes" rows="3" required>${escapeAttr(action === "version" ? "New agreement version created because contractor terms changed." : source.notes || "Contractor agreement created for settlement calculations.")}</textarea>
+        </label>
+      </form>
+    </div>
+    <footer>
+      <button class="secondary-btn" id="cancelDrawer">Cancel</button>
+      <button class="primary-btn" id="saveAgreement">Save agreement version</button>
+    </footer>
+  `;
+  drawer.classList.add("open");
+  backdrop.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("cancelDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("saveAgreement").addEventListener("click", () => {
+    const form = new FormData(document.getElementById("agreementForm"));
+    saveContractorAgreement({
+      contractor: String(form.get("contractor") || ""),
+      effectiveDate: String(form.get("effectiveDate") || ""),
+      contractorShare: Number(form.get("contractorShare") || 0),
+      jacksonShare: Number(form.get("jacksonShare") || 0),
+      status: String(form.get("status") || "Active"),
+      basis: String(form.get("basis") || ""),
+      notes: String(form.get("notes") || ""),
+      priorAgreementId: action === "version" ? agreementId : ""
+    });
+    closeDrawer();
+  });
+}
+
+function saveContractorAgreement(details) {
+  if (!details.contractor.trim() || !details.effectiveDate) {
+    alert("Contractor and effective date are required.");
+    return;
+  }
+  const totalShare = Number(details.contractorShare || 0) + Number(details.jacksonShare || 0);
+  if (Math.abs(totalShare - 100) > 0.01 && !details.notes.trim()) {
+    alert("Shares should total 100 unless a reason is entered in notes.");
+    return;
+  }
+  state.data.contractorAgreements = state.data.contractorAgreements || [];
+  const now = new Date().toISOString();
+  const id = contractorAgreementId(details.contractor.trim(), details.effectiveDate);
+  const existing = state.data.contractorAgreements.find(item => item.id === id);
+  const agreement = {
+    ...(existing || {}),
+    id,
+    contractor: details.contractor.trim(),
+    status: details.status,
+    effectiveDate: details.effectiveDate,
+    contractorShare: Math.round(Number(details.contractorShare || 0) * 100) / 100,
+    jacksonShare: Math.round(Number(details.jacksonShare || 0) * 100) / 100,
+    basis: details.basis.trim(),
+    rateVisibility: "Hidden until settlement issued unless Admin/Billing",
+    priorAgreementId: details.priorAgreementId || existing?.priorAgreementId || "",
+    notes: appendInlineNote(existing?.notes, details.notes.trim()),
+    activityLog: [...(existing?.activityLog || []), { at: now, by: state.user?.name || "Billing", note: details.priorAgreementId ? `Agreement versioned from ${details.priorAgreementId}.` : "Agreement saved." }],
+    createdAt: existing?.createdAt || now,
+    modifiedAt: now
+  };
+  if (existing) Object.assign(existing, agreement);
+  else state.data.contractorAgreements.push(agreement);
+  appendAuditLocal("agreement.saved", { agreement: agreement.id, contractor: agreement.contractor, priorAgreementId: agreement.priorAgreementId });
+  void saveToApi("contractorAgreements", agreement, !existing);
+  persist("Contractor agreement saved");
+  render();
+}
+
+function openSettlementDeductionDrawer(row) {
+  const drawer = document.getElementById("drawer");
+  const backdrop = document.getElementById("drawerBackdrop");
+  drawer.innerHTML = `
+    <header>
+      <div>
+        <h2>Add settlement deduction</h2>
+        <span>${escapeAttr(row.contractor)} · ${escapeAttr(row.projectId)} · ${escapeAttr(row.billingCode)}</span>
+      </div>
+      <button class="icon-btn" id="closeDrawer" title="Close">×</button>
+    </header>
+    <div class="drawer-body billing-package-drawer">
+      <section>
+        <div class="billing-package-drawer-summary">
+          ${metric("Gross", currency(row.grossAmount), "Contractor share")}
+          ${metric("Current deductions", currency(row.deductionTotal), `${row.deductions.length} line(s)`)}
+          ${metric("Current net", currency(row.netDue), "Before new deduction")}
+        </div>
+      </section>
+      <form id="settlementDeductionForm" class="billing-package-drawer-form">
+        <label>Category
+          <select name="category" required>
+            <option>Payroll handled by Jackson</option>
+            <option>Expenses</option>
+            <option>Advance</option>
+            <option>Fuel</option>
+            <option>Materials</option>
+            <option>Equipment</option>
+            <option>Chargeback</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label>Amount
+          <input name="amount" type="number" min="0" step="0.01" required>
+        </label>
+        <label>Status
+          <select name="status">
+            <option>Approved</option>
+            <option>Pending Review</option>
+            <option>Disputed</option>
+          </select>
+        </label>
+        <label>Date
+          <input name="deductionDate" type="date" value="${isoDate(today)}" required>
+        </label>
+        <label class="wide">Reason / reference
+          <textarea name="reason" rows="3" required>Settlement deduction line item.</textarea>
+        </label>
+      </form>
+    </div>
+    <footer>
+      <button class="secondary-btn" id="cancelDrawer">Cancel</button>
+      <button class="primary-btn" id="saveSettlementDeduction">Add deduction</button>
+    </footer>
+  `;
+  drawer.classList.add("open");
+  backdrop.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("cancelDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("saveSettlementDeduction").addEventListener("click", () => {
+    const form = new FormData(document.getElementById("settlementDeductionForm"));
+    addSettlementDeduction(row, {
+      category: String(form.get("category") || ""),
+      amount: Number(form.get("amount") || 0),
+      status: String(form.get("status") || "Approved"),
+      deductionDate: String(form.get("deductionDate") || ""),
+      reason: String(form.get("reason") || "")
+    });
+    closeDrawer();
+  });
+}
+
+function addSettlementDeduction(row, details) {
+  if (!Number.isFinite(details.amount) || details.amount <= 0) {
+    alert("Enter a valid deduction amount.");
+    return;
+  }
+  const settlement = ensureContractorSettlement(row);
+  state.data.contractorSettlementDeductions = state.data.contractorSettlementDeductions || [];
+  const now = new Date().toISOString();
+  const deduction = {
+    id: `DED-${settlement.id}-${Date.now()}`,
+    settlementId: settlement.id,
+    packageKey: row.packageKey,
+    project: row.projectId,
+    contractor: row.contractor,
+    category: details.category,
+    amount: Math.round(Number(details.amount || 0) * 100) / 100,
+    deductionDate: details.deductionDate || isoDate(today),
+    status: details.status || "Approved",
+    reason: details.reason.trim(),
+    enteredBy: state.user?.name || "Billing",
+    enteredAt: now,
+    notes: details.reason.trim(),
+    activityLog: [{ at: now, by: state.user?.name || "Billing", note: `Deduction added: ${details.category} ${currency(details.amount)}.` }],
+    createdAt: now,
+    modifiedAt: now
+  };
+  state.data.contractorSettlementDeductions.push(deduction);
+  settlement.status = settlement.status === "Draft" ? "Under Review" : settlement.status;
+  settlement.modifiedAt = now;
+  settlement.activityLog = [...(settlement.activityLog || []), { at: now, by: state.user?.name || "Billing", note: `Deduction added: ${deduction.category} ${currency(deduction.amount)}.` }];
+  void saveToApi("contractorSettlements", settlement, false);
+  void saveToApi("contractorSettlementDeductions", deduction, true);
+  appendAuditLocal("settlement.deduction-added", { settlement: settlement.id, contractor: row.contractor, amount: deduction.amount, category: deduction.category });
+  persist("Settlement deduction added");
+  render();
+}
+
+function updateSettlementStatus(row, status) {
+  if (status === "Issued") {
+    const validation = settlementIssueValidation(row);
+    if (!validation.ready) {
+      alert(`Settlement cannot be issued until blockers are cleared:\n\n${validation.blockers.join("\n")}`);
+      appendAuditLocal("settlement.issue-blocked", { settlement: row.id, blockers: validation.blockers });
+      return;
+    }
+  }
+  const settlement = ensureContractorSettlement(row);
+  const now = new Date().toISOString();
+  settlement.status = status;
+  if (status === "Approved") settlement.approvedAt = now;
+  if (status === "Issued") settlement.issuedAt = now;
+  if (status === "Closed") settlement.closedAt = now;
+  settlement.modifiedAt = now;
+  settlement.activityLog = [...(settlement.activityLog || []), { at: now, by: state.user?.name || "Billing", note: `Settlement status changed to ${status}.` }];
+  void saveToApi("contractorSettlements", settlement, false);
+  appendAuditLocal("settlement.status-changed", { settlement: settlement.id, status, contractor: row.contractor });
+  persist(`Settlement ${status.toLowerCase()}`);
+  render();
+}
+
+function openSettlementPaymentDrawer(row) {
+  const drawer = document.getElementById("drawer");
+  const backdrop = document.getElementById("drawerBackdrop");
+  drawer.innerHTML = `
+    <header>
+      <div>
+        <h2>Record contractor settlement payment</h2>
+        <span>${escapeAttr(row.contractor)} · ${escapeAttr(row.id)}</span>
+      </div>
+      <button class="icon-btn" id="closeDrawer" title="Close">×</button>
+    </header>
+    <div class="drawer-body billing-package-drawer">
+      <section>
+        <div class="billing-package-drawer-summary">
+          ${metric("Net due", currency(row.netDue), "After deductions")}
+          ${metric("Paid", currency(row.paidAmount), "Recorded")}
+          ${metric("Open", currency(row.balance), "Remaining")}
+        </div>
+      </section>
+      <form id="settlementPaymentForm" class="billing-package-drawer-form">
+        <label>Payment amount
+          <input name="amount" type="number" min="0" step="0.01" value="${escapeAttr(Math.max(0, row.balance))}" required>
+        </label>
+        <label>Payment date
+          <input name="paymentDate" type="date" value="${isoDate(today)}" required>
+        </label>
+        <label>Reference
+          <input name="reference" value="${escapeAttr(`SETTLEMENT-PAY-${row.id}`)}" required>
+        </label>
+        <label class="wide">Notes
+          <textarea name="note" rows="3">Contractor settlement payment recorded after deductions.</textarea>
+        </label>
+      </form>
+    </div>
+    <footer>
+      <button class="secondary-btn" id="cancelDrawer">Cancel</button>
+      <button class="primary-btn" id="saveSettlementPayment">Record payment</button>
+    </footer>
+  `;
+  drawer.classList.add("open");
+  backdrop.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("cancelDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("saveSettlementPayment").addEventListener("click", () => {
+    const form = new FormData(document.getElementById("settlementPaymentForm"));
+    recordSettlementPayment(row, {
+      amount: Number(form.get("amount") || 0),
+      paymentDate: String(form.get("paymentDate") || ""),
+      reference: String(form.get("reference") || ""),
+      note: String(form.get("note") || "")
+    });
+    closeDrawer();
+  });
+}
+
+function recordSettlementPayment(row, details) {
+  if (!Number.isFinite(details.amount) || details.amount <= 0) {
+    alert("Enter a valid settlement payment amount.");
+    return;
+  }
+  const settlement = ensureContractorSettlement(row);
+  state.data.contractorSettlementPayments = state.data.contractorSettlementPayments || [];
+  state.data.cashReceipts = state.data.cashReceipts || [];
+  const now = new Date().toISOString();
+  const payment = {
+    id: `SETPAY-${settlement.id}-${Date.now()}`,
+    settlementId: settlement.id,
+    packageKey: row.packageKey,
+    project: row.projectId,
+    contractor: row.contractor,
+    amount: Math.round(Number(details.amount || 0) * 100) / 100,
+    actualAmount: Math.round(Number(details.amount || 0) * 100) / 100,
+    paymentDate: details.paymentDate || isoDate(today),
+    actualDate: details.paymentDate || isoDate(today),
+    reference: details.reference.trim(),
+    status: "Recorded",
+    paidBy: state.user?.name || "Billing",
+    note: details.note.trim(),
+    activityLog: [{ at: now, by: state.user?.name || "Billing", note: `Settlement payment recorded for ${currency(details.amount)}.` }],
+    createdAt: now,
+    modifiedAt: now
+  };
+  state.data.contractorSettlementPayments.push(payment);
+  const refreshed = contractorSettlementRows().find(item => item.id === row.id) || row;
+  settlement.paidAmount = Number(refreshed.paidAmount || 0) + payment.amount;
+  settlement.balance = Math.max(0, Number(refreshed.netDue || 0) - settlement.paidAmount);
+  settlement.status = settlement.balance <= 0 ? "Paid" : "Partially Paid";
+  settlement.modifiedAt = now;
+  settlement.activityLog = [...(settlement.activityLog || []), { at: now, by: state.user?.name || "Billing", note: `Settlement payment ${payment.reference} recorded.` }];
+  void saveToApi("contractorSettlements", settlement, false);
+  void saveToApi("contractorSettlementPayments", payment, true);
+  appendAuditLocal("settlement.payment-recorded", { settlement: settlement.id, contractor: row.contractor, amount: payment.amount, reference: payment.reference });
+  persist("Settlement payment recorded");
+  render();
+}
+
+function deductionById(id = "") {
+  return (state.data.contractorSettlementDeductions || []).find(item => item.id === id) || null;
+}
+
+function openSettlementDeductionEditDrawer(row, deduction) {
+  const drawer = document.getElementById("drawer");
+  const backdrop = document.getElementById("drawerBackdrop");
+  drawer.innerHTML = `
+    <header>
+      <div>
+        <h2>Edit deduction</h2>
+        <span>${escapeAttr(row.contractor)} · ${escapeAttr(deduction.id)}</span>
+      </div>
+      <button class="icon-btn" id="closeDrawer" title="Close">×</button>
+    </header>
+    <div class="drawer-body billing-package-drawer">
+      <form id="settlementDeductionEditForm" class="billing-package-drawer-form">
+        <label>Category
+          <input name="category" value="${escapeAttr(deduction.category || "")}" required>
+        </label>
+        <label>Amount
+          <input name="amount" type="number" min="0" step="0.01" value="${escapeAttr(deduction.amount || 0)}" required>
+        </label>
+        <label>Status
+          <select name="status">
+            ${["Approved", "Pending Review", "Disputed", "Void"].map(status => `<option ${status === deduction.status ? "selected" : ""}>${status}</option>`).join("")}
+          </select>
+        </label>
+        <label>Date
+          <input name="deductionDate" type="date" value="${escapeAttr(deduction.deductionDate || isoDate(today))}" required>
+        </label>
+        <label class="wide">Edit reason
+          <textarea name="reason" rows="3" required>${escapeAttr(deduction.reason || "Deduction updated with supporting note.")}</textarea>
+        </label>
+      </form>
+    </div>
+    <footer>
+      <button class="secondary-btn" id="cancelDrawer">Cancel</button>
+      <button class="primary-btn" id="saveSettlementDeductionEdit">Save deduction</button>
+    </footer>
+  `;
+  drawer.classList.add("open");
+  backdrop.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  document.getElementById("closeDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("cancelDrawer").addEventListener("click", closeDrawer);
+  document.getElementById("saveSettlementDeductionEdit").addEventListener("click", () => {
+    const form = new FormData(document.getElementById("settlementDeductionEditForm"));
+    updateSettlementDeduction(row, deduction, {
+      category: String(form.get("category") || ""),
+      amount: Number(form.get("amount") || 0),
+      status: String(form.get("status") || ""),
+      deductionDate: String(form.get("deductionDate") || ""),
+      reason: String(form.get("reason") || "")
+    });
+    closeDrawer();
+  });
+}
+
+function updateSettlementDeduction(row, deduction, details) {
+  if (!details.reason.trim()) {
+    alert("A reason/note is required for deduction changes.");
+    return;
+  }
+  const now = new Date().toISOString();
+  const before = { amount: deduction.amount, status: deduction.status, category: deduction.category };
+  deduction.category = details.category.trim();
+  deduction.amount = Math.round(Number(details.amount || 0) * 100) / 100;
+  deduction.status = details.status;
+  deduction.deductionDate = details.deductionDate || deduction.deductionDate;
+  deduction.reason = details.reason.trim();
+  deduction.modifiedAt = now;
+  deduction.activityLog = [...(deduction.activityLog || []), { at: now, by: state.user?.name || "Billing", note: `Deduction updated from ${before.category}/${currency(before.amount)}/${before.status}. ${details.reason.trim()}` }];
+  const settlement = ensureContractorSettlement(row);
+  settlement.status = deduction.status === "Disputed" ? "Disputed" : settlement.status;
+  settlement.modifiedAt = now;
+  settlement.activityLog = [...(settlement.activityLog || []), { at: now, by: state.user?.name || "Billing", note: `Deduction ${deduction.id} updated.` }];
+  void saveToApi("contractorSettlementDeductions", deduction, false);
+  void saveToApi("contractorSettlements", settlement, false);
+  appendAuditLocal("settlement.deduction-updated", { settlement: row.id, deduction: deduction.id, before, after: { amount: deduction.amount, status: deduction.status, category: deduction.category } });
+  persist("Settlement deduction updated");
+  render();
+}
+
+function setSettlementDeductionStatus(row, deduction, status) {
+  const reason = prompt(`Reason for ${status}`, status === "Void" ? "Voided from settlement with approval note." : `${status} deduction status updated.`) || "";
+  if (!reason.trim()) return;
+  updateSettlementDeduction(row, deduction, {
+    category: deduction.category,
+    amount: deduction.amount,
+    status,
+    deductionDate: deduction.deductionDate,
+    reason
+  });
+}
+
+function handleSettlementDeductionAction(button) {
+  const row = settlementRowById(button.dataset.settlementId);
+  const deduction = deductionById(button.dataset.deductionId);
+  if (!row || !deduction) return;
+  if (!guardRoleAction("settlement.deduction", { settlement: row.id, deduction: deduction.id, deductionAction: button.dataset.settlementDeductionAction })) return;
+  const action = button.dataset.settlementDeductionAction;
+  if (action === "edit") return openSettlementDeductionEditDrawer(row, deduction);
+  if (action === "void") return setSettlementDeductionStatus(row, deduction, "Void");
+  if (action === "dispute") return setSettlementDeductionStatus(row, deduction, "Disputed");
+  if (action === "clear-dispute") return setSettlementDeductionStatus(row, deduction, "Approved");
+}
+
+function handleSettlementAction(button) {
+  const row = settlementRowById(button.dataset.settlementId);
+  if (!row) return;
+  const action = button.dataset.settlementAction;
+  const permission = action === "add-deduction" ? "settlement.deduction" : action === "record-payment" ? "settlement.payment" : "settlement.manage";
+  if (!guardRoleAction(permission, { settlement: row.id, contractor: row.contractor, settlementAction: action })) return;
+  if (action === "add-deduction") return openSettlementDeductionDrawer(row);
+  if (action === "approve") return updateSettlementStatus(row, "Approved");
+  if (action === "issue") return updateSettlementStatus(row, "Issued");
+  if (action === "dispute") return updateSettlementStatus(row, "Disputed");
+  if (action === "close") return updateSettlementStatus(row, "Closed");
+  if (action === "record-payment") return openSettlementPaymentDrawer(row);
+}
+
 function handleBillingAction(button) {
   const project = (state.data.projects || []).find(item => item.id === button.dataset.projectId);
   if (!project) return;
   const action = button.dataset.billingAction;
+  if (button.dataset.billingPackageKey && handleDailyBillingPackageAction(button, action)) return;
   const wasFinanciallyClosed = project.adminApprovals?.financialCloseout?.status === "Closed";
   const postSubmissionActions = ["prepare-squan-package", "rebuild-package-snapshot", "create-snapshot-rebuild-task", "approve-package-build", "create-package-build-blockers", "create-submission-blockers", "create-ar-discipline", "create-retainage-lifecycle", "submit-squan", "record-receipt", "schedule-followup", "record-squan-response", "escalate-ar-followup", "record-90-payment", "pay-when-paid", "record-dispute", "short-paid", "chargeback", "record-retainage-payment", "schedule-retainage-followup", "retainage-dispute"];
   if (!postSubmissionActions.includes(action) && !guardFinalizedPacketEdit(project.id, `Billing action: ${action}`)) return;
@@ -44175,6 +52230,14 @@ function bindEvents() {
 
   if (!state.user) return;
 
+  document.querySelectorAll(".workflow-context-bar [data-workflow-action]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      routeWorkflowRailElement(button);
+    }, true);
+  });
+
   const productionForm = document.getElementById("productionDailyForm");
   if (productionForm) productionForm.addEventListener("submit", handleProductionDailySubmit);
   const productionSaveDraft = document.getElementById("productionSaveDraft");
@@ -44183,6 +52246,115 @@ function bindEvents() {
   document.querySelectorAll("[data-production-daily-select]").forEach(select => {
     select.addEventListener("change", () => {
       state.selectedProductionDailyId = select.value;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-production-daily-open]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.selectedProductionDailyId = button.dataset.productionDailyOpen;
+      render();
+      requestAnimationFrame(() => {
+        const target = state.productionMode === "Review"
+          ? document.querySelector("[data-admin-daily-review-workstation]")
+          : document.querySelector(".production-daily-detail");
+        target?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-production-admin-filter]").forEach(select => {
+    select.addEventListener("change", () => {
+      productionAdminFilters()[select.dataset.productionAdminFilter] = select.value;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-production-admin-filter-clear]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.productionAdminFilters = {
+        responsible: "All",
+        project: "All",
+        code: "All",
+        proof: "All",
+        billing: "All",
+        review: "All"
+      };
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-production-mode]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.productionMode = button.dataset.productionMode;
+      render();
+    });
+  });
+
+  const productionCode = document.getElementById("productionCode");
+  const productionCodePreview = document.getElementById("productionCodePreview");
+  const productionQuantity = document.getElementById("productionQuantity");
+  const syncProductionCodePreview = () => {
+    const option = productionCode?.selectedOptions?.[0];
+    if (!option || !productionCodePreview) return;
+    const rate = Number(option.dataset.rate || 0);
+    const quantity = Number(productionQuantity?.value || 0);
+    const values = {
+      code: option.value || "",
+      description: option.dataset.description || "",
+      category: option.dataset.category || "",
+      uom: option.dataset.uom || "",
+      rate: currency(rate),
+      extended: ["Admin", "Operations", "Billing"].includes(state.role) ? currency(rate * quantity) : "Calculated for Billing",
+      readiness: option.dataset.readiness || productionCodeReadiness({ code: option.value, rate }),
+      source: ["Admin", "Operations", "Billing"].includes(state.role)
+        ? `${option.dataset.source || "Rate sheet"} · ${option.dataset.readiness || productionCodeReadiness({ code: option.value, rate })}`
+        : "Foreman sees code, unit, and description only. Admin/Billing owns rate validation."
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      const target = productionCodePreview.querySelector(`[data-code-preview="${key}"]`);
+      if (target) target.textContent = value;
+    });
+  };
+  if (productionCode) {
+    productionCode.addEventListener("change", syncProductionCodePreview);
+    syncProductionCodePreview();
+  }
+  if (productionQuantity) productionQuantity.addEventListener("input", syncProductionCodePreview);
+
+  document.querySelectorAll("[data-production-code-pick]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (!productionCode) return;
+      productionCode.value = button.dataset.productionCodePick;
+      syncProductionCodePreview();
+      document.getElementById("productionQuantity")?.focus();
+    });
+  });
+
+  document.querySelectorAll("[data-production-add-line]").forEach(button => {
+    button.addEventListener("click", () => {
+      const line = currentProductionDraftLine();
+      const blockers = validateProductionDraftLine(line);
+      if (blockers.length) {
+        alert(`Code line cannot be added yet:\n\n${blockers.join("\n")}`);
+        return;
+      }
+      state.productionDraftLines = [...(state.productionDraftLines || []), line];
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-production-remove-line]").forEach(button => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.productionRemoveLine);
+      state.productionDraftLines = (state.productionDraftLines || []).filter((_, itemIndex) => itemIndex !== index);
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-production-clear-lines]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.productionDraftLines = [];
       render();
     });
   });
@@ -44201,9 +52373,25 @@ function bindEvents() {
     });
   }
 
+  document.querySelectorAll("[data-real-submission-action]").forEach(button => {
+    button.addEventListener("click", () => handleRealSubmissionAction(button));
+  });
+
   document.querySelectorAll("[data-production-review]").forEach(button => {
     button.addEventListener("click", () => {
       if (guardAction("production")) handleProductionReview(button);
+    });
+  });
+
+  document.querySelectorAll("[data-production-daily-action]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (guardAction("production")) handleProductionDailyReviewAction(button);
+    });
+  });
+
+  document.querySelectorAll("[data-admin-review-fix]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (guardAction("production")) handleAdminReviewChecklistFix(button);
     });
   });
 
@@ -44291,6 +52479,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-view]").forEach(button => {
     button.addEventListener("click", event => {
+      if (button.closest(".workflow-context-bar")) return;
       event.preventDefault();
       if (navigateToView(button.dataset.view)) render();
     });
@@ -44420,6 +52609,24 @@ function bindEvents() {
   document.querySelectorAll("[data-billing-action]").forEach(button => {
     button.addEventListener("click", () => {
       if (guardAction("billing")) handleBillingAction(button);
+    });
+  });
+
+  document.querySelectorAll("[data-billing-package]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.selectedBillingPackageKey = button.dataset.billingPackage;
+      if (button.dataset.projectId) state.selectedProjectId = button.dataset.projectId;
+      state.view = "money";
+      render();
+      requestAnimationFrame(() => {
+        document.querySelector(".billing-package-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-billing-rate-override]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (guardAction("billing")) handleBillingRateOverride(button);
     });
   });
 
@@ -44685,6 +52892,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-project-id]").forEach(button => {
     button.addEventListener("click", () => {
+      if (!isProjectNavigationOnly(button)) return;
       const projectId = button.dataset.projectId;
       state.selectedProjectId = projectId;
       if (state.view === "documents") state.documentFilter = projectId;
@@ -44706,7 +52914,20 @@ function bindEvents() {
   });
 
   document.querySelectorAll("[data-workflow-action]").forEach(button => {
+    if (button.closest(".workflow-context-bar")) return;
     button.addEventListener("click", () => handleWorkflowClick(button));
+  });
+
+  document.querySelectorAll("[data-admin-readiness-open]").forEach(button => {
+    button.addEventListener("click", openOperationalReadinessDrawer);
+  });
+
+  document.querySelectorAll("[data-operational-cleanup-task]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      createOperationalCleanupTask(button);
+    });
   });
 
   document.querySelectorAll("[data-alert-action]").forEach(button => {
@@ -44774,6 +52995,70 @@ function bindEvents() {
     button.addEventListener("click", () => window.print());
   });
 
+  document.querySelectorAll("[data-report-mode]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.reportMode = button.dataset.reportMode;
+      if (button.dataset.workflowId) state.selectedProjectId = button.dataset.workflowId;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-daily-report-filter]").forEach(input => {
+    if (input.dataset.dailyReportFilter === "search") {
+      input.addEventListener("input", () => {
+        state.dailyReportFilters = state.dailyReportFilters || {};
+        state.dailyReportFilters.search = input.value;
+        state.selectedDailyReportId = "";
+        const cursor = input.selectionStart;
+        render();
+        requestAnimationFrame(() => {
+          const nextInput = document.querySelector('[data-daily-report-filter="search"]');
+          if (!nextInput) return;
+          nextInput.focus();
+          if (typeof nextInput.setSelectionRange === "function") {
+            nextInput.setSelectionRange(cursor, cursor);
+          }
+        });
+      });
+    }
+    input.addEventListener("change", () => {
+      const key = input.dataset.dailyReportFilter;
+      state.dailyReportFilters = state.dailyReportFilters || {};
+      state.dailyReportFilters[key] = input.type === "checkbox" ? input.checked : input.value;
+      state.selectedDailyReportId = "";
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-daily-report-open]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.selectedDailyReportId = button.dataset.dailyReportOpen;
+      render();
+      requestAnimationFrame(() => {
+        document.querySelector(".squan-submission-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-clear-daily-report-filters]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.dailyReportFilters = {
+        search: "",
+        dateType: "Worked",
+        startDate: "2026-03-20",
+        endDate: "",
+        status: "All",
+        client: "All",
+        workType: "All",
+        employeeType: "All",
+        origin: "All",
+        hideArchived: false
+      };
+      state.selectedDailyReportId = "";
+      render();
+    });
+  });
+
   const reportProjectSelect = document.getElementById("reportProjectSelect");
   if (reportProjectSelect) reportProjectSelect.addEventListener("change", event => {
     state.selectedProjectId = event.target.value;
@@ -44829,6 +53114,22 @@ function bindEvents() {
   document.querySelectorAll("[data-task-filter]").forEach(button => {
     button.addEventListener("click", () => {
       state.taskFilter = button.dataset.taskFilter;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-task-toolbar]").forEach(button => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.taskToolbar;
+      if (action === "filter") {
+        document.querySelector(".task-filter-search")?.focus();
+        return;
+      }
+      if (action === "sort") {
+        state.taskSortMode = state.taskSortMode === "Due" ? "Priority" : "Due";
+      }
+      if (action === "list") state.taskViewMode = "List";
+      if (action === "board") state.taskViewMode = "Board";
       render();
     });
   });
@@ -44917,9 +53218,53 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-settlement-action]").forEach(button => {
+    button.addEventListener("click", () => handleSettlementAction(button));
+  });
+
+  document.querySelectorAll("[data-settlement-select]").forEach(button => {
+    button.addEventListener("click", () => {
+      state.selectedSettlementId = button.dataset.settlementSelect;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-settlement-filter]").forEach(input => {
+    input.addEventListener("change", () => {
+      state.settlementFilters = state.settlementFilters || {};
+      state.settlementFilters[input.dataset.settlementFilter] = input.value;
+      state.selectedSettlementId = "";
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-agreement-action]").forEach(button => {
+    button.addEventListener("click", () => openAgreementDrawer(button.dataset.agreementAction, button.dataset.agreementId || ""));
+  });
+
+  document.querySelectorAll("[data-settlement-deduction-action]").forEach(button => {
+    button.addEventListener("click", () => handleSettlementDeductionAction(button));
+  });
+
   document.querySelectorAll("[data-doc-filter]").forEach(button => {
     button.addEventListener("click", () => {
       state.documentFilter = button.dataset.docFilter;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-document-pin]").forEach(button => {
+    button.addEventListener("click", () => {
+      const documentRecord = (state.data.documents || []).find(item => item.id === button.dataset.documentPin);
+      if (!documentRecord) return;
+      documentRecord.pinned = documentRecord.pinned === "Yes" ? "No" : "Yes";
+      documentRecord.modifiedAt = new Date().toISOString();
+      documentRecord.activityLog = [...(documentRecord.activityLog || []), {
+        at: documentRecord.modifiedAt,
+        by: state.user?.name || "User",
+        note: documentRecord.pinned === "Yes" ? "Document pinned as favorite." : "Document removed from favorites."
+      }];
+      persist(documentRecord.pinned === "Yes" ? "Document favorited" : "Document unfavorited");
       render();
     });
   });
@@ -46240,5 +54585,12 @@ function recomputeBillingReadinessLocal(projectId) {
   return next;
 }
 
+document.addEventListener("click", event => {
+  const railItem = event.target?.closest?.(".workflow-context-bar [data-workflow-target]");
+  if (!railItem) return;
+  event.preventDefault();
+  event.stopPropagation();
+  routeWorkflowRailElement(railItem);
+}, true);
 render();
 syncFromApi();
