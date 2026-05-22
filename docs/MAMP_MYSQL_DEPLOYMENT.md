@@ -65,6 +65,21 @@ Enter the local MAMP MySQL password when prompted. If using phpMyAdmin instead, 
   -e "SELECT collection_name, COUNT(*) AS rows_count FROM records GROUP BY collection_name ORDER BY collection_name; SELECT COUNT(*) AS audit_events FROM audit_events;"
 ```
 
+## Restore Drill Result
+
+The local restore drill uses an isolated database named `syncerp_restore_test`, not the pilot source-of-truth database.
+
+Latest drill result:
+
+- Source database: `syncerp`
+- Restore database: `syncerp_restore_test`
+- `app_state`: 2 rows matched
+- `records`: 367 rows matched
+- `audit_events`: 1164 rows matched
+- Collection counts matched with diff `0`
+
+Keep using an isolated restore target for drills. Do not restore over `syncerp` unless you are in a planned maintenance window with a verified backup.
+
 ## Runtime Migration Steps
 
 1. Import current JSON into MySQL and confirm row counts.

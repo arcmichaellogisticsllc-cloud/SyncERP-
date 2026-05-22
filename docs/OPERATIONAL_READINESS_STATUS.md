@@ -23,7 +23,7 @@ These are external/business signoffs, not code blockers:
 | --- | --- | --- | --- |
 | SQUAN Tracker field format | Pilot CSV ready; Billing signoff pending | Billing | Confirm exact external Tracker columns with the first real submission. |
 | Real users/roles | Pilot seeded | Admin | Replace demo emails with real users and least-privilege roles. |
-| Full restore drill | Validation passed; full restore pending maintenance window | Admin | Execute one restore rehearsal before production data entry. |
+| Full restore drill | Passed in `syncerp_restore_test` | Admin | Copy approved backups to external/Dropbox storage before production sessions. |
 | Hosting target | Deferred paid hosting | Admin / Technical owner | Choose production host before out-of-state/public access. |
 | Source of truth | Local MySQL pilot | Admin / Technical owner | Keep `.env` local and uncommitted; refresh backups before/after production sessions. |
 

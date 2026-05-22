@@ -11,7 +11,7 @@ SyncERP is ready for a controlled local pilot. The gaps below must be closed bef
 | Operational cleanup | Cleanup queue is clear. | Keep cleanup queue at zero before signoff. | Ready |
 | Local pilot runtime | Node app runs locally; paid public hosting deferred. | Decide final production host before out-of-state employee access. | Gap |
 | Database persistence | MAMP MySQL `syncerp` is the local pilot source of truth; JSON is backup/export fallback. | Move to hosted database when public hosting is approved. | Ready for local pilot |
-| Backup / restore | Backup validation passes. | Run a full restore drill during a maintenance window and record owner/location. | Gap |
+| Backup / restore | Backup validation and isolated MySQL restore drill pass. | Choose final off-machine backup location. | Ready for local pilot |
 | Real users | Pilot/demo users are seeded. | Replace demo emails with real users and least-privilege roles. | Gap |
 | SQUAN Tracker | CSV recordkeeping is ready. | Billing confirms exact external Tracker fields with first real submission. | Gap |
 | Acceptance workflow | Script/checklist is documented. | Execute one real production-to-payment test and capture results. | Gap |
@@ -57,21 +57,22 @@ Exit criteria:
 
 ### 3. Backup And Restore Drill
 
-Backup validation passes, but live use needs a real restore rehearsal.
+Backup validation and the isolated MySQL restore rehearsal pass. Live use still needs a final off-machine backup location.
 
 Required steps:
 
-- Export backup from Admin/API.
-- Store backup in the approved backup location.
-- Validate backup.
-- Restore into a safe test copy or maintenance window.
-- Confirm row counts and key workflow records after restore.
-- Record backup owner and restore owner.
+- Export backup from Admin/API. Done for local drill.
+- Store backup in the approved backup location. Still requires final off-machine location.
+- Validate backup. Done.
+- Restore into a safe test copy or maintenance window. Done in `syncerp_restore_test`.
+- Confirm row counts and key workflow records after restore. Done.
+- Record backup owner and restore owner. Done: Admin.
 
 Exit criteria:
 
 - Restore drill date is recorded.
-- Backup path is known.
+- Backup path is known locally.
+- Off-machine backup location is selected.
 - Owner is named.
 - Recovery instructions are documented.
 
@@ -155,7 +156,7 @@ These should not block a controlled pilot, but they should happen before multipl
 - Operational cleanup CSV has no blocker rows.
 - Operational readiness CSV shows zero blockers.
 - MAMP MySQL `syncerp` import is verified.
-- Backup validation passes.
+- Backup validation and isolated MySQL restore drill pass.
 - MySQL mode reports `dataDriver: mysql` when enabled.
 - MySQL mode is the local controlled pilot runtime through ignored `.env`.
 - JSON remains the backup/export fallback.
@@ -166,6 +167,7 @@ These should not block a controlled pilot, but they should happen before multipl
 - Source of truth selected for local pilot.
 - `.env` configured outside git.
 - Full restore drill completed.
+- Off-machine backup location selected.
 - Real user roster approved.
 - Demo accounts handled.
 - SQUAN Tracker fields confirmed.

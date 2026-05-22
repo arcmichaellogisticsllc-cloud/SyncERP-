@@ -81,16 +81,18 @@
       "hostingTarget": "Paid public hosting deferred; local Node runtime remains pilot host until budget/timing approval.",
       "persistenceMode": "MAMP MySQL syncerp is the local controlled pilot source of truth; JSON is backup/export fallback.",
       "backupOwner": "Admin",
-      "restoreDrillStatus": "Backup validation passed; full restore drill scheduled for maintenance window",
+      "restoreDrillStatus": "Passed in isolated syncerp_restore_test database",
       "mysqlDatabase": "syncerp",
       "mysqlImportVerifiedAt": "2026-05-22T20:01:51.487Z",
       "acceptanceWorkflow": "docs/ACCEPTANCE_WORKFLOW.md",
       "status": "Ready for Local MySQL Pilot",
       "notes": "Step 2 closed: local pilot runs with DATA_DRIVER=mysql from ignored .env. Public/out-of-state access remains deferred until paid hosting and production auth are approved.",
-      "reviewedAt": "2026-05-22T20:09:06.148Z",
+      "reviewedAt": "2026-05-22T23:54:45.225Z",
       "sourceOfTruth": "mysql",
       "sourceOfTruthDecidedAt": "2026-05-22T22:31:32.749Z",
-      "sourceOfTruthOwner": "Admin"
+      "sourceOfTruthOwner": "Admin",
+      "restoreOwner": "Admin",
+      "backupPath": "backups/ local ignored folder; copy approved backups to external/Dropbox storage before production sessions"
     },
     "squanTrackerConfirmation": {
       "status": "Pilot CSV Ready; Billing Signoff Pending",
@@ -106,6 +108,21 @@
       "userCount": 9,
       "notes": "Pilot/demo role matrix is seeded and QA-covered. Replace example emails with real least-privilege users before live external use.",
       "reviewedAt": "2026-05-22T20:09:06.148Z"
+    },
+    "backupRestoreDrill": {
+      "status": "Passed",
+      "drillType": "Isolated MySQL restore test",
+      "sourceDatabase": "syncerp",
+      "restoreDatabase": "syncerp_restore_test",
+      "backupFile": "backups/syncerp-backup-20260522-194935.json",
+      "backupOwner": "Admin",
+      "restoreOwner": "Admin",
+      "validatedAt": "2026-05-22T23:54:45.225Z",
+      "appStateRows": 2,
+      "recordRows": 367,
+      "auditEventRows": 1164,
+      "collectionDiffs": "All collection counts matched with diff 0.",
+      "notes": "Backup exported through API, validated through restore validator, imported into isolated syncerp_restore_test database, and compared against syncerp without touching production pilot database."
     }
   },
   "contractRules": [
@@ -16144,6 +16161,22 @@
       "activityLog": [],
       "createdAt": "2026-05-22T22:31:32.749Z",
       "modifiedAt": "2026-05-22T22:31:32.749Z"
+    },
+    {
+      "id": "AUD-1165",
+      "at": "2026-05-22T23:54:45.225Z",
+      "action": "operational.backup-restore-drill",
+      "detail": {
+        "sourceDatabase": "syncerp",
+        "restoreDatabase": "syncerp_restore_test",
+        "appStateRows": 2,
+        "recordRows": 367,
+        "auditEventRows": 1164
+      },
+      "notes": "Backup validation and isolated MySQL restore drill passed with matching row counts.",
+      "activityLog": [],
+      "createdAt": "2026-05-22T23:54:45.225Z",
+      "modifiedAt": "2026-05-22T23:54:45.225Z"
     }
   ],
   "timeEntries": [
