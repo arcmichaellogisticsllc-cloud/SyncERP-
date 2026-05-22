@@ -79,6 +79,7 @@ Deploy a controlled internal Jackson Telcom ERP instance that can support real S
 ### Phase 3: End-to-End Acceptance Test
 
 - Walk one real row through Foreman daily, Admin approval, Billing package, SQUAN submission, payment/holdback, contractor settlement, and reports.
+- Follow [ACCEPTANCE_WORKFLOW.md](ACCEPTANCE_WORKFLOW.md) and record pass/fail notes.
 - Confirm every state transition has an audit log entry.
 - Confirm record locks require correction/revision instead of silent edits.
 - Confirm exported CSVs match the accepted package and payment records.

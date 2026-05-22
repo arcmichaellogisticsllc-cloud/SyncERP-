@@ -1,10 +1,21 @@
 const http = require("http");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
+const { spawnSync } = require("child_process");
 
+loadEnvFile();
 const PORT = Number(process.env.PORT || 8080);
 const ROOT = __dirname;
 const DB_PATH = path.join(ROOT, "data", "db.json");
+const DATA_DRIVER = process.env.DATA_DRIVER || "json";
+const MYSQL_DATABASE = process.env.MYSQL_DATABASE || "syncerp";
+const MYSQL_SOCKET = process.env.MYSQL_SOCKET || "/Applications/MAMP/tmp/mysql/mysql.sock";
+const MYSQL_HOST = process.env.MYSQL_HOST || "127.0.0.1";
+const MYSQL_PORT = process.env.MYSQL_PORT || "3306";
+const MYSQL_USER = process.env.MYSQL_USER || "root";
+const MYSQL_PASSWORD = process.env.MYSQL_PASSWORD || "";
+const MYSQL_BIN = process.env.MYSQL_BIN || "/Applications/MAMP/Library/bin/mysql80/bin/mysql";
 const PUBLIC_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -71,12 +82,161 @@ const collections = new Set([
   "customerContactLog"
 ]);
 
+function loadEnvFile() {
+  const file = path.join(__dirname, ".env");
+  if (!fs.existsSync(file)) return;
+  fs.readFileSync(file, "utf8").split(/\r?\n/).forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return;
+    const index = trimmed.indexOf("=");
+    if (index === -1) return;
+    const key = trimmed.slice(0, index).trim();
+    const value = trimmed.slice(index + 1).trim().replace(/^['"]|['"]$/g, "");
+    if (key && process.env[key] === undefined) process.env[key] = value;
+  });
+}
+
+function mysqlArgs(database = MYSQL_DATABASE) {
+  const args = ["--batch", "--raw", "--skip-column-names", "--default-character-set=utf8mb4"];
+  if (MYSQL_SOCKET) args.push(`--socket=${MYSQL_SOCKET}`);
+  else {
+    args.push(`--host=${MYSQL_HOST}`);
+    args.push(`--port=${MYSQL_PORT}`);
+  }
+  args.push(`--user=${MYSQL_USER}`);
+  if (MYSQL_PASSWORD) args.push(`--password=${MYSQL_PASSWORD}`);
+  if (database) args.push(database);
+  return args;
+}
+
+function runMysql(sql, database = MYSQL_DATABASE) {
+  const result = spawnSync(MYSQL_BIN, mysqlArgs(database), {
+    input: sql,
+    encoding: "utf8",
+    maxBuffer: 50 * 1024 * 1024
+  });
+  if (result.status !== 0) {
+    const detail = result.stderr || result.stdout || "Unknown MySQL error";
+    throw new Error(`MySQL command failed: ${detail.trim()}`);
+  }
+  return result.stdout;
+}
+
+function sqlString(value) {
+  if (value === null || value === undefined || value === "") return "NULL";
+  return `'${String(value).replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
+}
+
+function sqlJson(value) {
+  return `CAST(${sqlString(JSON.stringify(value))} AS JSON)`;
+}
+
+function sqlDate(value) {
+  if (!value) return "NULL";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "NULL";
+  return sqlString(date.toISOString().slice(0, 19).replace("T", " "));
+}
+
+function recordId(collection, record, index) {
+  return record.id || record.key || record.email || record.code || record.invoice || `${collection}-${index + 1}`;
+}
+
+function statusValue(record) {
+  return record.status || record.reviewStatus || record.billingStatus || record.paymentStatus || record.approvalStatus || "";
+}
+
+function ownerValue(record) {
+  return record.owner || record.by || record.foreman || record.contractor || record.employee || record.submittedBy || "";
+}
+
+function projectValue(record) {
+  return record.project || record.projectId || record.ntp || record.map || "";
+}
+
 function readDb() {
+  if (DATA_DRIVER === "mysql") return readMysqlDb();
   return JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
 }
 
 function writeDb(db) {
+  if (DATA_DRIVER === "mysql") return writeMysqlDb(db);
   fs.writeFileSync(DB_PATH, `${JSON.stringify(db, null, 2)}\n`);
+}
+
+function readMysqlDb() {
+  const db = {};
+  collections.forEach(collection => {
+    db[collection] = [];
+  });
+  db.auditLog = [];
+  const appStateRows = runMysql("SELECT state_key, JSON_UNQUOTE(JSON_EXTRACT(payload, '$')) FROM app_state ORDER BY state_key;");
+  appStateRows.trim().split(/\r?\n/).filter(Boolean).forEach(line => {
+    const [key, payload] = line.split("\t");
+    if (key && payload) db[key] = JSON.parse(payload);
+  });
+  const recordRows = runMysql("SELECT collection_name, JSON_UNQUOTE(JSON_EXTRACT(payload, '$')) FROM records ORDER BY collection_name, record_id;");
+  recordRows.trim().split(/\r?\n/).filter(Boolean).forEach(line => {
+    const tab = line.indexOf("\t");
+    if (tab === -1) return;
+    const collection = line.slice(0, tab);
+    const payload = line.slice(tab + 1);
+    if (!db[collection]) db[collection] = [];
+    db[collection].push(JSON.parse(payload));
+  });
+  const auditRows = runMysql("SELECT JSON_UNQUOTE(JSON_EXTRACT(payload, '$')) FROM audit_events ORDER BY event_at, audit_id;");
+  db.auditLog = auditRows.trim().split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
+  return db;
+}
+
+function writeMysqlDb(db) {
+  const schemaSql = fs.readFileSync(path.join(ROOT, "database", "schema.mysql.sql"), "utf8")
+    .replace(/CREATE DATABASE IF NOT EXISTS syncerp/, `CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE}`)
+    .replace(/USE syncerp;/, `USE ${MYSQL_DATABASE};`);
+  const statements = [
+    `CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+    `USE ${MYSQL_DATABASE};`,
+    schemaSql,
+    "SET FOREIGN_KEY_CHECKS = 0;",
+    "TRUNCATE TABLE audit_events;",
+    "TRUNCATE TABLE records;",
+    "TRUNCATE TABLE app_state;",
+    "SET FOREIGN_KEY_CHECKS = 1;"
+  ];
+  ["company", "meta"].forEach(key => {
+    if (!db[key] || typeof db[key] !== "object" || Array.isArray(db[key])) return;
+    statements.push(
+      "INSERT INTO app_state (state_key, payload) VALUES " +
+      `(${sqlString(key)}, ${sqlJson(db[key])}) ` +
+      "ON DUPLICATE KEY UPDATE payload = VALUES(payload);"
+    );
+  });
+  Object.entries(db).forEach(([collection, value]) => {
+    if (!Array.isArray(value) || collection === "auditLog") return;
+    value.forEach((record, index) => {
+      if (!record || typeof record !== "object" || Array.isArray(record)) return;
+      statements.push(
+        "INSERT INTO records (collection_name, record_id, project_id, status_value, owner_value, source_value, created_at_value, modified_at_value, payload) VALUES " +
+        `(${sqlString(collection)}, ${sqlString(recordId(collection, record, index))}, ${sqlString(projectValue(record))}, ${sqlString(statusValue(record))}, ${sqlString(ownerValue(record))}, ${sqlString(record.source || "")}, ${sqlDate(record.createdAt || record.date || record.at)}, ${sqlDate(record.modifiedAt || record.updatedAt || record.at)}, ${sqlJson(record)}) ` +
+        "ON DUPLICATE KEY UPDATE project_id = VALUES(project_id), status_value = VALUES(status_value), owner_value = VALUES(owner_value), source_value = VALUES(source_value), created_at_value = VALUES(created_at_value), modified_at_value = VALUES(modified_at_value), payload = VALUES(payload);"
+      );
+    });
+  });
+  (db.auditLog || []).forEach((event, index) => {
+    if (!event || typeof event !== "object" || Array.isArray(event)) return;
+    statements.push(
+      "INSERT INTO audit_events (audit_id, action_value, actor_value, project_id, event_at, payload) VALUES " +
+      `(${sqlString(recordId("auditLog", event, index))}, ${sqlString(event.action || event.type || "")}, ${sqlString(event.by || event.actor || "")}, ${sqlString(event.project || event.detail?.project || "")}, ${sqlDate(event.at || event.createdAt)}, ${sqlJson(event)}) ` +
+      "ON DUPLICATE KEY UPDATE action_value = VALUES(action_value), actor_value = VALUES(actor_value), project_id = VALUES(project_id), event_at = VALUES(event_at), payload = VALUES(payload);"
+    );
+  });
+  const tempPath = path.join(os.tmpdir(), `syncerp-${process.pid}-${Date.now()}.sql`);
+  fs.writeFileSync(tempPath, `${statements.join("\n")}\n`);
+  try {
+    runMysql(fs.readFileSync(tempPath, "utf8"), "");
+  } finally {
+    fs.rmSync(tempPath, { force: true });
+  }
 }
 
 function validateBackupData(data) {
@@ -3919,7 +4079,7 @@ async function handleApi(req, res, url) {
   const parts = url.pathname.split("/").filter(Boolean);
 
   if (req.method === "GET" && url.pathname === "/api/health") {
-    return send(res, 200, { ok: true, app: "Jackson Telcom ERP" });
+    return send(res, 200, { ok: true, app: "Jackson Telcom ERP", dataDriver: DATA_DRIVER, database: DATA_DRIVER === "mysql" ? MYSQL_DATABASE : "data/db.json" });
   }
 
   if (req.method === "GET" && url.pathname === "/api/bootstrap") {

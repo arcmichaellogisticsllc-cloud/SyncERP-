@@ -74,6 +74,28 @@ Enter the local MAMP MySQL password when prompted. If using phpMyAdmin instead, 
 5. Run the same workflow checks against MySQL mode.
 6. Lock down real users, backup/restore, and destructive-action QA before live pilot.
 
+## Runtime Mode
+
+JSON remains the default runtime:
+
+```bash
+DATA_DRIVER=json npm start
+```
+
+After importing into `syncerp`, run against MySQL:
+
+```bash
+DATA_DRIVER=mysql \
+MYSQL_SOCKET=/Applications/MAMP/tmp/mysql/mysql.sock \
+MYSQL_BIN=/Applications/MAMP/Library/bin/mysql80/bin/mysql \
+MYSQL_DATABASE=syncerp \
+MYSQL_USER=root \
+MYSQL_PASSWORD='your-local-password' \
+npm start
+```
+
+The `/api/health` endpoint reports the active data driver. Keep `.env` local and uncommitted.
+
 ## Tables To Normalize First
 
 Start with these after the lossless JSON import is validated:
