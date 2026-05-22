@@ -25,6 +25,8 @@ These are external/business signoffs, not code blockers:
 | Full restore drill | Validation passed; full restore pending maintenance window | Admin | Execute one restore rehearsal before production data entry. |
 | Hosting target | Local Node pilot | Admin / Technical owner | Choose production host before external access. |
 
+See [LIVE_USE_GAP_OUTLINE.md](LIVE_USE_GAP_OUTLINE.md) for the full live-use checklist.
+
 ## Verification Commands
 
 ```bash
