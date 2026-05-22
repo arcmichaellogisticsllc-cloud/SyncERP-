@@ -180,6 +180,28 @@ function submitProductionDaily(db, input) {
   }
 }
 
+function submitMultiLineProductionDaily(db, input) {
+  upsert(db, "productionDailies", {
+    id: input.dailyId,
+    project: input.project,
+    sourceType: input.sourceType,
+    submittedBy: input.submittedBy,
+    workedDate: input.workedDate,
+    status: "Submitted",
+    notes: `${input.lines.length} production line(s) submitted by foreman.`
+  });
+  input.lines.forEach((line, index) => {
+    submitProductionDaily(db, {
+      ...input,
+      dailyId: input.dailyId,
+      lineId: line.lineId || `${input.dailyId}-LINE-${index + 1}`,
+      code: line.code,
+      quantity: line.quantity,
+      proofNote: line.proofNote
+    });
+  });
+}
+
 function productionLedgerRows(db) {
   const squanByKey = new Map();
   (db.squanProductionLines || []).forEach(line => {
@@ -313,6 +335,187 @@ function billingPackageRows(db) {
       grouped.set(key, existing);
     });
   return [...grouped.values()];
+}
+
+function billingPackageWorkflowRows(db) {
+  const grouped = new Map();
+  (db.billingLedger || [])
+    .filter(item => item.billingStatus === "Ready to Bill")
+    .forEach(item => {
+      const line = (db.productionLines || []).find(row => row.id === item.productionLineId) || {};
+      const daily = (db.productionDailies || []).find(row => row.id === line.dailyId) || {};
+      const project = item.project || line.project || daily.project || "";
+      const workedDate = item.workedDate || line.workedDate || daily.workedDate || "";
+      const code = item.code || line.code || "";
+      const key = [project, workedDate, code].join("|");
+      const existing = grouped.get(key) || {
+        key,
+        project,
+        workedDate,
+        code,
+        lines: [],
+        quantity: 0,
+        billableAmount: 0,
+        payableAmount: 0,
+        proofAccepted: 0,
+        owners: new Set()
+      };
+      const proof = proofState(db, line);
+      existing.lines.push({ ledger: item, line, daily, proof });
+      existing.quantity += Number(line.quantity || 0);
+      existing.billableAmount += Number(item.squanBillableAmount || 0);
+      existing.payableAmount += Number(item.contractorPayableAmount || 0);
+      if (["Accepted", "Accepted Exception"].includes(proof)) existing.proofAccepted += 1;
+      if (daily.submittedBy || line.submittedBy) existing.owners.add(daily.submittedBy || line.submittedBy);
+      grouped.set(key, existing);
+    });
+  return [...grouped.values()].map(row => {
+    const invoice = (db.invoices || []).find(item => item.project === row.project);
+    const submission = (db.invoiceSubmissions || []).find(item => item.project === row.project || item.invoice === invoice?.id);
+    const blockers = [
+      row.proofAccepted < row.lines.length ? "Proof not fully accepted" : "",
+      !row.billableAmount ? "No billable amount" : "",
+      submission?.status === "Rejected by SQUAN" ? "Rejected by SQUAN" : ""
+    ].filter(Boolean);
+    return {
+      ...row,
+      owners: [...row.owners],
+      invoice,
+      submission,
+      blockers,
+      status: submission ? submission.status || "Submitted to SQUAN" : blockers.length ? "Needs Review" : invoice ? "Ready to Submit" : "Ready for Package Prep"
+    };
+  });
+}
+
+function approvedProductionRows(db) {
+  const dailies = new Map((db.productionDailies || []).map(daily => [daily.id, daily]));
+  const ledger = new Map((db.billingLedger || []).map(row => [row.productionLineId, row]));
+  return (db.productionLines || [])
+    .filter(line => ["Approved", "Accepted"].includes(line.reviewStatus) || line.billableStatus === "Ready to Bill")
+    .map(line => {
+      const daily = dailies.get(line.dailyId) || {};
+      const bill = ledger.get(line.id) || {};
+      const price = priceForCode(db, line.code) || {};
+      const unitRate = Number(line.unitRate || price.subRate || 0);
+      const quantity = Number(line.quantity || bill.quantity || 0);
+      const calculatedAmount = Math.round(quantity * unitRate * 100) / 100;
+      return {
+        dailyId: daily.externalDailyId || line.dailyId || "",
+        mapNtp: line.ntp || line.project || daily.project || "",
+        workedDate: line.workedDate || daily.workedDate || "",
+        foreman: daily.submittedBy || line.submittedBy || "",
+        code: line.code || bill.code || "",
+        quantity,
+        uom: line.uom || price.uom || "",
+        unitRate,
+        calculatedAmount,
+        squanBillableAmount: Number(bill.squanBillableAmount || 0),
+        contractorPayableAmount: Number(bill.contractorPayableAmount || 0),
+        reviewStatus: line.reviewStatus || "",
+        billingStatus: bill.billingStatus || line.billableStatus || ""
+      };
+    });
+}
+
+function readyToSubmitRows(db) {
+  return billingPackageWorkflowRows(db)
+    .filter(row => row.status === "Ready to Submit")
+    .flatMap(pack => pack.lines.map(item => ({
+      packageKey: pack.key,
+      mapNtp: pack.project,
+      workedDate: pack.workedDate,
+      code: pack.code,
+      dailyId: item.daily.externalDailyId || item.daily.id || item.line.dailyId || "",
+      foreman: item.daily.submittedBy || item.line.submittedBy || "",
+      quantity: Number(item.line.quantity || 0),
+      unitRate: Number(item.line.unitRate || priceForCode(db, item.line.code)?.subRate || 0),
+      squanBillableAmount: Number(item.ledger.squanBillableAmount || 0),
+      contractorPayableAmount: Number(item.ledger.contractorPayableAmount || 0),
+      blockers: pack.blockers.join("; ")
+    })));
+}
+
+function priceSheetReadiness(item = {}) {
+  if (!item.code) return "Missing Code";
+  if (item.code === "HRS") return "Prior Approval";
+  if (Number(item.subRate || 0) <= 0) return "Rate Review";
+  return "Ready";
+}
+
+function priceSheetCatalogRows(db) {
+  const usageByCode = new Map();
+  (db.productionLines || []).forEach(line => {
+    const code = line.code || "No Code";
+    const existing = usageByCode.get(code) || {
+      usedLineCount: 0,
+      submittedQuantity: 0,
+      approvedQuantity: 0,
+      billableQuantity: 0,
+      owners: new Set(),
+      projects: new Set()
+    };
+    existing.usedLineCount += 1;
+    existing.submittedQuantity += Number(line.quantity || 0);
+    if (line.reviewStatus === "Approved") existing.approvedQuantity += Number(line.quantity || 0);
+    if (["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)) existing.billableQuantity += Number(line.quantity || 0);
+    if (line.submittedBy) existing.owners.add(line.submittedBy);
+    if (line.project) existing.projects.add(line.project);
+    usageByCode.set(code, existing);
+  });
+  return (db.priceSheetItems || []).map(item => {
+    const usage = usageByCode.get(item.code) || {};
+    return {
+      code: item.code,
+      subRate: Number(item.subRate || 0),
+      sourceType: item.sourceType || item.source || "",
+      readiness: priceSheetReadiness(item),
+      usedLineCount: Number(usage.usedLineCount || 0),
+      submittedQuantity: Number(usage.submittedQuantity || 0),
+      approvedQuantity: Number(usage.approvedQuantity || 0),
+      billableQuantity: Number(usage.billableQuantity || 0),
+      owners: [...(usage.owners || [])],
+      projects: [...(usage.projects || [])]
+    };
+  });
+}
+
+function prepareBillingPackage(db, project) {
+  const rows = billingPackageWorkflowRows(db).filter(row => row.project === project && !row.blockers.length);
+  assert(rows.length, `No ready package rows for ${project}`);
+  const gross = rows.reduce((total, row) => total + Number(row.billableAmount || 0), 0);
+  upsert(db, "invoices", {
+    id: `INV-${project}`,
+    project,
+    gross,
+    retainage10: Math.round(gross * 0.1 * 100) / 100,
+    status: "Prepared",
+    support: "Prepared from accepted Daily Capture billing lines."
+  });
+  upsert(db, "retainageLedger", {
+    id: `RET-${project}`,
+    project,
+    invoice: `INV-${project}`,
+    heldAmount: Math.round(gross * 0.1 * 100) / 100,
+    status: "Projected"
+  });
+}
+
+function submitBillingPackage(db, project) {
+  const invoice = (db.invoices || []).find(item => item.project === project);
+  assert(invoice, `Package must be prepared before SQUAN submission for ${project}`);
+  upsert(db, "invoiceSubmissions", {
+    id: `SUB-${project}`,
+    project,
+    invoice: invoice.id,
+    invoiceNumber: invoice.id,
+    status: "Submitted to SQUAN",
+    gross: invoice.gross,
+    expected90: Math.round(Number(invoice.gross || 0) * 0.9 * 100) / 100,
+    retainage10: invoice.retainage10,
+    confirmationNumber: `SQUAN-${project}-TEST`,
+    followUpDate: "2026-06-19"
+  });
 }
 
 function featureLayerForCode(db, code) {
@@ -507,6 +710,9 @@ function run() {
     contractorPayables: [],
     techWorkEntries: [],
     billingLedger: [],
+    invoices: [],
+    invoiceSubmissions: [],
+    retainageLedger: [],
     quantityReconciliation: [],
     fieldEvidence: [],
     tasks: [],
@@ -521,18 +727,24 @@ function run() {
   const priceRows = importPriceSheet(db, [
     "code,description,uom,contractor rate,aspect",
     "BSMI-003,Overlash Fiber,Foot,1.05,Fiber",
+    "BSMI-015,Splice / Test Fiber Fusion per Fiber,Each,29.05,FS",
+    "WC-1,WC-1,EA,67.5,Aerial",
     "TS01,Technician labor,Hours,58,Tech"
   ].join("\n"));
-  assert.strictEqual(priceRows, 2);
+  assert.strictEqual(priceRows, 4);
   assert.strictEqual(db.priceSheetItems.find(item => item.code === "BSMI-003").subRate, 1.05);
+  assert.strictEqual(db.priceSheetItems.find(item => item.code === "BSMI-015").subRate, 29.05);
+  assert.strictEqual(db.priceSheetItems.find(item => item.code === "WC-1").subRate, 67.5);
 
   const squan = importSquanDaily(db, [
     "ntp,date,code,quantity,amount,description",
-    "BSP-MIC-0190,2026-05-19,BSMI-003,100,105,Overlash Fiber"
+    "BSP-MIC-0190,2026-05-19,BSMI-003,100,105,Overlash Fiber",
+    "BSP-MIC-0190,2026-05-21,BSMI-015,2,58.10,Fiber fusion splice",
+    "BSP-MIC-0190,2026-05-21,WC-1,1,67.50,Aerial work code"
   ].join("\n"));
-  assert.strictEqual(squan.lineCount, 1);
-  assert.strictEqual(squan.totalAmount, 105);
-  assert.strictEqual(squanMapFeatureRows(db).length, 1);
+  assert.strictEqual(squan.lineCount, 3);
+  assert.strictEqual(squan.totalAmount, 230.6);
+  assert.strictEqual(squanMapFeatureRows(db).length, 3);
   assert.strictEqual(squanMapFeatureRows(db)[0].layerName, "Fiber");
   assert.strictEqual(squanMapRollups(db)[0].quantity, 100);
   const featureLine = createDailyFromFeature(db, squanMapFeatureRows(db)[0].id);
@@ -604,11 +816,37 @@ function run() {
     quantity: 6,
     proofNote: "Duplicate unsupported line."
   });
+  submitMultiLineProductionDaily(db, {
+    dailyId: "PD-MULTI-1",
+    sourceType: "Contractor Daily",
+    submittedBy: "Jackson Sub Crew",
+    project: "BSP-MIC-0190",
+    workedDate: "2026-05-20",
+    lines: [
+      { lineId: "PL-MULTI-1", code: "BSMI-003", quantity: 15, proofNote: "Foreman photo set B." },
+      { lineId: "PL-MULTI-2", code: "TS01", quantity: 2, proofNote: "Foreman labor note." }
+    ]
+  });
+  submitMultiLineProductionDaily(db, {
+    dailyId: "PD-FOREMAN-CODE-DRILL",
+    sourceType: "Contractor Daily",
+    submittedBy: "Marcus Hill",
+    project: "BSP-MIC-0190",
+    workedDate: "2026-05-21",
+    lines: [
+      { lineId: "PL-FOREMAN-BSMI-015", code: "BSMI-015", quantity: 2, proofNote: "Foreman splice tray photo and fiber test result attached." },
+      { lineId: "PL-FOREMAN-WC-1", code: "WC-1", quantity: 1, proofNote: "Foreman aerial support photo and field note attached." }
+    ]
+  });
 
-  assert.strictEqual(db.productionDailies.length, 6);
-  assert.strictEqual(db.fieldEvidence.length, 7);
+  assert.strictEqual(db.productionDailies.length, 8);
+  assert.strictEqual(db.productionLines.filter(item => item.dailyId === "PD-MULTI-1").length, 2);
+  assert.strictEqual(db.productionLines.filter(item => item.dailyId === "PD-FOREMAN-CODE-DRILL").length, 2);
+  assert.strictEqual(db.fieldEvidence.length, 11);
   assert.strictEqual(db.techWorkEntries.length, 1);
   assert.strictEqual(productionLedgerRows(db).find(row => row.id === "PL-CON-1").varianceQuantity, 0);
+  assert.strictEqual(db.productionLines.find(item => item.id === "PL-FOREMAN-BSMI-015").submittedAmount, 58.1);
+  assert.strictEqual(db.productionLines.find(item => item.id === "PL-FOREMAN-WC-1").submittedAmount, 67.5);
 
   assert.strictEqual(reviewProductionLine(db, "PL-CON-2", "approve"), false);
   assert.strictEqual(db.tasks.find(item => item.relatedId === "PL-CON-2").status, "Open");
@@ -619,18 +857,59 @@ function run() {
   acceptProof(db, "PL-TECH-1");
   assert.strictEqual(reviewProductionLine(db, "PL-CON-1", "approve"), true);
   assert.strictEqual(reviewProductionLine(db, "PL-TECH-1", "approve"), true);
+  acceptProof(db, "PL-MULTI-1");
+  assert.strictEqual(reviewProductionLine(db, "PL-MULTI-1", "approve"), true);
+  acceptProof(db, "PL-FOREMAN-BSMI-015");
+  acceptProof(db, "PL-FOREMAN-WC-1");
+  assert.strictEqual(reviewProductionLine(db, "PL-FOREMAN-BSMI-015", "approve"), true);
+  assert.strictEqual(reviewProductionLine(db, "PL-FOREMAN-WC-1", "approve"), true);
 
   assert.strictEqual(db.productionLines.find(item => item.id === "PL-CON-2").payableStatus, "Hold");
   assert.strictEqual(db.productionLines.find(item => item.id === "PL-CON-3").billableStatus, "Rejected");
-  assert.strictEqual(db.contractorPayables.length, 1);
+  assert.strictEqual(db.productionLines.find(item => item.id === "PL-MULTI-1").billableStatus, "Ready to Bill");
+  assert.strictEqual(db.productionLines.find(item => item.id === "PL-FOREMAN-BSMI-015").billableStatus, "Ready to Bill");
+  assert.strictEqual(db.productionLines.find(item => item.id === "PL-FOREMAN-WC-1").billableStatus, "Ready to Bill");
+  assert.strictEqual(db.contractorPayables.length, 4);
   assert.strictEqual(db.contractorPayables[0].amount, 105);
-  assert.strictEqual(db.billingLedger.length, 2);
+  assert.strictEqual(db.contractorPayables.find(item => item.productionLineId === "PL-MULTI-1").amount, 15.75);
+  assert.strictEqual(db.contractorPayables.find(item => item.productionLineId === "PL-FOREMAN-BSMI-015").amount, 58.1);
+  assert.strictEqual(db.contractorPayables.find(item => item.productionLineId === "PL-FOREMAN-WC-1").amount, 67.5);
+  assert.strictEqual(db.billingLedger.length, 5);
   assert.strictEqual(db.billingLedger.find(item => item.productionLineId === "PL-CON-1").squanBillableAmount, 105);
   assert.strictEqual(db.billingLedger.find(item => item.productionLineId === "PL-TECH-1").inHouseCostAmount, 232);
+  assert.strictEqual(db.billingLedger.find(item => item.productionLineId === "PL-MULTI-1").billingStatus, "Ready to Bill");
+  assert.strictEqual(db.billingLedger.find(item => item.productionLineId === "PL-FOREMAN-BSMI-015").squanBillableAmount, 58.1);
+  assert.strictEqual(db.billingLedger.find(item => item.productionLineId === "PL-FOREMAN-WC-1").squanBillableAmount, 67.5);
   assert.strictEqual(db.quantityReconciliation.find(item => item.productionLineId === "PL-CON-1").status, "Reconciled");
   assert.strictEqual(db.quantityReconciliation.find(item => item.productionLineId === "PL-CON-2").status, "Needs Proof");
   assert.strictEqual(db.quantityReconciliation.find(item => item.productionLineId === "PL-CON-3").status, "Rejected");
-  assert.strictEqual(billingPackageRows(db).length, 2);
+  assert.strictEqual(db.quantityReconciliation.find(item => item.productionLineId === "PL-MULTI-1").billingQuantity, 15);
+  assert.strictEqual(db.quantityReconciliation.find(item => item.productionLineId === "PL-FOREMAN-BSMI-015").status, "Reconciled");
+  assert.strictEqual(db.quantityReconciliation.find(item => item.productionLineId === "PL-FOREMAN-WC-1").status, "Reconciled");
+  assert.strictEqual(billingPackageRows(db).length, 5);
+  const approvedRows = approvedProductionRows(db);
+  assert(approvedRows.some(row => row.dailyId === "PD-FOREMAN-CODE-DRILL" && row.code === "BSMI-015" && row.foreman === "Marcus Hill" && row.calculatedAmount === 58.1 && row.squanBillableAmount === 58.1));
+  assert(approvedRows.some(row => row.dailyId === "PD-FOREMAN-CODE-DRILL" && row.code === "WC-1" && row.foreman === "Marcus Hill" && row.calculatedAmount === 67.5 && row.squanBillableAmount === 67.5));
+  const catalogRows = priceSheetCatalogRows(db);
+  assert(catalogRows.some(row => row.code === "BSMI-015" && row.subRate === 29.05 && row.readiness === "Ready" && row.usedLineCount === 1 && row.owners.includes("Marcus Hill")));
+  assert(catalogRows.some(row => row.code === "WC-1" && row.subRate === 67.5 && row.readiness === "Ready" && row.usedLineCount === 1 && row.owners.includes("Marcus Hill")));
+  let packageRows = billingPackageWorkflowRows(db);
+  assert(packageRows.some(row => row.project === "BSP-MIC-0190" && row.code === "BSMI-003" && row.status === "Ready for Package Prep"));
+  assert(packageRows.some(row => row.project === "BSP-MIC-0190" && row.code === "BSMI-015" && row.status === "Ready for Package Prep" && row.owners.includes("Marcus Hill")));
+  assert(packageRows.some(row => row.project === "BSP-MIC-0190" && row.code === "WC-1" && row.status === "Ready for Package Prep" && row.owners.includes("Marcus Hill")));
+  assert(packageRows.every(row => row.proofAccepted === row.lines.length));
+  prepareBillingPackage(db, "BSP-MIC-0190");
+  packageRows = billingPackageWorkflowRows(db);
+  assert(packageRows.some(row => row.project === "BSP-MIC-0190" && row.status === "Ready to Submit"));
+  const readyRows = readyToSubmitRows(db);
+  assert(readyRows.some(row => row.dailyId === "PD-FOREMAN-CODE-DRILL" && row.code === "BSMI-015" && row.squanBillableAmount === 58.1 && row.blockers === ""));
+  assert(readyRows.some(row => row.dailyId === "PD-FOREMAN-CODE-DRILL" && row.code === "WC-1" && row.squanBillableAmount === 67.5 && row.blockers === ""));
+  assert.strictEqual(db.invoices.find(item => item.project === "BSP-MIC-0190").gross, 478.35);
+  assert.strictEqual(db.retainageLedger.find(item => item.project === "BSP-MIC-0190").heldAmount, 47.84);
+  submitBillingPackage(db, "BSP-MIC-0190");
+  packageRows = billingPackageWorkflowRows(db);
+  assert(packageRows.every(row => row.project !== "BSP-MIC-0190" || row.status === "Submitted to SQUAN"));
+  assert.strictEqual(db.invoiceSubmissions.find(item => item.project === "BSP-MIC-0190").expected90, 430.52);
   assert(featureReconciliationRows(db).some(row => row.feature.id === "FEATURE-SPL-TEST-1" && row.submittedQuantity >= 100));
 
   console.log("Phase 1 and Phase 2 production workflow test passed.");

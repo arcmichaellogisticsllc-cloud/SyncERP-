@@ -43,6 +43,10 @@ const collections = new Set([
   "productionDailies",
   "productionLines",
   "contractorPayables",
+  "contractorAgreements",
+  "contractorSettlements",
+  "contractorSettlementDeductions",
+  "contractorSettlementPayments",
   "techWorkEntries",
   "billingLedger",
   "quantityReconciliation",
@@ -75,6 +79,41 @@ function writeDb(db) {
   fs.writeFileSync(DB_PATH, `${JSON.stringify(db, null, 2)}\n`);
 }
 
+function validateBackupData(data) {
+  const requiredArrays = ["projects", "tasks", "productionDailies", "productionLines", "priceSheetItems", "billingLedger", "roles", "users", "auditLog"];
+  if (!data || typeof data !== "object" || Array.isArray(data)) return ["Backup must be a JSON object."];
+  const source = data.data && typeof data.data === "object" ? data.data : data;
+  const failures = [];
+  requiredArrays.forEach(key => {
+    if (!Array.isArray(source[key])) failures.push(`Missing required collection: ${key}`);
+  });
+  if (!source.company || typeof source.company !== "object") failures.push("Missing company profile.");
+  if (!source.meta || typeof source.meta !== "object") failures.push("Missing metadata.");
+  return failures;
+}
+
+function backupPayload(db, by = "Admin") {
+  return {
+    exportedAt: new Date().toISOString(),
+    exportedBy: by,
+    source: "Node server data/db.json",
+    runtime: "Node app; MAMP can provide MySQL persistence later",
+    data: db
+  };
+}
+
+function protectedDeleteReason(collection, record = {}) {
+  if (collection === "productionDailies" && ["Submitted", "Approved", "Accepted"].includes(record.status || record.reviewStatus)) return "Submitted production dailies require a correction workflow.";
+  if (collection === "productionLines" && ["Submitted", "Approved", "Accepted"].includes(record.status || record.reviewStatus)) return "Submitted or approved production lines require a correction workflow.";
+  if (collection === "billingLedger" && ["Ready to Bill", "Billed", "Closed / Billed"].includes(record.billingStatus)) return "Billable ledger rows require an adjustment workflow.";
+  if (collection === "invoiceSubmissions") return "SQUAN submission records are audit records and cannot be deleted.";
+  if (collection === "cashReceipts") return "Payment and holdback records are audit records and cannot be deleted.";
+  if (collection === "contractorSettlements" && !["Draft", "Void"].includes(record.status || "Draft")) return "Issued or approved contractor settlements require a reversal/correction workflow.";
+  if (collection === "contractorSettlementPayments") return "Contractor payment records are audit records and cannot be deleted.";
+  if (collection === "priceSheetItems" && record.code) return "Rate sheet rows should be superseded, not deleted.";
+  return "";
+}
+
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, {
     "Content-Type": type,
@@ -88,7 +127,7 @@ function parseBody(req) {
     let body = "";
     req.on("data", chunk => {
       body += chunk;
-      if (body.length > 1_000_000) {
+      if (body.length > 20_000_000) {
         reject(new Error("Request body too large"));
         req.destroy();
       }
@@ -2498,14 +2537,1185 @@ function appendAudit(db, action, detail) {
   });
 }
 
-function csv(rows) {
-  if (!rows.length) return "";
-  const headers = Object.keys(rows[0]);
+function csv(rows, explicitHeaders = []) {
+  if (!rows.length && !explicitHeaders.length) return "";
+  const headers = explicitHeaders.length ? explicitHeaders : Object.keys(rows[0]);
   const escape = value => `"${String(value ?? "").replaceAll('"', '""')}"`;
   return [
     headers.map(escape).join(","),
     ...rows.map(row => headers.map(header => escape(row[header])).join(","))
   ].join("\n");
+}
+
+const approvedProductionCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "dailyId",
+  "mapNtp",
+  "project",
+  "workedDate",
+  "foreman",
+  "code",
+  "description",
+  "quantity",
+  "uom",
+  "unitRate",
+  "rateSource",
+  "rateVersion",
+  "calculatedAmount",
+  "amountVariance",
+  "submittedAmount",
+  "squanBillableAmount",
+  "contractorPayableAmount",
+  "inHouseCostAmount",
+  "reviewStatus",
+  "proofStatus",
+  "billingStatus",
+  "payableStatus",
+  "notes"
+];
+
+const billingPackageCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "packageKey",
+  "packageStatus",
+  "mapNtp",
+  "workedDate",
+  "code",
+  "dailyId",
+  "foreman",
+  "quantity",
+  "uom",
+  "unitRate",
+  "rateSource",
+  "rateVersion",
+  "calculatedSquanAmount",
+  "squanVariance",
+  "squanBillableAmount",
+  "contractorRate",
+  "calculatedContractorAmount",
+  "contractorVariance",
+  "contractorPayableAmount",
+  "inHouseCostAmount",
+  "proofStatus",
+  "reviewStatus",
+  "billingStatus",
+  "invoice",
+  "submission",
+  "blockers"
+];
+
+const squanTrackerRecordCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "mapNtp",
+  "dailyId",
+  "productionLineId",
+  "billingLedgerId",
+  "workedDate",
+  "foreman",
+  "nodeClli",
+  "streetFeeder",
+  "billingCode",
+  "description",
+  "quantity",
+  "uom",
+  "rate",
+  "extendedAmount",
+  "proofStatus",
+  "adminReviewStatus",
+  "packageId",
+  "packageVersion",
+  "correctionOf",
+  "manualTrackerReference",
+  "recordkeepingNote"
+];
+
+const billingPackagePaymentCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "packageKey",
+  "mapNtp",
+  "workedDate",
+  "code",
+  "packageStatus",
+  "invoice",
+  "submission",
+  "squanSubmittedValue",
+  "squanPaidAmount",
+  "squanHoldbackAmount",
+  "squanPaymentVariance",
+  "contractorPayableAmount",
+  "contractorPaidAmount",
+  "contractorOpenAmount",
+  "paymentStatus",
+  "contractorPaymentStatus",
+  "paymentReferences",
+  "lastPaymentDate"
+];
+
+const contractorSettlementCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "settlementId",
+  "packageKey",
+  "mapNtp",
+  "workedDate",
+  "contractor",
+  "billingCode",
+  "lineCount",
+  "agreementId",
+  "contractorShare",
+  "jacksonShare",
+  "grossAmount",
+  "deductionTotal",
+  "netDue",
+  "paidAmount",
+  "balance",
+  "status",
+  "paymentStatus"
+];
+
+const contractorDeductionCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "deductionId",
+  "settlementId",
+  "packageKey",
+  "mapNtp",
+  "contractor",
+  "category",
+  "amount",
+  "deductionDate",
+  "status",
+  "reason",
+  "enteredBy"
+];
+
+const contractorSettlementPaymentCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "paymentId",
+  "settlementId",
+  "packageKey",
+  "mapNtp",
+  "contractor",
+  "amount",
+  "paymentDate",
+  "reference",
+  "status",
+  "paidBy",
+  "note"
+];
+
+const contractorAgreementCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "agreementId",
+  "contractor",
+  "status",
+  "effectiveDate",
+  "contractorShare",
+  "jacksonShare",
+  "basis",
+  "rateVisibility",
+  "priorAgreementId",
+  "notes"
+];
+
+const billingPackageLifecycleCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "packageKey",
+  "mapNtp",
+  "workedDate",
+  "code",
+  "foreman",
+  "quantity",
+  "squanSubmittedValue",
+  "rateAuditStatus",
+  "packageStatus",
+  "submissionStatus",
+  "approvedAmount",
+  "responseVariance",
+  "squanPaidAmount",
+  "squanVariance",
+  "squanHoldbackAmount",
+  "contractorPayableAmount",
+  "contractorPaidAmount",
+  "nextAction"
+];
+
+const billingPackageExceptionCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "packageKey",
+  "mapNtp",
+  "workedDate",
+  "code",
+  "exceptionType",
+  "detail",
+  "owner",
+  "amount",
+  "nextAction"
+];
+
+const priceSheetCatalogCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "code",
+  "unitName",
+  "description",
+  "uom",
+  "subRate",
+  "aspect",
+  "sourceType",
+  "sourceFile",
+  "status",
+  "readiness",
+  "usedLineCount",
+  "submittedQuantity",
+  "approvedQuantity",
+  "billableQuantity",
+  "submittedAmount",
+  "billableAmount",
+  "owners",
+  "projects"
+];
+
+const operationalCleanupCsvHeaders = [
+  "type",
+  "owner",
+  "severity",
+  "status",
+  "project",
+  "sourceId",
+  "detail",
+  "action",
+  "focus"
+];
+
+const operationalReadinessCsvHeaders = [
+  "area",
+  "owner",
+  "status",
+  "detail",
+  "blockers"
+];
+
+const operationalCloseoutCsvHeaders = [
+  "item",
+  "owner",
+  "status",
+  "detail"
+];
+
+const importedSubmissionCsvHeaders = [
+  "dataMode",
+  "sourceSummary",
+  "sourceId",
+  "project",
+  "workedDate",
+  "tech",
+  "node",
+  "feeder",
+  "code",
+  "description",
+  "quantity",
+  "uom",
+  "squanAmount",
+  "status",
+  "dataClassification",
+  "sourceLock",
+  "resubmissionStatus",
+  "linkedJacksonDailyId"
+];
+
+const resubmissionComparisonCsvHeaders = [
+  "sourceId",
+  "jacksonDailyId",
+  "sourceProject",
+  "jacksonProject",
+  "projectMatch",
+  "sourceWorkedDate",
+  "jacksonWorkedDate",
+  "dateMatch",
+  "code",
+  "codeStatus",
+  "sourceQuantity",
+  "jacksonQuantity",
+  "quantityMatch",
+  "proofStatus",
+  "billingReadiness",
+  "blockers"
+];
+
+const demoArchiveCsvHeaders = [
+  "collection",
+  "id",
+  "project",
+  "classification",
+  "status",
+  "owner",
+  "detail"
+];
+
+function rateSourceForCodeServer(db, code) {
+  const price = (db.priceSheetItems || []).find(item => item.code === code);
+  if (price) return { ...price, source: "priceSheetItems", sourceId: price.id || price.code || code };
+  const unit = (db.unitPrices || []).find(item => item.id === code || item.unitCode === code);
+  if (unit) return { ...unit, source: "unitPrices", sourceId: unit.id || unit.unitCode || code };
+  return null;
+}
+
+function priceSheetReadinessServer(item = {}) {
+  if (!item.code) return "Missing Code";
+  if (item.code === "HRS") return "Prior Approval";
+  if (Number(item.subRate ?? item.unitPrice ?? item.price ?? 0) <= 0) return "Rate Review";
+  return "Ready";
+}
+
+function dataSourceModeServer(record = {}) {
+  const classification = dataSourceClassificationServer(record);
+  if (classification === "Real Imported") return "Imported";
+  if (classification === "Live Jackson Submission") return "Live";
+  if (classification === "Manual Adjustment") return "Manual";
+  if (classification === "Archived Demo" || classification === "Demo") return "Demo";
+  if (classification === "Generated") return "Generated";
+  if (classification === "Live") return "Live";
+  const text = [
+    record.dataMode,
+    record.sourceClass,
+    record.sourceType,
+    record.source,
+    record.sourceFile,
+    record.notes,
+    record.description,
+    record.id
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (/demo|seeded|sample|placeholder/.test(text)) return "Demo";
+  if (/manual|override|agreement|settlement|payment|deduction/.test(text)) return "Manual";
+  if (/import|csv|prime sheet|squan|brightspeed|rdb/.test(text)) return "Imported";
+  if (/generated|system|auto/.test(text)) return "Generated";
+  return "Live";
+}
+
+function dataSourceClassificationServer(record = {}) {
+  const explicit = record.dataClassification || record.sourceClassification || "";
+  if (/archived demo|demo archive|training archive/i.test(explicit)) return "Archived Demo";
+  if (/real imported|imported source|source import/i.test(explicit)) return "Real Imported";
+  if (/live jackson|jackson submission|resubmission/i.test(explicit)) return "Live Jackson Submission";
+  if (/manual adjustment|manual/i.test(explicit)) return "Manual Adjustment";
+  if (/demo|training|sample|placeholder/i.test(explicit)) return "Demo";
+  if (/generated|system/i.test(explicit)) return "Generated";
+  if (/live/i.test(explicit)) return "Live";
+  const text = [
+    record.dataMode,
+    record.sourceClass,
+    record.sourceType,
+    record.source,
+    record.sourceFile,
+    record.notes,
+    record.description,
+    record.importId,
+    record.id
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (/archived demo|demo archive|training archive/.test(text)) return "Archived Demo";
+  if (/demo|seeded|sample|placeholder|training/.test(text)) return "Demo";
+  if (/manual|override|agreement|settlement|payment|deduction/.test(text)) return "Manual Adjustment";
+  if (/import|csv|prime sheet|squan|brightspeed|rdb/.test(text)) return "Real Imported";
+  if (/generated|system|auto/.test(text)) return "Generated";
+  return "Live";
+}
+
+function isArchivedDemoRecordServer(record = {}) {
+  return dataSourceClassificationServer(record) === "Archived Demo";
+}
+
+function isDemoRecordServer(record = {}) {
+  return ["Demo", "Archived Demo"].includes(dataSourceClassificationServer(record));
+}
+
+function dataModeSummaryServer(records = []) {
+  const counts = { Live: 0, Imported: 0, Demo: 0, Generated: 0, Manual: 0 };
+  records.forEach(record => {
+    const mode = dataSourceModeServer(record);
+    counts[mode] = (counts[mode] || 0) + 1;
+  });
+  const active = Object.entries(counts).filter(([, value]) => value > 0);
+  return {
+    dataMode: active.length === 0 ? "Not Ready" : active.length === 1 ? active[0][0] : "Mixed",
+    sourceSummary: active.map(([key, value]) => `${key}:${value}`).join("; ") || "No source records"
+  };
+}
+
+function operationalCleanupRowsServer(db) {
+  const productionLines = (db.productionLines || []).filter(line => !isArchivedDemoRecordServer(line));
+  const billingLedger = (db.billingLedger || []).filter(row => !isArchivedDemoRecordServer(row));
+  const priceRows = db.priceSheetItems || [];
+  const packages = billingPackageWorkflowRowsServer(db);
+  const settlements = contractorSettlementRowsServer(db);
+  const priceByCode = new Map(priceRows.map(item => [item.code, item]));
+  const usedCodes = [...new Set(productionLines.map(line => line.code).filter(Boolean))];
+  const missingRates = usedCodes.filter(code => !priceByCode.has(code));
+  const zeroRates = priceRows.filter(item => Number(item.subRate ?? item.unitPrice ?? item.price ?? 0) <= 0 && item.code !== "HRS");
+  const missingUom = [...productionLines.filter(line => !line.uom), ...priceRows.filter(item => !item.uom)];
+  const missingProof = productionLines.filter(line => !["Accepted", "Accepted Exception"].includes(proofStateForProductionLine(db, line)));
+  const unapproved = productionLines.filter(line => !["Approved", "Accepted"].includes(line.reviewStatus || line.status));
+  const unmatchedLedger = billingLedger.filter(row => !productionLines.some(line => line.id === row.productionLineId));
+  const settlementBlockers = settlements.flatMap(row => {
+    const blockers = [
+      !row.agreementId ? "Missing contractor agreement" : "",
+      Number(row.grossAmount || 0) <= 0 ? "Gross contractor share is zero" : "",
+      Number(row.deductionTotal || 0) > Number(row.grossAmount || 0) ? "Deductions exceed gross settlement" : "",
+      row.status === "Disputed" ? "Disputed settlement is open" : ""
+    ].filter(Boolean);
+    return blockers.map(detail => ({ row, detail }));
+  });
+  return [
+    ...[
+      ...(db.productionDailies || []),
+      ...(db.productionLines || []),
+      ...(db.billingLedger || []),
+      ...(db.squanProductionLines || [])
+    ].filter(item => isDemoRecordServer(item) && !isArchivedDemoRecordServer(item)).map(line => ({ type: "Demo / training record", owner: "Admin", severity: "Medium", status: "Open", project: line.project || line.ntp || "", sourceId: line.id, detail: `${line.id} should move to the demo archive before go-live counts are reviewed.`, action: "Production", focus: "Demo Archive" })),
+    ...missingRates.map(code => ({ type: "Missing rate", owner: "Billing", severity: "Critical", status: "Open", project: "", sourceId: code, detail: `${code} is used but not in the imported price sheet.`, action: "Production", focus: "Billing code catalog" })),
+    ...zeroRates.map(item => ({ type: "Zero rate", owner: "Billing", severity: "Critical", status: "Open", project: "", sourceId: item.code || item.id, detail: `${item.code} has zero/missing rate.`, action: "Production", focus: "Billing code catalog" })),
+    ...missingUom.map(item => ({ type: "Missing UOM", owner: "Billing", severity: "Medium", status: "Open", project: item.project || "", sourceId: item.code || item.id, detail: `${item.code || item.id} is missing UOM.`, action: "Production", focus: "Billing code catalog" })),
+    ...missingProof.map(line => ({ type: "Missing proof", owner: "Foreman", severity: "High", status: "Open", project: line.project || "", sourceId: line.id, detail: `${line.id} ${line.code} proof is ${proofStateForProductionLine(db, line)}.`, action: "Production", focus: "Submit Daily" })),
+    ...unapproved.map(line => ({ type: "Unapproved production", owner: "Operations", severity: "High", status: "Open", project: line.project || "", sourceId: line.id, detail: `${line.id} review is ${line.reviewStatus || line.status || "Missing"}.`, action: "Production", focus: "Review" })),
+    ...unmatchedLedger.map(row => ({ type: "Unmatched ledger", owner: "Billing", severity: "High", status: "Open", project: row.project || "", sourceId: row.id, detail: `${row.id} has no matching production line.`, action: "Billing", focus: "Billing ownership and blockers" })),
+    ...settlementBlockers.map(({ row, detail }) => ({ type: "Settlement blocker", owner: "Billing", severity: "High", status: "Open", project: row.mapNtp || "", sourceId: row.settlementId, detail: `${row.contractor}: ${detail}`, action: "Billing", focus: "Contractor settlement" })),
+    ...packages.filter(pack => pack.blockers?.length).map(pack => ({ type: "Package blocker", owner: "Billing", severity: "High", status: "Open", project: pack.projectId, sourceId: pack.key, detail: pack.blockers.join("; "), action: "Billing", focus: "Ready to submit" }))
+  ];
+}
+
+function operationalReadinessCsvRowsServer(db) {
+  const cleanup = operationalCleanupRowsServer(db);
+  const source = dataModeSummaryServer([
+    ...(db.productionDailies || []),
+    ...(db.productionLines || []),
+    ...(db.billingLedger || []),
+    ...(db.priceSheetItems || []),
+    ...(db.squanImports || []),
+    ...(db.contractorAgreements || []),
+    ...(db.contractorSettlements || [])
+  ]);
+  const count = type => cleanup.filter(item => item.type === type).length;
+  const ready = cleanup.length === 0;
+  return [
+    { area: "Foreman Daily Capture", owner: "Foreman", status: "Ready for Review", detail: "Daily Capture form, code/quantity entry, proof note, draft, submit, and correction loop are wired.", blockers: count("Missing proof") },
+    { area: "Admin/Ops Review", owner: "Operations", status: count("Unapproved production") ? "Needs Cleanup" : "Ready for Review", detail: "Production approval and proof review drive billing readiness.", blockers: count("Unapproved production") },
+    { area: "Billing Package", owner: "Billing", status: count("Package blocker") ? "Needs Cleanup" : "Ready for Review", detail: "Billing packages group ready production by Map, date, and code.", blockers: count("Package blocker") },
+    { area: "SQUAN Submission", owner: "Billing", status: "Ready for Review", detail: "CSV supports recordkeeping and manual entry into the outside SQUAN Tracker.", blockers: 0 },
+    { area: "SQUAN Payment / Holdback", owner: "Billing", status: "Ready for Review", detail: "Payment, holdback, variance, and follow-up records are separate from contractor settlement.", blockers: 0 },
+    { area: "Contractor Settlements", owner: "Billing", status: count("Settlement blocker") ? "Needs Cleanup" : "Ready for Review", detail: "Agreement, gross, deductions, net due, disputes, and payments are tracked.", blockers: count("Settlement blocker") },
+    { area: "Reports / Exports", owner: "Billing", status: "Ready for Review", detail: "Production, package, lifecycle, exceptions, payment, settlement, and price sheet CSVs are available.", blockers: 0 },
+    { area: "Permissions / Visibility", owner: "Admin", status: "Ready for Review", detail: "Role nav and action guards control restricted workflows.", blockers: 0 },
+    { area: "Real Data Readiness", owner: "Admin", status: ready ? "Operational Ready" : "Needs Cleanup", detail: source.sourceSummary, blockers: cleanup.length },
+    { area: "Operational Cleanup Queue", owner: "Admin", status: "Ready for Review", detail: "Cleanup blockers export with owner, source, route, and status.", blockers: cleanup.length },
+    { area: "Button / Workflow QA", owner: "Admin", status: "Ready for Review", detail: "Workflow confidence and browser QA are wired through npm run check.", blockers: 0 },
+    { area: "Deployment / Backup", owner: "Admin", status: "Needs Decision", detail: "Hosting, database persistence, backup, restore, and admin recovery need final go-live decision.", blockers: 1 }
+  ];
+}
+
+function operationalCloseoutCsvRowsServer(db) {
+  const realImports = (db.squanProductionLines || []).filter(line => dataSourceClassificationServer(line) === "Real Imported").length;
+  return [
+    { item: "Real workflow validation", owner: "Admin/Ops", status: realImports ? "Ready for Review" : "Needs Data", detail: "Walk real imports through linked Jackson resubmission, approval, billing, SQUAN response, and settlement." },
+    { item: "Persistence/database prep", owner: "Admin", status: "Needs Decision", detail: "Node remains runtime; MAMP MySQL is the next durable persistence target after schema approval." },
+    { item: "Role permission QA", owner: "Admin", status: "Ready for Review", detail: "Verify Foreman, Admin, Operations, Billing, and Safety only see permitted screens/actions." },
+    { item: "Final UX polish", owner: "Admin", status: "Ready for Review", detail: "Keep role home focused on next actions; move dense tables into reports/tools drawers." },
+    { item: "Backup/restore/go-live procedure", owner: "Admin", status: "Ready for Review", detail: "Use Admin backup/restore controls until MySQL migration; test restore before go-live." },
+    { item: "Real users/roles", owner: "Admin", status: "Needs Setup", detail: "Seed actual Jackson users and assign least-privilege roles before live use." },
+    { item: "Record locking rules", owner: "Admin", status: "Defined", detail: "Submitted, approved, packaged, submitted-to-SQUAN, paid, and closed records require revision/correction instead of silent edits." },
+    { item: "Correction/revision SOP", owner: "Admin/Ops", status: "Defined", detail: "Corrections never overwrite originals; they create linked revisions with reason, owner, and audit history." },
+    { item: "Required field matrix", owner: "Admin", status: "Defined", detail: "Foreman, Admin review, Billing package, SQUAN Tracker, payment, and settlement fields are defined in app guidance." },
+    { item: "Confirm SQUAN Tracker field format", owner: "Billing", status: "Needs Real-World Confirmation", detail: "Manual Tracker entry uses package CSV for recordkeeping; Billing must confirm exact external fields." },
+    { item: "Exception handling", owner: "Operations/Billing", status: "Defined", detail: "Missing proof, wrong code/quantity/map/date, SQUAN rejection/short-pay, and contractor disputes have owner/action paths." },
+    { item: "Audit trail review", owner: "Admin", status: "Ready for Review", detail: "Critical submit/review/package/payment/settlement events append audit entries." },
+    { item: "Operational dashboard finalization", owner: "Admin", status: "Ready for Review", detail: "Home is role-command first: Foreman submit/correct, Ops review, Billing submit/pay/settle, Admin exceptions/readiness." },
+    { item: "Data retention/archive rules", owner: "Admin", status: "Defined", detail: "Closed packages and settlements remain audit records; demo/training rows move to archive and stay out of live readiness." },
+    { item: "Deployment runbook", owner: "Admin", status: "Documented", detail: "Run Node app, keep data path known, use backup/restore, define admin recovery, then migrate to MySQL." },
+    { item: "Acceptance test script", owner: "Admin", status: "Documented", detail: "Submit daily, approve, package, export, record SQUAN response/payment, settle contractor, verify reports." },
+    { item: "Data import SOP", owner: "Billing/Ops", status: "Documented", detail: "Import SQUAN/Brightspeed rows as real read-only originals; archive demo; create linked Jackson resubmissions for billing." }
+  ];
+}
+
+function importedSubmissionRowsServer(db) {
+  const dailies = db.productionDailies || [];
+  return (db.squanProductionLines || [])
+    .filter(line => dataSourceClassificationServer(line) === "Real Imported")
+    .map(source => {
+      const linkedDaily = dailies.find(daily => daily.sourceSubmissionId === source.id || daily.resubmissionOf === source.id || daily.linkedSourceSubmissionId === source.id) || {};
+      const mode = dataModeSummaryServer([source]);
+      return {
+        dataMode: mode.dataMode,
+        sourceSummary: mode.sourceSummary,
+        sourceId: source.id || "",
+        project: source.project || source.ntp || source.jobId || "",
+        workedDate: source.workedDate || "",
+        tech: source.tech || source.submittedBy || "",
+        node: source.clli || source.node || "",
+        feeder: source.feeder || source.street || "",
+        code: source.code || "",
+        description: source.description || "",
+        quantity: Number(source.quantity || 0),
+        uom: source.uom || "",
+        squanAmount: Number(source.squanAmount || source.amount || 0),
+        status: source.status || "Imported",
+        dataClassification: dataSourceClassificationServer(source),
+        sourceLock: source.sourceLock || "Original import read-only",
+        resubmissionStatus: source.resubmissionStatus || (linkedDaily.id ? "Jackson Daily Created" : "Needs Jackson Review"),
+        linkedJacksonDailyId: linkedDaily.id || source.linkedJacksonDailyId || ""
+      };
+    });
+}
+
+function resubmissionAcceptanceChecklistServer(db, source = {}, linkedDaily = {}, linkedLine = {}) {
+  const rate = rateSourceForCodeServer(db, source.code || linkedLine.code || "");
+  const proof = linkedLine.id ? proofStateForProductionLine(db, linkedLine) : "Missing";
+  return [
+    { label: "Original imported source preserved", complete: dataSourceClassificationServer(source) === "Real Imported" && source.locked !== false },
+    { label: "Jackson daily created", complete: Boolean(linkedDaily.id) },
+    { label: "Billing code valid", complete: Boolean(rate && (source.code || linkedLine.code)) },
+    { label: "Quantity entered", complete: Number(linkedLine.quantity || source.quantity || 0) > 0 },
+    { label: "Proof accepted or exception approved", complete: ["Accepted", "Accepted Exception"].includes(proof) },
+    { label: "Admin/Ops reviewed", complete: ["Approved", "Accepted"].includes(linkedLine.reviewStatus || linkedLine.status) },
+    { label: "Billing ready", complete: ["Ready to Bill", "Billed", "Closed / Billed"].includes(linkedLine.billableStatus) }
+  ];
+}
+
+function resubmissionComparisonRowsServer(db) {
+  const dailies = db.productionDailies || [];
+  const lines = db.productionLines || [];
+  return (db.squanProductionLines || [])
+    .filter(source => dataSourceClassificationServer(source) === "Real Imported")
+    .map(source => {
+      const linkedDaily = dailies.find(daily => daily.sourceSubmissionId === source.id || daily.resubmissionOf === source.id || daily.linkedSourceSubmissionId === source.id) || {};
+      const linkedLines = lines.filter(line => line.sourceSubmissionId === source.id || line.resubmissionOf === source.id || line.dailyId === linkedDaily.id);
+      const linkedLine = linkedLines[linkedLines.length - 1] || {};
+      const sourceProject = source.project || source.ntp || source.jobId || "";
+      const jacksonProject = linkedLine.project || linkedDaily.project || "";
+      const sourceWorkedDate = source.workedDate || "";
+      const jacksonWorkedDate = linkedLine.workedDate || linkedDaily.workedDate || "";
+      const sourceQuantity = Number(source.quantity || 0);
+      const jacksonQuantity = Number(linkedLine.quantity || 0);
+      const rate = rateSourceForCodeServer(db, source.code || linkedLine.code || "");
+      const checklist = resubmissionAcceptanceChecklistServer(db, source, linkedDaily, linkedLine);
+      return {
+        sourceId: source.id || "",
+        jacksonDailyId: linkedDaily.id || "",
+        sourceProject,
+        jacksonProject,
+        projectMatch: !linkedDaily.id ? "Pending" : sourceProject === jacksonProject ? "Matched" : "Override Needed",
+        sourceWorkedDate,
+        jacksonWorkedDate,
+        dateMatch: !linkedDaily.id ? "Pending" : sourceWorkedDate === jacksonWorkedDate ? "Matched" : "Override Needed",
+        code: source.code || linkedLine.code || "",
+        codeStatus: rate ? "Valid" : "Missing Rate",
+        sourceQuantity,
+        jacksonQuantity,
+        quantityMatch: !linkedLine.id ? "Pending" : sourceQuantity === jacksonQuantity ? "Matched" : "Variance",
+        proofStatus: linkedLine.id ? proofStateForProductionLine(db, linkedLine) : "Missing",
+        billingReadiness: checklist.every(item => item.complete) ? "Ready for Package Prep" : "Needs Review",
+        blockers: checklist.filter(item => !item.complete).map(item => item.label).join("; ")
+      };
+    });
+}
+
+function demoArchiveRowsServer(db) {
+  const collect = (collection, records = []) => records
+    .filter(isDemoRecordServer)
+    .map(record => ({
+      collection,
+      id: record.id || "",
+      project: record.project || record.ntp || "",
+      classification: dataSourceClassificationServer(record),
+      status: record.status || record.reviewStatus || "",
+      owner: record.submittedBy || record.tech || record.owner || "Admin",
+      detail: record.notes || record.description || record.sourceType || ""
+    }));
+  return [
+    ...collect("productionDailies", db.productionDailies || []),
+    ...collect("productionLines", db.productionLines || []),
+    ...collect("squanProductionLines", db.squanProductionLines || []),
+    ...collect("billingLedger", db.billingLedger || [])
+  ];
+}
+
+function priceSheetCatalogCsvRows(db) {
+  const usageByCode = new Map();
+  (db.productionLines || []).forEach(line => {
+    const code = line.code || "No Code";
+    const existing = usageByCode.get(code) || {
+      usedLineCount: 0,
+      submittedQuantity: 0,
+      approvedQuantity: 0,
+      billableQuantity: 0,
+      submittedAmount: 0,
+      billableAmount: 0,
+      owners: new Set(),
+      projects: new Set()
+    };
+    existing.usedLineCount += 1;
+    existing.submittedQuantity += Number(line.quantity || 0);
+    if ((line.reviewStatus || line.status) === "Approved") existing.approvedQuantity += Number(line.quantity || 0);
+    if (["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)) existing.billableQuantity += Number(line.quantity || 0);
+    existing.submittedAmount += Number(line.submittedAmount || 0);
+    if (["Ready to Bill", "Billed", "Closed / Billed"].includes(line.billableStatus)) {
+      existing.billableAmount += Number(line.squanAmount || line.submittedAmount || 0);
+    }
+    if (line.submittedBy || line.tech) existing.owners.add(line.submittedBy || line.tech);
+    if (line.project || line.ntp) existing.projects.add(line.project || line.ntp);
+    usageByCode.set(code, existing);
+  });
+  const priceCodes = new Set((db.priceSheetItems || []).map(item => item.code).filter(Boolean));
+  const missingUsageRows = [...usageByCode.keys()]
+    .filter(code => !priceCodes.has(code))
+    .map(code => ({
+      id: `MISSING-${code}`,
+      code,
+      unitName: "Missing price sheet row",
+      description: "Production line uses this code, but it is not in priceSheetItems.",
+      uom: "",
+      subRate: 0,
+      aspect: "",
+      sourceType: "Missing",
+      sourceFile: "",
+      status: "Rate Review"
+    }));
+  return [...(db.priceSheetItems || []), ...missingUsageRows]
+    .map(item => {
+      const usage = usageByCode.get(item.code) || {};
+      const mode = dataModeSummaryServer([item]);
+      return {
+        dataMode: mode.dataMode,
+        sourceSummary: mode.sourceSummary,
+        code: item.code || "",
+        unitName: item.unitName || "",
+        description: item.description || "",
+        uom: item.uom || item.unit || "",
+        subRate: Number(item.subRate ?? item.unitPrice ?? item.price ?? 0),
+        aspect: item.aspect || item.category || "",
+        sourceType: item.sourceType || item.source || "",
+        sourceFile: item.sourceFile || "",
+        status: item.status || "",
+        readiness: priceSheetReadinessServer(item),
+        usedLineCount: Number(usage.usedLineCount || 0),
+        submittedQuantity: Number(usage.submittedQuantity || 0),
+        approvedQuantity: Number(usage.approvedQuantity || 0),
+        billableQuantity: Number(usage.billableQuantity || 0),
+        submittedAmount: Number(usage.submittedAmount || 0),
+        billableAmount: Number(usage.billableAmount || 0),
+        owners: [...(usage.owners || [])].join("; "),
+        projects: [...(usage.projects || [])].join("; ")
+      };
+    })
+    .sort((a, b) => Number(b.usedLineCount || 0) - Number(a.usedLineCount || 0) || a.code.localeCompare(b.code));
+}
+
+function amountVarianceServer(actual, calculated) {
+  return Math.round((Number(actual || 0) - Number(calculated || 0)) * 100) / 100;
+}
+
+function rateAuditForPackageLineServer(db, pack, row) {
+  const line = row.line || {};
+  const ledger = row.ledger || {};
+  const code = line.code || ledger.code || pack.code;
+  const rate = rateSourceForCodeServer(db, code);
+  const quantity = Number(line.quantity || ledger.quantity || 0);
+  const squanRate = Number(line.unitRate || rate?.subRate || rate?.price || 0);
+  const contractorRate = line.sourceType?.includes("Contractor") ? Number(line.unitRate || rate?.subRate || 0) : 0;
+  const calculatedSquanAmount = Math.round(quantity * squanRate * 100) / 100;
+  const calculatedContractorAmount = Math.round(quantity * contractorRate * 100) / 100;
+  const squanAmount = Number(ledger.squanBillableAmount || line.submittedAmount || 0);
+  const contractorAmount = Number(ledger.contractorPayableAmount || 0);
+  const squanVariance = amountVarianceServer(squanAmount, calculatedSquanAmount);
+  const contractorVariance = amountVarianceServer(contractorAmount, calculatedContractorAmount);
+  const issues = [
+    !rate ? "Missing rate source" : "",
+    squanRate <= 0 ? "Missing SQUAN/customer rate" : "",
+    Math.abs(squanVariance) > 0.01 ? "SQUAN amount mismatch" : "",
+    line.sourceType?.includes("Contractor") && contractorAmount <= 0 ? "Missing contractor payable" : "",
+    line.sourceType?.includes("Contractor") && Math.abs(contractorVariance) > 0.01 ? "Contractor amount mismatch" : ""
+  ].filter(Boolean);
+  return {
+    rateSource: rate?.source || "Unknown",
+    rateVersion: rate?.version || rate?.rateVersion || rate?.effectiveDate || "",
+    squanRate,
+    calculatedSquanAmount,
+    squanVariance,
+    contractorRate,
+    calculatedContractorAmount,
+    contractorVariance,
+    rateAuditStatus: issues.length ? "Needs Review" : "Matched",
+    rateAuditIssues: issues.join("; ")
+  };
+}
+
+function proofStateForProductionLine(db, line = {}) {
+  const evidence = (db.fieldEvidence || []).filter(item => item.productionLineId === line.id || item.dailyId === line.dailyId);
+  if (["Accepted", "Accepted Exception"].includes(line.proofStatus)) return line.proofStatus;
+  if (evidence.some(item => ["Accepted", "Accepted Exception"].includes(item.status))) return "Accepted";
+  if (["Rejected", "Returned", "Needs Correction"].includes(line.proofStatus)) return "Needs Correction";
+  if (evidence.length || ["Submitted", "Attached"].includes(line.proofStatus)) return "Needs Review";
+  return line.proofStatus || "Missing";
+}
+
+function approvedProductionCsvRows(db) {
+  const dailies = new Map((db.productionDailies || []).map(daily => [daily.id, daily]));
+  const ledger = new Map((db.billingLedger || []).map(row => [row.productionLineId, row]));
+  return (db.productionLines || [])
+    .filter(line => ["Approved", "Accepted"].includes(line.reviewStatus) || line.billableStatus === "Ready to Bill")
+    .map(line => {
+      const daily = dailies.get(line.dailyId) || {};
+      const bill = ledger.get(line.id) || {};
+      const rate = rateSourceForCodeServer(db, line.code || bill.code || "");
+      const unitRate = Number(line.unitRate || rate?.subRate || rate?.price || 0);
+      const calculatedAmount = Math.round(Number(line.quantity || bill.quantity || 0) * unitRate * 100) / 100;
+      const billableAmount = Number(bill.squanBillableAmount || 0);
+      const mode = dataModeSummaryServer([line, daily, bill, rate || {}]);
+      return {
+        dataMode: mode.dataMode,
+        sourceSummary: mode.sourceSummary,
+        dailyId: daily.externalDailyId || line.dailyId || "",
+        mapNtp: line.ntp || line.project || daily.project || "",
+        project: line.project || daily.project || "",
+        workedDate: line.workedDate || daily.workedDate || "",
+        foreman: daily.submittedBy || line.submittedBy || "",
+        code: line.code || bill.code || "",
+        description: line.unitName || line.mapLayer || "",
+        quantity: line.quantity || bill.quantity || 0,
+        uom: line.uom || "",
+        unitRate: unitRate || "",
+        rateSource: rate?.source || "Unknown",
+        rateVersion: rate?.version || rate?.rateVersion || rate?.effectiveDate || "",
+        calculatedAmount,
+        amountVariance: amountVarianceServer(billableAmount || line.submittedAmount || 0, calculatedAmount),
+        submittedAmount: line.submittedAmount || "",
+        squanBillableAmount: billableAmount,
+        contractorPayableAmount: bill.contractorPayableAmount || 0,
+        inHouseCostAmount: bill.inHouseCostAmount || 0,
+        reviewStatus: line.reviewStatus || "",
+        proofStatus: proofStateForProductionLine(db, line),
+        billingStatus: bill.billingStatus || line.billableStatus || "",
+        payableStatus: line.payableStatus || "",
+        notes: line.notes || bill.notes || ""
+      };
+    });
+}
+
+function billingPackageWorkflowRowsServer(db) {
+  const lines = db.productionLines || [];
+  const dailies = db.productionDailies || [];
+  const projects = db.projects || [];
+  const submissions = db.invoiceSubmissions || [];
+  const invoices = db.invoices || [];
+  const snapshots = db.packageSnapshots || [];
+  const grouped = new Map();
+
+  (db.billingLedger || [])
+    .filter(item => item.billingStatus === "Ready to Bill")
+    .forEach(item => {
+      const line = lines.find(row => row.id === item.productionLineId) || {};
+      const daily = dailies.find(row => row.id === line.dailyId) || {};
+      const projectId = item.project || line.project || daily.project || "";
+      const workedDate = item.workedDate || line.workedDate || daily.workedDate || "";
+      const code = item.code || line.code || "";
+      const key = [projectId, workedDate, code].join("|");
+      const existing = grouped.get(key) || {
+        key,
+        projectId,
+        project: projects.find(project => project.id === projectId) || { id: projectId, map: projectId },
+        workedDate,
+        code,
+        lines: [],
+        lineCount: 0,
+        quantity: 0,
+        billableAmount: 0,
+        payableAmount: 0,
+        jobCostAmount: 0,
+        proofAccepted: 0,
+        owners: new Set(),
+        dailyIds: new Set()
+      };
+      const proofState = proofStateForProductionLine(db, line);
+      existing.lines.push({ ledger: item, line, daily, proofState });
+      existing.lineCount += 1;
+      existing.quantity += Number(line.quantity || item.quantity || 0);
+      existing.billableAmount += Number(item.squanBillableAmount || 0);
+      existing.payableAmount += Number(item.contractorPayableAmount || 0);
+      existing.jobCostAmount += Number(item.inHouseCostAmount || 0);
+      if (["Accepted", "Accepted Exception"].includes(proofState)) existing.proofAccepted += 1;
+      if (daily.submittedBy || line.submittedBy) existing.owners.add(daily.submittedBy || line.submittedBy);
+      if (daily.id || line.dailyId) existing.dailyIds.add(daily.externalDailyId || daily.id || line.dailyId);
+      grouped.set(key, existing);
+    });
+
+  return [...grouped.values()].map(row => {
+    const snapshot = snapshots
+      .filter(item => item.scope === "SQUAN Billing Package" && item.packageKey === row.key && item.status !== "Superseded")
+      .sort((a, b) => String(b.preparedAt || "").localeCompare(String(a.preparedAt || "")))[0];
+    const invoice = snapshot?.invoice
+      ? invoices.find(item => item.id === snapshot.invoice)
+      : invoices.find(item => item.project === row.projectId && item.packageKey === row.key);
+    const submission = submissions.find(item => snapshot?.id && item.packageSnapshot === snapshot.id)
+      || submissions.find(item => invoice?.id && item.invoice === invoice.id && item.status !== "Rejected by SQUAN" && item.status !== "Correction Superseded")
+      || submissions.find(item => item.packageKey === row.key && item.status !== "Rejected by SQUAN" && item.status !== "Correction Superseded");
+    const basePack = {
+      ...row,
+      owners: [...row.owners],
+      dailyIds: [...row.dailyIds],
+      invoice,
+      submission,
+      snapshot
+    };
+    const rateBlockers = billingPackageRateIssuesServer(db, basePack).map(item => `${item.code}: ${item.issue}`);
+    const blockers = [
+      row.proofAccepted < row.lineCount ? "Proof not fully accepted" : "",
+      !row.billableAmount ? "No billable amount" : "",
+      ...rateBlockers,
+      submission?.status === "Rejected by SQUAN" ? "Rejected by SQUAN" : ""
+    ].filter(Boolean);
+    const pack = {
+      ...basePack,
+      blockers,
+      status: submission ? submission.status || "Submitted to SQUAN" : blockers.length ? "Needs Review" : snapshot || invoice ? "Ready to Submit" : "Ready for Package Prep"
+    };
+    pack.status = billingPackageDerivedStatusServer(db, pack);
+    return pack;
+  }).sort((a, b) => String(b.workedDate || "").localeCompare(String(a.workedDate || "")) || a.projectId.localeCompare(b.projectId) || a.code.localeCompare(b.code));
+}
+
+function billingPackageDerivedStatusServer(db, pack) {
+  if (!pack.submission) return pack.status;
+  if (pack.submission.status === "Rejected by SQUAN") return "Rejected by SQUAN";
+  const money = billingPackageMoneySummaryServer(db, pack);
+  const squanClosed = money.submittedValue > 0 && Math.abs(money.squanVariance) <= 0.01;
+  const contractorClosed = money.contractorPayable <= 0 || money.contractorOpen <= 0;
+  if (squanClosed && contractorClosed) return "Closed";
+  if (money.squanPaid > 0 || money.holdback > 0) return "Paid / holdback";
+  if (["Approved by SQUAN", "Partially approved by SQUAN"].includes(pack.submission.status)) return pack.submission.status;
+  return pack.submission.status || "Submitted to SQUAN";
+}
+
+function billingPackageCsvRows(packages = [], db = {}) {
+  return packages.flatMap(pack => pack.lines.map(row => {
+    const audit = rateAuditForPackageLineServer(db, pack, row);
+    const mode = dataModeSummaryServer([pack.snapshot || {}, pack.submission || {}, row.daily, row.line, row.ledger]);
+    return {
+      dataMode: mode.dataMode,
+      sourceSummary: mode.sourceSummary,
+      packageKey: pack.key,
+      packageStatus: pack.status,
+      mapNtp: pack.projectId,
+      workedDate: pack.workedDate,
+      code: pack.code,
+      dailyId: row.daily.externalDailyId || row.daily.id || row.line.dailyId || "",
+      foreman: row.daily.submittedBy || row.line.submittedBy || "",
+      quantity: row.line.quantity || row.ledger.quantity || 0,
+      uom: row.line.uom || "",
+      unitRate: row.line.unitRate || "",
+      rateSource: audit.rateSource,
+      rateVersion: audit.rateVersion,
+      calculatedSquanAmount: audit.calculatedSquanAmount,
+      squanVariance: audit.squanVariance,
+      squanBillableAmount: row.ledger.squanBillableAmount || 0,
+      contractorRate: audit.contractorRate,
+      calculatedContractorAmount: audit.calculatedContractorAmount,
+      contractorVariance: audit.contractorVariance,
+      contractorPayableAmount: row.ledger.contractorPayableAmount || 0,
+      inHouseCostAmount: row.ledger.inHouseCostAmount || 0,
+      proofStatus: row.proofState,
+      reviewStatus: row.line.reviewStatus || "",
+      billingStatus: row.ledger.billingStatus || row.line.billableStatus || "",
+      invoice: pack.invoice?.id || "",
+      submission: pack.submission?.confirmationNumber || pack.submission?.status || "",
+      blockers: [...pack.blockers, audit.rateAuditIssues].filter(Boolean).join("; ")
+    };
+  }));
+}
+
+function squanTrackerRecordCsvRows(packages = [], db = {}) {
+  return packages.flatMap(pack => pack.lines.map(row => {
+    const audit = rateAuditForPackageLineServer(db, pack, row);
+    const snapshot = pack.snapshot || {};
+    const rate = Number(audit.squanRate || row.line.unitRate || 0);
+    const quantity = Number(row.line.quantity || row.ledger.quantity || 0);
+    const mode = dataModeSummaryServer([snapshot, pack.submission || {}, row.daily, row.line, row.ledger]);
+    return {
+      dataMode: mode.dataMode,
+      sourceSummary: mode.sourceSummary,
+      mapNtp: pack.projectId,
+      dailyId: row.daily.externalDailyId || row.daily.id || row.line.dailyId || "",
+      productionLineId: row.line.id || "",
+      billingLedgerId: row.ledger.id || "",
+      workedDate: pack.workedDate,
+      foreman: row.daily.submittedBy || row.line.submittedBy || "",
+      nodeClli: row.line.clli || row.daily.clli || "",
+      streetFeeder: row.line.feeder || row.daily.feeder || "",
+      billingCode: row.line.code || pack.code,
+      description: row.line.unitName || row.line.mapLayer || "",
+      quantity,
+      uom: row.line.uom || "",
+      rate,
+      extendedAmount: row.ledger.squanBillableAmount || audit.calculatedSquanAmount || 0,
+      proofStatus: row.proofState,
+      adminReviewStatus: row.line.reviewStatus || "",
+      packageId: snapshot.id || "",
+      packageVersion: Number(snapshot.version || 1),
+      correctionOf: snapshot.correctionOf || "",
+      manualTrackerReference: pack.submission?.confirmationNumber || "",
+      recordkeepingNote: "CSV supports Jackson recordkeeping and manual entry into the outside SQUAN Tracker; it is not a direct SQUAN integration."
+    };
+  }));
+}
+
+function readyToSubmitCsvRows(db) {
+  return billingPackageCsvRows(billingPackageWorkflowRowsServer(db).filter(pack => pack.status === "Ready to Submit"), db);
+}
+
+function billingPackagePaymentCsvRows(db) {
+  return billingPackageWorkflowRowsServer(db).map(pack => {
+    const receipts = (db.cashReceipts || []).filter(item => item.packageKey === pack.key || (pack.submission?.id && item.submission === pack.submission.id) || (pack.invoice?.id && item.invoice === pack.invoice.id));
+    const squanPaid = receipts.filter(item => item.type === "SQUAN Package Payment").reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+    const holdback = receipts.filter(item => item.type === "SQUAN Holdback").reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+    const contractorPaid = receipts.filter(item => item.type === "Contractor Package Payment").reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+    const contractorPayable = Number(pack.payableAmount || 0);
+    const submittedValue = Number(pack.submission?.squanSubmittedValue ?? pack.snapshot?.squanSubmittedValue ?? pack.billableAmount ?? 0);
+    const mode = dataModeSummaryServer([pack.snapshot || {}, pack.submission || {}, ...pack.lines.flatMap(row => [row.daily, row.line, row.ledger]), ...receipts]);
+    return {
+      dataMode: mode.dataMode,
+      sourceSummary: mode.sourceSummary,
+      packageKey: pack.key,
+      mapNtp: pack.projectId,
+      workedDate: pack.workedDate,
+      code: pack.code,
+      packageStatus: pack.status,
+      invoice: pack.invoice?.id || "",
+      submission: pack.submission?.id || "",
+      squanSubmittedValue: submittedValue,
+      squanPaidAmount: squanPaid,
+      squanHoldbackAmount: holdback,
+      squanPaymentVariance: submittedValue - squanPaid - holdback,
+      contractorPayableAmount: contractorPayable,
+      contractorPaidAmount: contractorPaid,
+      contractorOpenAmount: contractorPayable - contractorPaid,
+      paymentStatus: squanPaid >= submittedValue && submittedValue > 0 ? "Paid" : squanPaid || holdback ? "Partially Paid" : "Open",
+      contractorPaymentStatus: contractorPayable <= 0 ? "No contractor payable" : contractorPaid >= contractorPayable ? "Paid" : contractorPaid > 0 ? "Partially Paid" : "Unpaid",
+      paymentReferences: receipts.map(item => item.reference).filter(Boolean).join("; "),
+      lastPaymentDate: receipts.map(item => item.actualDate).filter(Boolean).sort().at(-1) || ""
+    };
+  });
+}
+
+function defaultContractorAgreementServer(contractor = "Default Contractor") {
+  return {
+    id: `AGREE-${String(contractor || "DEFAULT").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}-20260101`,
+    contractor,
+    status: "Active",
+    effectiveDate: "2026-01-01",
+    contractorShare: 80,
+    jacksonShare: 20,
+    basis: "Percent of approved SQUAN production",
+    rateVisibility: "Hidden until settlement issued unless Admin/Billing"
+  };
+}
+
+function agreementForContractorServer(db, contractor = "Default Contractor", workedDate = "") {
+  const agreements = (db.contractorAgreements || [])
+    .filter(item => (item.contractor === contractor || item.contractor === "Default Contractor") && item.status !== "Inactive")
+    .filter(item => !item.effectiveDate || item.effectiveDate <= workedDate)
+    .sort((a, b) => String(b.effectiveDate || "").localeCompare(String(a.effectiveDate || "")));
+  return agreements[0] || defaultContractorAgreementServer(contractor);
+}
+
+function contractorSettlementIdServer(packageKey = "", contractor = "Contractor") {
+  return `SETTLE-${String(packageKey || "PACKAGE").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}-${String(contractor || "CONTRACTOR").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase()}`;
+}
+
+function contractorSettlementRowsServer(db) {
+  const persisted = db.contractorSettlements || [];
+  return billingPackageWorkflowRowsServer(db).filter(pack => Number(pack.billableAmount || 0) > 0).flatMap(pack => {
+    const owners = pack.owners?.length ? pack.owners : [...new Set(pack.lines.map(row => row.daily.submittedBy || row.line.submittedBy || "Contractor"))];
+    return owners.map(owner => {
+      const ownerLines = pack.lines.filter(row => (row.daily.submittedBy || row.line.submittedBy || owner) === owner);
+      const lines = ownerLines.length ? ownerLines : pack.lines;
+      const billable = lines.reduce((total, row) => total + Number(row.ledger.squanBillableAmount || row.line.submittedAmount || 0), 0);
+      const existing = persisted.find(item => item.packageKey === pack.key && item.contractor === owner) || {};
+      const agreement = existing.agreementSnapshot || agreementForContractorServer(db, owner, pack.workedDate);
+      const share = Number(agreement.contractorShare || 0);
+      const grossAmount = Number(existing.grossAmount ?? Math.round(billable * share) / 100);
+      const settlementId = existing.id || contractorSettlementIdServer(pack.key, owner);
+      const deductions = (db.contractorSettlementDeductions || []).filter(item => item.settlementId === settlementId);
+      const deductionTotal = deductions.filter(item => item.status !== "Disputed" && item.status !== "Void").reduce((total, item) => total + Number(item.amount || 0), 0);
+      const payments = (db.contractorSettlementPayments || []).filter(item => item.settlementId === settlementId);
+      const paidAmount = payments.reduce((total, item) => total + Number(item.amount || item.actualAmount || 0), 0);
+      const netDue = Math.max(0, Math.round((grossAmount - deductionTotal) * 100) / 100);
+      const balance = Math.round((netDue - paidAmount) * 100) / 100;
+      const status = existing.status || (balance <= 0 && paidAmount > 0 ? "Paid" : deductions.some(item => item.status === "Disputed") ? "Disputed" : "Draft");
+      const mode = dataModeSummaryServer([existing, agreement, ...lines.flatMap(row => [row.daily, row.line, row.ledger])]);
+      return {
+        dataMode: mode.dataMode,
+        sourceSummary: mode.sourceSummary,
+        settlementId,
+        packageKey: pack.key,
+        mapNtp: pack.projectId,
+        workedDate: pack.workedDate,
+        contractor: owner,
+        billingCode: pack.code,
+        lineCount: lines.length,
+        agreementId: agreement.id,
+        contractorShare: share,
+        jacksonShare: Number(agreement.jacksonShare || Math.max(0, 100 - share)),
+        grossAmount,
+        deductionTotal,
+        netDue,
+        paidAmount,
+        balance,
+        status,
+        paymentStatus: balance <= 0 && paidAmount > 0 ? "Paid" : paidAmount > 0 ? "Partially Paid" : "Unpaid"
+      };
+    });
+  });
+}
+
+function contractorDeductionCsvRows(db) {
+  return (db.contractorSettlementDeductions || []).map(row => ({
+    dataMode: dataModeSummaryServer([row]).dataMode,
+    sourceSummary: dataModeSummaryServer([row]).sourceSummary,
+    deductionId: row.id,
+    settlementId: row.settlementId,
+    packageKey: row.packageKey,
+    mapNtp: row.project,
+    contractor: row.contractor,
+    category: row.category,
+    amount: row.amount,
+    deductionDate: row.deductionDate,
+    status: row.status,
+    reason: row.reason,
+    enteredBy: row.enteredBy
+  }));
+}
+
+function contractorSettlementPaymentCsvRows(db) {
+  return (db.contractorSettlementPayments || []).map(row => ({
+    dataMode: dataModeSummaryServer([row]).dataMode,
+    sourceSummary: dataModeSummaryServer([row]).sourceSummary,
+    paymentId: row.id,
+    settlementId: row.settlementId,
+    packageKey: row.packageKey,
+    mapNtp: row.project,
+    contractor: row.contractor,
+    amount: row.amount || row.actualAmount || 0,
+    paymentDate: row.paymentDate || row.actualDate || "",
+    reference: row.reference,
+    status: row.status,
+    paidBy: row.paidBy,
+    note: row.note
+  }));
+}
+
+function contractorAgreementCsvRows(db) {
+  return (db.contractorAgreements || []).map(row => ({
+    dataMode: dataModeSummaryServer([row]).dataMode,
+    sourceSummary: dataModeSummaryServer([row]).sourceSummary,
+    agreementId: row.id,
+    contractor: row.contractor,
+    status: row.status,
+    effectiveDate: row.effectiveDate,
+    contractorShare: row.contractorShare,
+    jacksonShare: row.jacksonShare,
+    basis: row.basis,
+    rateVisibility: row.rateVisibility,
+    priorAgreementId: row.priorAgreementId || "",
+    notes: row.notes || ""
+  }));
+}
+
+function billingPackageMoneySummaryServer(db, pack) {
+  const receipts = (db.cashReceipts || []).filter(item => item.packageKey === pack.key || (pack.submission?.id && item.submission === pack.submission.id) || (pack.invoice?.id && item.invoice === pack.invoice.id));
+  const squanPaid = receipts.filter(item => item.type === "SQUAN Package Payment").reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const holdback = receipts.filter(item => item.type === "SQUAN Holdback").reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const contractorPaid = receipts.filter(item => item.type === "Contractor Package Payment").reduce((total, item) => total + Number(item.actualAmount || 0), 0);
+  const submittedValue = Number(pack.submission?.squanSubmittedValue ?? pack.snapshot?.squanSubmittedValue ?? pack.billableAmount ?? 0);
+  const contractorPayable = Number(pack.snapshot?.contractorPayableSnapshot ?? pack.payableAmount ?? 0);
+  return {
+    squanPaid,
+    holdback,
+    contractorPaid,
+    submittedValue,
+    contractorPayable,
+    squanVariance: submittedValue - squanPaid - holdback,
+    contractorOpen: contractorPayable - contractorPaid
+  };
+}
+
+function billingPackageRateIssuesServer(db, pack) {
+  return pack.lines.flatMap(row => {
+    const audit = rateAuditForPackageLineServer(db, pack, row);
+    return audit.rateAuditIssues ? audit.rateAuditIssues.split("; ").map(issue => ({ code: pack.code, issue })) : [];
+  });
+}
+
+function billingPackageNextActionServer(db, pack, money = billingPackageMoneySummaryServer(db, pack)) {
+  const rateIssues = billingPackageRateIssuesServer(db, pack);
+  if (pack.blockers.length || rateIssues.length) return "Clear blockers / rate audit";
+  if (!pack.snapshot && !pack.invoice) return "Prepare package";
+  if (!pack.submission) return "Record manual SQUAN Tracker submission";
+  if (pack.submission.status === "Rejected by SQUAN") return "Correct and resubmit";
+  if (money.squanPaid <= 0 && money.holdback <= 0) return "Record SQUAN payment";
+  if (Math.abs(money.squanVariance) > 0.01) return "Resolve SQUAN variance / holdback";
+  if (money.contractorOpen > 0) return "Record contractor payment";
+  return "Closed / monitor";
+}
+
+function billingPackageLifecycleCsvRows(db) {
+  return billingPackageWorkflowRowsServer(db).map(pack => {
+    const money = billingPackageMoneySummaryServer(db, pack);
+    const rateIssues = billingPackageRateIssuesServer(db, pack);
+    const mode = dataModeSummaryServer([pack.snapshot || {}, pack.submission || {}, ...pack.lines.flatMap(row => [row.daily, row.line, row.ledger])]);
+    return {
+      dataMode: mode.dataMode,
+      sourceSummary: mode.sourceSummary,
+      packageKey: pack.key,
+      mapNtp: pack.projectId,
+      workedDate: pack.workedDate,
+      code: pack.code,
+      foreman: pack.owners.join("; "),
+      quantity: pack.quantity,
+      squanSubmittedValue: money.submittedValue,
+      rateAuditStatus: rateIssues.length ? "Needs Review" : "Matched",
+      packageStatus: pack.status,
+      submissionStatus: pack.submission?.status || "",
+      approvedAmount: pack.submission?.approvedAmount || "",
+      responseVariance: pack.submission?.responseVariance || "",
+      squanPaidAmount: money.squanPaid,
+      squanVariance: money.squanVariance,
+      squanHoldbackAmount: money.holdback,
+      contractorPayableAmount: money.contractorPayable,
+      contractorPaidAmount: money.contractorPaid,
+      nextAction: billingPackageNextActionServer(db, pack, money)
+    };
+  });
+}
+
+function billingPackageExceptionCsvRows(db) {
+  return billingPackageWorkflowRowsServer(db).flatMap(pack => {
+    const money = billingPackageMoneySummaryServer(db, pack);
+    const mode = dataModeSummaryServer([pack.snapshot || {}, pack.submission || {}, ...pack.lines.flatMap(row => [row.daily, row.line, row.ledger])]);
+    const base = { dataMode: mode.dataMode, sourceSummary: mode.sourceSummary };
+    const rows = [];
+    pack.blockers.forEach(blocker => rows.push({ ...base, packageKey: pack.key, mapNtp: pack.projectId, workedDate: pack.workedDate, code: pack.code, exceptionType: "Blocker", detail: blocker, owner: pack.owners.join("; ") || "Billing", amount: "", nextAction: "Clear blocker" }));
+    billingPackageRateIssuesServer(db, pack).forEach(item => rows.push({ ...base, packageKey: pack.key, mapNtp: pack.projectId, workedDate: pack.workedDate, code: pack.code, exceptionType: "Rate audit", detail: item.issue, owner: "Billing", amount: "", nextAction: "Review rate / override" }));
+    if (pack.submission?.status === "Rejected by SQUAN") rows.push({ ...base, packageKey: pack.key, mapNtp: pack.projectId, workedDate: pack.workedDate, code: pack.code, exceptionType: "SQUAN rejection", detail: pack.submission.rejectionReason || "Rejected by SQUAN", owner: "Billing", amount: money.submittedValue, nextAction: "Correct and resubmit" });
+    if (pack.submission?.status === "Partially approved by SQUAN" || Math.abs(Number(pack.submission?.responseVariance || 0)) > 0.01) rows.push({ ...base, packageKey: pack.key, mapNtp: pack.projectId, workedDate: pack.workedDate, code: pack.code, exceptionType: "SQUAN partial approval", detail: "Approved amount does not match submitted package value", owner: "Billing", amount: pack.submission?.responseVariance || "", nextAction: "Review partial approval variance" });
+    if (money.squanPaid > 0 && Math.abs(money.squanVariance) > 0.01) rows.push({ ...base, packageKey: pack.key, mapNtp: pack.projectId, workedDate: pack.workedDate, code: pack.code, exceptionType: "SQUAN variance", detail: "Paid amount does not close submitted value", owner: "Billing", amount: money.squanVariance, nextAction: "Resolve variance / holdback" });
+    if (money.contractorOpen > 0) rows.push({ ...base, packageKey: pack.key, mapNtp: pack.projectId, workedDate: pack.workedDate, code: pack.code, exceptionType: "Contractor payable", detail: "Contractor balance remains open", owner: pack.owners.join("; ") || "Billing", amount: money.contractorOpen, nextAction: "Record contractor payment" });
+    return rows;
+  });
 }
 
 function findRecord(db, collection, id) {
@@ -2714,6 +3924,60 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/bootstrap") {
     return send(res, 200, { ...db, summary: summarize(db) });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/backup") {
+    return send(res, 200, backupPayload(db, url.searchParams.get("by") || "Admin"));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/restore/validate") {
+    const body = await parseBody(req);
+    const failures = validateBackupData(body.backup || body);
+    return send(res, failures.length ? 400 : 200, { ok: failures.length === 0, failures });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/restore") {
+    const body = await parseBody(req);
+    if (body.confirm !== "RESTORE") return send(res, 400, { error: "Restore requires confirm: RESTORE" });
+    const source = body.backup?.data && typeof body.backup.data === "object" ? body.backup.data : body.backup;
+    const failures = validateBackupData(source);
+    if (failures.length) return send(res, 400, { error: "Backup validation failed", failures });
+    const nextDb = {
+      ...source,
+      auditLog: Array.isArray(source.auditLog) ? source.auditLog : []
+    };
+    appendAudit(nextDb, "admin.restore-backup", {
+      by: body.by || "Admin",
+      restoredAt: new Date().toISOString(),
+      source: body.backup?.source || "Uploaded backup"
+    });
+    writeDb(nextDb);
+    return send(res, 200, { ok: true, restoredAt: new Date().toISOString() });
+  }
+
+  if (req.method === "PUT" && url.pathname === "/api/admin/go-live-mode") {
+    const body = await parseBody(req);
+    const allowedModes = ["Demo Mode", "Review Mode", "Live Mode"];
+    const mode = allowedModes.includes(body.mode) ? body.mode : "Review Mode";
+    const readiness = operationalReadinessCsvRowsServer(db);
+    const liveBlockers = readiness.filter(row => !["Operational Ready", "Ready for Review"].includes(row.status));
+    if (mode === "Live Mode" && liveBlockers.length) {
+      return send(res, 409, { error: "Live Mode blocked by readiness items", blockers: liveBlockers });
+    }
+    db.company = {
+      ...(db.company || {}),
+      goLiveMode: mode,
+      goLiveModeUpdatedAt: new Date().toISOString(),
+      goLiveModeUpdatedBy: body.by || "Admin",
+      persistencePlan: body.persistencePlan || db.company?.persistencePlan || "Node server with JSON backup now; MAMP MySQL migration next"
+    };
+    appendAudit(db, "admin.go-live-mode", {
+      by: body.by || "Admin",
+      mode,
+      persistencePlan: db.company.persistencePlan
+    });
+    writeDb(db);
+    return send(res, 200, { company: db.company });
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
@@ -3140,6 +4404,117 @@ async function handleApi(req, res, url) {
     return send(res, 200, reportProjectPacket(db, projectId, "billing"));
   }
 
+  if (req.method === "GET" && url.pathname === "/api/reports/approved-production.csv") {
+    return send(res, 200, csv(approvedProductionCsvRows(db), approvedProductionCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/ready-to-submit.csv") {
+    return send(res, 200, csv(readyToSubmitCsvRows(db), billingPackageCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/billing-package-payments.csv") {
+    return send(res, 200, csv(billingPackagePaymentCsvRows(db), billingPackagePaymentCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/billing-package-lifecycle.csv") {
+    return send(res, 200, csv(billingPackageLifecycleCsvRows(db), billingPackageLifecycleCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/billing-package-exceptions.csv") {
+    return send(res, 200, csv(billingPackageExceptionCsvRows(db), billingPackageExceptionCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/price-sheet-catalog.csv") {
+    return send(res, 200, csv(priceSheetCatalogCsvRows(db), priceSheetCatalogCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/operational-cleanup.csv") {
+    return send(res, 200, csv(operationalCleanupRowsServer(db), operationalCleanupCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/operational-readiness.csv") {
+    return send(res, 200, csv(operationalReadinessCsvRowsServer(db), operationalReadinessCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/operational-closeout.csv") {
+    return send(res, 200, csv(operationalCloseoutCsvRowsServer(db), operationalCloseoutCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/imported-submissions.csv") {
+    return send(res, 200, csv(importedSubmissionRowsServer(db), importedSubmissionCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/resubmission-comparison.csv") {
+    return send(res, 200, csv(resubmissionComparisonRowsServer(db), resubmissionComparisonCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/demo-archive.csv") {
+    return send(res, 200, csv(demoArchiveRowsServer(db), demoArchiveCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/billing-package.csv") {
+    const projectId = url.searchParams.get("project") || "";
+    const workedDate = url.searchParams.get("workedDate") || "";
+    const code = url.searchParams.get("code") || "";
+    const key = url.searchParams.get("key") || "";
+    const packages = billingPackageWorkflowRowsServer(db).filter(pack => {
+      if (key) return pack.key === key;
+      return (!projectId || pack.projectId === projectId)
+        && (!workedDate || pack.workedDate === workedDate)
+        && (!code || pack.code === code);
+    });
+    return send(res, 200, csv(billingPackageCsvRows(packages, db), billingPackageCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/squan-tracker-record.csv") {
+    const projectId = url.searchParams.get("project") || "";
+    const workedDate = url.searchParams.get("workedDate") || "";
+    const code = url.searchParams.get("code") || "";
+    const key = url.searchParams.get("key") || "";
+    const packages = billingPackageWorkflowRowsServer(db).filter(pack => {
+      if (key) return pack.key === key;
+      return (!projectId || pack.projectId === projectId)
+        && (!workedDate || pack.workedDate === workedDate)
+        && (!code || pack.code === code)
+        && ["Ready to Submit", "Submitted to SQUAN", "Approved by SQUAN", "Partially approved by SQUAN", "Paid / holdback", "Closed"].includes(pack.status);
+    });
+    return send(res, 200, csv(squanTrackerRecordCsvRows(packages, db), squanTrackerRecordCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/contractor-settlements.csv") {
+    return send(res, 200, csv(contractorSettlementRowsServer(db), contractorSettlementCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/contractor-agreements.csv") {
+    return send(res, 200, csv(contractorAgreementCsvRows(db), contractorAgreementCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/contractor-deductions.csv") {
+    return send(res, 200, csv(contractorDeductionCsvRows(db), contractorDeductionCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/contractor-unpaid.csv") {
+    return send(res, 200, csv(contractorSettlementRowsServer(db).filter(row => Number(row.balance || 0) > 0), contractorSettlementCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/contractor-holdbacks.csv") {
+    const holdbackPackages = new Set((db.cashReceipts || []).filter(item => item.type === "SQUAN Holdback").map(item => item.packageKey));
+    return send(res, 200, csv(contractorSettlementRowsServer(db).filter(row => holdbackPackages.has(row.packageKey) || row.status === "Disputed"), contractorSettlementCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/contractor-disputed.csv") {
+    return send(res, 200, csv(contractorSettlementRowsServer(db).filter(row => row.status === "Disputed"), contractorSettlementCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/contractor-settlement-payments.csv") {
+    return send(res, 200, csv(contractorSettlementPaymentCsvRows(db), contractorSettlementPaymentCsvHeaders), "text/csv; charset=utf-8");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports/contractor-settlement-statement.csv") {
+    const settlement = url.searchParams.get("settlement") || "";
+    return send(res, 200, csv(contractorSettlementRowsServer(db).filter(row => !settlement || row.settlementId === settlement), contractorSettlementCsvHeaders), "text/csv; charset=utf-8");
+  }
+
   if (req.method === "GET" && url.pathname === "/api/reports/daily-package-intake") {
     return send(res, 200, dailyPackageReport(db, url.searchParams.get("project") || ""));
   }
@@ -3338,6 +4713,8 @@ async function handleApi(req, res, url) {
     if (req.method === "DELETE" && id) {
       const index = db[collection].findIndex(item => item.id === id);
       if (index === -1) return send(res, 404, { error: "Record not found" });
+      const reason = protectedDeleteReason(collection, db[collection][index]);
+      if (reason) return send(res, 409, { error: reason });
       const [deleted] = db[collection].splice(index, 1);
       appendAudit(db, `${collection}.delete`, { id });
       writeDb(db);
@@ -3370,6 +4747,16 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     send(res, 500, { error: error.message });
   }
+});
+
+server.on("error", error => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} is already in use.`);
+    console.error("Run `npm run server:status` to see SyncERP listeners.");
+    console.error("Run `npm run server:dedupe` to keep the canonical server and stop duplicates.");
+    process.exit(1);
+  }
+  throw error;
 });
 
 server.listen(PORT, () => {

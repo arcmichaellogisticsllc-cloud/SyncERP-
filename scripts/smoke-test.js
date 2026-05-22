@@ -22,7 +22,11 @@ const requiredCollections = [
   "fieldUploadQueue",
   "customerContactLog",
   "packetLocks",
-  "packageSnapshots"
+  "packageSnapshots",
+  "contractorAgreements",
+  "contractorSettlements",
+  "contractorSettlementDeductions",
+  "contractorSettlementPayments"
 ];
 
 const failures = [];
@@ -40,7 +44,7 @@ for (const project of db.projects || []) {
   }
 }
 
-for (const collection of ["tasks", "documents", "fieldEvidence", "dailies", "timeEntries", "safety", "invoices", "billingReadiness", "formSubmissions", "offlineSyncQueue", "fieldUploadQueue", "customerContactLog", "photoEvidence", "siteSurveys", "obstacles", "qcCloseouts", "packageSnapshots", "productionDailies", "productionLines", "contractorPayables", "techWorkEntries", "billingLedger", "quantityReconciliation"]) {
+for (const collection of ["tasks", "documents", "fieldEvidence", "dailies", "timeEntries", "safety", "invoices", "billingReadiness", "formSubmissions", "offlineSyncQueue", "fieldUploadQueue", "customerContactLog", "photoEvidence", "siteSurveys", "obstacles", "qcCloseouts", "packageSnapshots", "productionDailies", "productionLines", "contractorPayables", "contractorSettlements", "contractorSettlementDeductions", "contractorSettlementPayments", "techWorkEntries", "billingLedger", "quantityReconciliation"]) {
   for (const record of db[collection] || []) {
     if (record.project && !projectIds.has(record.project)) {
       failures.push(`${collection}.${record.id} references missing project ${record.project}`);
@@ -66,6 +70,7 @@ for (const [collection, rows] of Object.entries(db)) {
 if (!db.meta?.dataVersion) failures.push("Missing db.meta.dataVersion");
 
 const appSource = fs.readFileSync(path.join(root, "src", "app.js"), "utf8");
+const serverSource = fs.readFileSync(path.join(root, "server.js"), "utf8");
 const workflowAliases = [
   "Project & Map Hub",
   "Documents",
@@ -171,6 +176,14 @@ const sourceTokens = [
   ["Foreman returned daily fix loop", "renderForemanReturnedFixLoop"],
   ["Foreman returned daily rows", "returnedDailyFixRows"],
   ["Foreman returned daily CSS", "foreman-returned-loop"],
+  ["Foreman My Dailies status panel", "renderForemanMyDailiesPanel"],
+  ["Role workflow tightening panel", "renderRoleWorkflowTighteningPanel"],
+  ["Role workflow counts", "roleWorkflowCounts"],
+  ["Operational role dashboard", "renderOperationalRoleDashboard"],
+  ["Operational role work items", "operationalRoleWorkItems"],
+  ["Operational work queue marker", "data-operational-work-queue"],
+  ["Role action permission matrix", "roleActionMatrix"],
+  ["Role action guard", "guardRoleAction"],
   ["Foreman start gate enforcement", "fieldStartGate"],
   ["Foreman daily requirement source", "renderDailyRequirementSourcePanel"],
   ["Submitted daily lock view", "renderSubmittedDailyLockedView"],
@@ -185,6 +198,84 @@ const sourceTokens = [
   ["Billing accepted daily gate state", "acceptedDailyBillingGate"],
   ["Billing accepted daily gate CSS", "accepted-daily-billing-gate"],
   ["Billing production invoice ledger", "renderProductionToInvoiceLedger"],
+  ["Billing package command view", "renderBillingPackageCommandView"],
+  ["Billing package workflow rows", "billingPackageWorkflowRows"],
+  ["Billing package detail view", "renderBillingPackageDetailView"],
+  ["Billing package admin visibility", "renderBillingPackageAdminVisibility"],
+  ["Approved production CSV export", "approvedProductionCsvRows"],
+  ["Ready to submit CSV export", "readyToSubmitCsvRows"],
+  ["Billing package CSV export", "billingPackageCsvRows"],
+  ["Billing package prepare action", "createDailyBillingPackageSnapshot"],
+  ["Billing package submit action", "submitDailyBillingPackage"],
+  ["Billing package submission drawer", "openBillingPackageSubmissionDrawer"],
+  ["Billing package response action", "updateDailyBillingPackageResponse"],
+  ["Billing package response drawer", "openBillingPackageResponseDrawer"],
+  ["Billing package money snapshot", "billingPackageMoneySnapshot"],
+  ["Billing package rate audit rows", "billingPackageRateAuditRows"],
+  ["Billing package rate blockers", "billingPackageRateBlockers"],
+  ["Billing package rate override", "handleBillingRateOverride"],
+  ["Billing package rate audit UI", "billing-rate-audit"],
+  ["Billing package rate source", "rateSourceForCode"],
+  ["Billing package payment summary", "billingPackagePaymentSummary"],
+  ["Billing package payment action", "recordBillingPackagePayment"],
+  ["Billing package payment drawer", "openBillingPackagePaymentDrawer"],
+  ["Billing package action readiness", "renderBillingPackageActionReadiness"],
+  ["Billing submit today dashboard", "renderBillingSubmitTodayDashboard"],
+  ["Billing duplicate protection", "billingPackageDuplicateRisk"],
+  ["Billing package readiness checklist", "billingPackageReadinessChecklist"],
+  ["Billing correction package", "createSquanCorrectionPackage"],
+  ["Billing submitted line snapshot", "submittedLineSnapshots"],
+  ["Billing package payment export", "/api/reports/billing-package-payments.csv"],
+  ["Billing package payment CSV rows", "billingPackagePaymentCsvRows"],
+  ["Billing package lifecycle report", "renderBillingPackageLifecycleReport"],
+  ["Billing package lifecycle export", "/api/reports/billing-package-lifecycle.csv"],
+  ["Billing package exceptions report", "renderBillingPackageExceptionsReport"],
+  ["Billing package exceptions export", "/api/reports/billing-package-exceptions.csv"],
+  ["Price sheet catalog rows", "productionPriceSheetCatalogRows"],
+  ["Price sheet control panel", "renderProductionBillingCodeControlPanel"],
+  ["Price sheet catalog export", "/api/reports/price-sheet-catalog.csv"],
+  ["Real data source classifier", "function dataSourceMode"],
+  ["Real source classification", "function dataSourceClassification"],
+  ["Real submission preservation panel", "renderRealSubmissionPreservationPanel"],
+  ["Real imported submission rows", "realSubmissionRows"],
+  ["Resubmission comparison rows", "resubmissionComparisonRows"],
+  ["Demo archive rows", "demoArchiveRows"],
+  ["Real submission action handler", "handleRealSubmissionAction"],
+  ["Imported submissions export", "/api/reports/imported-submissions.csv"],
+  ["Resubmission comparison export", "/api/reports/resubmission-comparison.csv"],
+  ["Demo archive export", "/api/reports/demo-archive.csv"],
+  ["Operational data readiness gate", "function operationalDataReadiness"],
+  ["Data mode warning banner", "function renderDataModeBanner"],
+  ["Data readiness dashboard", "function renderDataReadinessDashboard"],
+  ["Data readiness dashboard marker", "data-data-readiness-dashboard"],
+  ["Data source CSV label", "sourceSummary"],
+  ["Operational completion panel", "renderOperationalCompletionPanel"],
+  ["Operational completion checklist", "operationalCompletionChecklist"],
+  ["Operational closeout checklist", "operationalCloseoutChecklist"],
+  ["Operational closeout panel", "renderOperationalCloseoutPanel"],
+  ["Required field matrix", "operationalRequiredFieldMatrix"],
+  ["Record locking rules", "operationalRecordLockRules"],
+  ["Exception paths", "operationalExceptionPaths"],
+  ["Operational closeout export", "/api/reports/operational-closeout.csv"],
+  ["Operational cleanup queue", "renderOperationalCleanupQueue"],
+  ["Operational cleanup task creation", "createOperationalCleanupTask"],
+  ["Operational readiness export", "/api/reports/operational-readiness.csv"],
+  ["Operational cleanup export", "/api/reports/operational-cleanup.csv"],
+  ["Server backup endpoint", "/api/admin/backup"],
+  ["Restore validation endpoint", "/api/admin/restore/validate"],
+  ["Go-live mode endpoint", "/api/admin/go-live-mode"],
+  ["Go-live mode save", "saveGoLiveMode"],
+  ["Backup restore control", "restoreBackupFromFile"],
+  ["MAMP MySQL persistence note", "MAMP MySQL migration next"],
+  ["Protected delete guard", "protectedDeleteReason"],
+  ["Billing package timeline", "renderBillingPackageTimeline"],
+  ["SQUAN actual paid field", "squanPaidAmount"],
+  ["Contractor payable snapshot field", "contractorPayableSnapshot"],
+  ["Billing package status lanes", "billing-admin-status-lanes"],
+  ["Approved production export route", "/api/reports/approved-production.csv"],
+  ["Ready to submit export route", "/api/reports/ready-to-submit.csv"],
+  ["Selected billing package export route", "/api/reports/billing-package.csv"],
+  ["SQUAN Tracker record export route", "/api/reports/squan-tracker-record.csv"],
   ["Billing line review controls", "handleBillingLedgerLineReview"],
   ["Billing line correction task", "createBillingLineCorrectionTask"],
   ["Billing line source versioning", "sourceVersionKey"],
@@ -199,7 +290,7 @@ const sourceTokens = [
 ];
 
 for (const [label, token] of sourceTokens) {
-  if (!appSource.includes(token)) failures.push(`Missing MVP workflow breakpoint: ${label}`);
+  if (!appSource.includes(token) && !serverSource.includes(token)) failures.push(`Missing MVP workflow breakpoint: ${label}`);
 }
 
 const map3 = "PO-SQ-24031";
@@ -501,7 +592,33 @@ const importFirstProductionTokens = [
   ["Production control screen", "renderProductionControl"],
   ["Production import center", "renderProductionImportCenter"],
   ["Production daily form", "renderProductionDailyForm"],
+  ["Foreman fast submit strip", "renderForemanDailyFastPath"],
+  ["Admin production command view", "renderProductionAdminCommandView"],
+  ["Daily Capture mode tabs", "renderProductionModeTabs"],
+  ["Daily Capture mode panel", "renderProductionModePanel"],
+  ["Daily Capture primary actions", "renderProductionPrimaryActions"],
+  ["Foreman code confidence panel", "renderProductionForemanCodeConfidencePanel"],
+  ["Billing handoff summary", "renderProductionBillingHandoffSummary"],
+  ["SQUAN package export history", "renderSquanPackageExportHistoryPanel"],
+  ["SQUAN Tracker field mapping", "squanTrackerFieldMap"],
+  ["SQUAN Tracker record validation", "validateSquanTrackerRecordRows"],
+  ["Contractor settlement workbench", "renderContractorSettlementWorkbench"],
+  ["Contractor agreement versioning", "agreementForContractor"],
+  ["Contractor agreement manager", "renderAgreementManager"],
+  ["Contractor agreement drawer", "openAgreementDrawer"],
+  ["Settlement detail panel", "renderSettlementDetail"],
+  ["Settlement issue validation", "settlementIssueValidation"],
+  ["Settlement deduction edit", "openSettlementDeductionEditDrawer"],
+  ["Contractor settlement deductions", "contractorSettlementDeductions"],
+  ["Contractor settlement payment handler", "recordSettlementPayment"],
+  ["Outcome export panel", "renderProductionOutcomeExportPanel"],
+  ["Daily Capture workflow route modes", "productionModeForWorkflow"],
+  ["Reports workflow route modes", "reportModeForWorkflow"],
+  ["Admin production lanes", "productionAdminCommandLanes"],
+  ["Admin production filters", "renderProductionAdminFilters"],
   ["SQUAN-style daily detail", "renderProductionDailyDetailView"],
+  ["Daily drill-in review summary", "renderProductionDailyReviewSummary"],
+  ["Billing ready line handoff", "renderProductionBillingReadyLineView"],
   ["Daily detail header", "Daily Detail View"],
   ["Daily capture grouped form", "production-form-section"],
   ["Production daily draft save", "handleProductionDailyDraftSave"],
@@ -520,14 +637,19 @@ const importFirstProductionTokens = [
   ["Normalized workflow status", "workflowStatusBadge"],
   ["Needs work indicator", "Needs work"],
   ["Daily Capture nav label", "Daily Capture"],
-  ["Billing code totals subtitle", "Closed/billed status, code breakdown"],
+  ["Billing compact page subtitle", "Packages, payments, settlements"],
   ["Map daily billing status", "renderMapDailyProductionStatusPanel"],
   ["Daily production audit report", "renderDailyProductionAuditReport"],
+  ["Owner exception dashboard", "renderOwnerExceptionDashboard"],
   ["Daily production sync label", "Daily / Production Sync"],
   ["Daily production review label", "Daily / Production Admin Review"],
   ["Daily to billing status label", "Daily to Billing Status"],
   ["Daily production audit label", "Daily / Production Audit Trail"],
   ["Settings sync notice", "workflow-sync-notice"],
+  ["Workflow slice plan panel", "renderWorkflowSlicePlanPanel"],
+  ["Workflow slice plan rows", "workflowSlicePlanRows"],
+  ["Workflow slice plan CSS", "workflow-slice-plan-panel"],
+  ["Workflow slice plan doc", "docs/WORKFLOW_SLICE_PLAN.md"],
   ["Closed billed code breakdown", "Closed / Billed"],
   ["Quantity submitted billing metric", "Quantity submitted"],
   ["Daily detail as-builts", "As-Builts / Photos"],
@@ -585,7 +707,8 @@ const importFirstProductionTokens = [
 const sampleFiles = [
   ["Price sheet sample", "samples/price-sheet-template.csv"],
   ["SQUAN daily sample", "samples/squan-daily-export-template.csv"],
-  ["ArcGIS readiness doc", "docs/ARCGIS_PHASE4_READINESS.md"]
+  ["ArcGIS readiness doc", "docs/ARCGIS_PHASE4_READINESS.md"],
+  ["Workflow confidence QA doc", "docs/WORKFLOW_CONFIDENCE_QA.md"]
 ];
 
 for (const [label, file] of sampleFiles) {
