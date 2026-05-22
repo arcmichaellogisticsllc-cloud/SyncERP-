@@ -6,6 +6,8 @@ Source-backed requirements from the signed SQUAN MSA and Jackson Telcom workflow
 
 Workflow and MVP boundaries are captured in `docs/WORKFLOW_MVP_REVIEW.md`. Before adding new slices, use that document to confirm the user, operating question, source record, downstream impact, and whether the slice is MVP-required or deferred.
 
+The active slice plan is captured in `docs/WORKFLOW_SLICE_PLAN.md`. Use it to keep the build sequence locked: Daily Capture freeze, Billing Package completion, SQUAN Submission, Payment/Retainage, Reports/Audit Trail, and final UI cleanup.
+
 ## Guiding Decision
 
 Phase 1 is import-first. Jackson ERP should export from SQUAN and import into Jackson ERP, while contractors and in-house technicians submit Jackson production dailies. Live ArcGIS integration is Phase 4 after the internal workflow, proof controls, and pay/bill ledger are stable.

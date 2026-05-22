@@ -181,17 +181,22 @@ The end-to-end MVP should prove this path:
 
 ## Current Build Focus
 
-The current build had moved deeply into the Billing/Admin collections decision path:
+The build is now organized by the locked slice plan in `docs/WORKFLOW_SLICE_PLAN.md`.
 
-- decision evidence attachment,
-- Admin evidence acceptance/rejection,
-- evidence replacement/version history,
-- Billing correction workbench,
-- evidence SLA alerts and tasks,
-- decision readiness gate,
-- finalized decision packet snapshots.
+Active sequence:
 
-That work is useful because it protects high-risk cash decisions, but the immediate build priority is now Phase 1 Operational Pay/Billing MVP:
+1. Daily Capture Freeze / QA
+2. Billing Package Completion
+3. SQUAN Submission
+4. Payment / Retainage
+5. Reports / Audit Trail
+6. UI / Navigation Cleanup
+
+Daily Capture is frozen except for blockers. Billing Package completion is the active lane. Do not add unrelated workflow surfaces unless they directly support that lane.
+
+The prior Billing/Admin collections decision work is useful because it protects high-risk cash decisions, but it is not the active lane until SQUAN Submission and Payment/Retainage are reached.
+
+Phase 1 Operational Pay/Billing MVP remains the foundation:
 
 - import price sheet,
 - import SQUAN daily CSV,
