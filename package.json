@@ -8,6 +8,7 @@
     "server:status": "node scripts/server-status.js",
     "server:dedupe": "node scripts/server-dedupe.js",
     "check": "node --check server.js && node --check src/app.js && node --check scripts/workflow-confidence-test.js && node --check scripts/browser-workflow-qa.js && node scripts/smoke-test.js && node scripts/phase1-production-test.js && node scripts/workflow-confidence-test.js && node scripts/browser-workflow-qa.js",
+    "mysql:export": "node scripts/export-mysql-seed.js",
     "smoke": "node scripts/smoke-test.js",
     "test:phase1": "node scripts/phase1-production-test.js",
     "test:workflow": "node scripts/workflow-confidence-test.js",

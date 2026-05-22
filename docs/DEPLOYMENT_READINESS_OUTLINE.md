@@ -38,7 +38,7 @@ Deploy a controlled internal Jackson Telcom ERP instance that can support real S
 | Local app runtime | Ready for local validation | Continue using `npm start` for local review. |
 | Automated QA | Ready | Run `npm run check` before every release candidate. |
 | JSON persistence | Prototype-ready only | Keep backups; do not treat `data/db.json` as final durable storage. |
-| MySQL migration | Not started | Design schema from `docs/DATA_MODEL.md` and current `data/db.json` collections. |
+| MySQL migration | Import validated locally | Use [MAMP_MYSQL_DEPLOYMENT.md](MAMP_MYSQL_DEPLOYMENT.md) for schema, import, and verification steps. |
 | Secrets handling | Partially defined | Keep ArcGIS/API credentials outside repo and outside `data/db.json`. |
 | Audit trail | Implemented in app flows | Review submit, approve, return, package, SQUAN response, payment, settlement, and close events. |
 | Record locking | App rules started | Validate correction/revision flows against real examples. |
@@ -105,6 +105,7 @@ Use `scripts/server-status.js` and `scripts/server-dedupe.js` as local maintenan
 ## Known Blockers Before Live Use
 
 - Durable persistence is not yet implemented.
+- Local MAMP MySQL now has an isolated `syncerp` import target, but the Node app still reads and writes `data/db.json`.
 - Backup/restore has not been executed against a live candidate.
 - Real users and least-privilege permissions are not seeded.
 - SQUAN Tracker fields need real-world confirmation.
