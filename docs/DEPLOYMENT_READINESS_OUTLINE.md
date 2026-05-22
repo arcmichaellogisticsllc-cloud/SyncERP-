@@ -105,10 +105,11 @@ Use `scripts/server-status.js` and `scripts/server-dedupe.js` as local maintenan
 
 ## Known Blockers Before Live Use
 
-- Durable persistence is not yet implemented.
-- Local MAMP MySQL now has an isolated `syncerp` import target, but the Node app still reads and writes `data/db.json`.
-- Backup/restore has not been executed against a live candidate.
-- Real users and least-privilege permissions are not seeded.
-- SQUAN Tracker fields need real-world confirmation.
-- Demo/training rows need archive handling before live readiness metrics are trusted.
+- Local pilot persistence is ready through JSON default plus MAMP MySQL `syncerp` import/runtime mode.
+- Backup validation passes; a full restore drill should run during a maintenance window before production data entry.
+- Demo/training rows are archived for readiness metrics.
+- Pilot users/roles are seeded; replace demo emails with real least-privilege users before live external use.
+- SQUAN Tracker CSV is ready for pilot validation; Billing must confirm exact external fields with a real submission.
 - Manual QA is still needed for destructive actions: submit, approve, return, package, payment, holdback, and contractor payout.
+
+See [OPERATIONAL_READINESS_STATUS.md](OPERATIONAL_READINESS_STATUS.md) for the current pilot/live signoff split.

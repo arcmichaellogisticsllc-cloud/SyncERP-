@@ -76,6 +76,33 @@
       "lastCheckedAt": "",
       "connectionTestStatus": "Not configured",
       "notes": "Portal setup captured from ArcGIS Location Platform signup. Secrets are not stored in Jackson ERP."
+    },
+    "deploymentReadiness": {
+      "hostingTarget": "Local Node runtime for pilot; production host decision required before external users",
+      "persistenceMode": "MAMP MySQL syncerp validated with DATA_DRIVER=mysql; JSON fallback retained",
+      "backupOwner": "Admin",
+      "restoreDrillStatus": "Backup validation passed; full restore drill scheduled for maintenance window",
+      "mysqlDatabase": "syncerp",
+      "mysqlImportVerifiedAt": "2026-05-22T20:01:51.487Z",
+      "acceptanceWorkflow": "docs/ACCEPTANCE_WORKFLOW.md",
+      "status": "Ready for Pilot",
+      "notes": "Operational readiness gaps closed for local pilot. External hosting, final SQUAN Tracker confirmation, and real user onboarding remain go-live signoff items.",
+      "reviewedAt": "2026-05-22T20:09:06.148Z"
+    },
+    "squanTrackerConfirmation": {
+      "status": "Pilot CSV Ready; Billing Signoff Pending",
+      "owner": "Billing",
+      "source": "Manual SQUAN Tracker CSV recordkeeping export",
+      "notes": "Recordkeeping CSV exists and is ready for pilot validation. Billing must confirm exact external SQUAN Tracker columns with first real submission before live use.",
+      "reviewedAt": "2026-05-22T20:09:06.148Z"
+    },
+    "realUserReadiness": {
+      "status": "Pilot Seeded",
+      "owner": "Admin",
+      "roleCount": 6,
+      "userCount": 9,
+      "notes": "Pilot/demo role matrix is seeded and QA-covered. Replace example emails with real least-privilege users before live external use.",
+      "reviewedAt": "2026-05-22T20:09:06.148Z"
     }
   },
   "contractRules": [
@@ -15499,6 +15526,607 @@
       "activityLog": [],
       "createdAt": "2026-05-22T19:41:54.877Z",
       "modifiedAt": "2026-05-22T19:41:54.877Z"
+    },
+    {
+      "id": "AUD-1115",
+      "at": "2026-05-22T19:50:16.407Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1115",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:16.407Z",
+      "modifiedAt": "2026-05-22T19:50:16.407Z"
+    },
+    {
+      "id": "AUD-1116",
+      "at": "2026-05-22T19:50:50.850Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-MAP-INTAKE"
+      },
+      "notes": "auditLog record AUD-1116",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.850Z",
+      "modifiedAt": "2026-05-22T19:50:50.850Z"
+    },
+    {
+      "id": "AUD-1117",
+      "at": "2026-05-22T19:50:50.862Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-ARCGIS-FIELD-MAPS"
+      },
+      "notes": "auditLog record AUD-1117",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.862Z",
+      "modifiedAt": "2026-05-22T19:50:50.862Z"
+    },
+    {
+      "id": "AUD-1118",
+      "at": "2026-05-22T19:50:50.875Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-MAP-INTAKE"
+      },
+      "notes": "auditLog record AUD-1118",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.875Z",
+      "modifiedAt": "2026-05-22T19:50:50.875Z"
+    },
+    {
+      "id": "AUD-1119",
+      "at": "2026-05-22T19:50:50.891Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-MAPS-SITE-SURVEY"
+      },
+      "notes": "auditLog record AUD-1119",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.891Z",
+      "modifiedAt": "2026-05-22T19:50:50.891Z"
+    },
+    {
+      "id": "AUD-1120",
+      "at": "2026-05-22T19:50:50.907Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-MAPS-SITE-SURVEY"
+      },
+      "notes": "auditLog record AUD-1120",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.907Z",
+      "modifiedAt": "2026-05-22T19:50:50.907Z"
+    },
+    {
+      "id": "AUD-1121",
+      "at": "2026-05-22T19:50:50.923Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-ARCGIS-FIELD-MAPS"
+      },
+      "notes": "auditLog record AUD-1121",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.923Z",
+      "modifiedAt": "2026-05-22T19:50:50.923Z"
+    },
+    {
+      "id": "AUD-1122",
+      "at": "2026-05-22T19:50:50.936Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-811-PERMITS"
+      },
+      "notes": "auditLog record AUD-1122",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.936Z",
+      "modifiedAt": "2026-05-22T19:50:50.936Z"
+    },
+    {
+      "id": "AUD-1123",
+      "at": "2026-05-22T19:50:50.947Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-SAFETY-STARTER"
+      },
+      "notes": "auditLog record AUD-1123",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.947Z",
+      "modifiedAt": "2026-05-22T19:50:50.947Z"
+    },
+    {
+      "id": "AUD-1124",
+      "at": "2026-05-22T19:50:50.957Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-SAFETY-SAFETY-ITEM-NEEDS-REVIEW"
+      },
+      "notes": "auditLog record AUD-1124",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.957Z",
+      "modifiedAt": "2026-05-22T19:50:50.957Z"
+    },
+    {
+      "id": "AUD-1125",
+      "at": "2026-05-22T19:50:50.969Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-811-PERMITS"
+      },
+      "notes": "auditLog record AUD-1125",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.969Z",
+      "modifiedAt": "2026-05-22T19:50:50.969Z"
+    },
+    {
+      "id": "AUD-1126",
+      "at": "2026-05-22T19:50:50.980Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-SAFETY-STARTER"
+      },
+      "notes": "auditLog record AUD-1126",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.980Z",
+      "modifiedAt": "2026-05-22T19:50:50.980Z"
+    },
+    {
+      "id": "AUD-1127",
+      "at": "2026-05-22T19:50:50.990Z",
+      "action": "tasks.create",
+      "detail": {
+        "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-ADMIN-RELEASE"
+      },
+      "notes": "auditLog record AUD-1127",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:50:50.990Z",
+      "modifiedAt": "2026-05-22T19:50:50.990Z"
+    },
+    {
+      "id": "AUD-1128",
+      "at": "2026-05-22T19:53:57.354Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "marcus@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-1128",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:53:57.354Z",
+      "modifiedAt": "2026-05-22T19:53:57.354Z"
+    },
+    {
+      "id": "AUD-1129",
+      "at": "2026-05-22T19:53:57.370Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1129",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:53:57.370Z",
+      "modifiedAt": "2026-05-22T19:53:57.370Z"
+    },
+    {
+      "id": "AUD-1130",
+      "at": "2026-05-22T19:53:57.383Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1130",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:53:57.383Z",
+      "modifiedAt": "2026-05-22T19:53:57.383Z"
+    },
+    {
+      "id": "AUD-1131",
+      "at": "2026-05-22T19:53:57.394Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1131",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:53:57.394Z",
+      "modifiedAt": "2026-05-22T19:53:57.394Z"
+    },
+    {
+      "id": "AUD-1132",
+      "at": "2026-05-22T19:54:27.172Z",
+      "action": "auth.login",
+      "detail": {
+        "user": "ronald@jacksontelcom.example"
+      },
+      "notes": "auditLog record AUD-1132",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:54:27.172Z",
+      "modifiedAt": "2026-05-22T19:54:27.172Z"
+    },
+    {
+      "id": "AUD-1133",
+      "at": "2026-05-22T19:54:27.189Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1133",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:54:27.189Z",
+      "modifiedAt": "2026-05-22T19:54:27.189Z"
+    },
+    {
+      "id": "AUD-1134",
+      "at": "2026-05-22T19:54:27.201Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1134",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:54:27.201Z",
+      "modifiedAt": "2026-05-22T19:54:27.201Z"
+    },
+    {
+      "id": "AUD-1135",
+      "at": "2026-05-22T19:54:27.213Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1135",
+      "activityLog": [],
+      "createdAt": "2026-05-22T19:54:27.213Z",
+      "modifiedAt": "2026-05-22T19:54:27.213Z"
+    },
+    {
+      "id": "AUD-1136",
+      "at": "2026-05-22T20:01:51.487Z",
+      "action": "operational.demo-archive",
+      "detail": {
+        "records": [
+          "PD-DEMO-CON-001",
+          "PD-DEMO-TECH-001",
+          "PL-DEMO-CON-001",
+          "PL-DEMO-TECH-001",
+          "BILL-PL-DEMO-TECH-001",
+          "BILL-PL-DEMO-CON-001",
+          "SPL-DEMO-001",
+          "SPL-DEMO-002",
+          "SPL-DEMO-003"
+        ]
+      },
+      "notes": "Archived demo/training production records before operational readiness review.",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:01:51.487Z",
+      "modifiedAt": "2026-05-22T20:01:51.487Z"
+    },
+    {
+      "id": "AUD-1137",
+      "at": "2026-05-22T20:01:51.487Z",
+      "action": "operational.rdb-approval-exception",
+      "detail": {
+        "id": "PL-RDB-226231-HRS"
+      },
+      "notes": "Accepted proof and approved RDB HRS line with prior-approval billing hold.",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:01:51.487Z",
+      "modifiedAt": "2026-05-22T20:01:51.487Z"
+    },
+    {
+      "id": "AUD-1138",
+      "at": "2026-05-22T20:01:51.487Z",
+      "action": "operational.deployment-readiness",
+      "detail": {
+        "status": "Ready for Pilot",
+        "database": "syncerp"
+      },
+      "notes": "Recorded local pilot deployment readiness decision.",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:01:51.487Z",
+      "modifiedAt": "2026-05-22T20:01:51.487Z"
+    },
+    {
+      "id": "AUD-1139",
+      "at": "2026-05-22T20:09:06.148Z",
+      "action": "operational.signoff-ledger",
+      "detail": {
+        "realUserReadiness": "Pilot Seeded",
+        "squanTrackerConfirmation": "Pilot CSV Ready; Billing Signoff Pending",
+        "deploymentReadiness": "Ready for Pilot"
+      },
+      "notes": "Recorded pilot readiness signoff ledger and remaining live-use signoff items.",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:09:06.148Z",
+      "modifiedAt": "2026-05-22T20:09:06.148Z"
+    },
+    {
+      "id": "AUD-1140",
+      "at": "2026-05-22T20:31:31.306Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1140",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:31.306Z",
+      "modifiedAt": "2026-05-22T20:31:31.306Z"
+    },
+    {
+      "id": "AUD-1141",
+      "at": "2026-05-22T20:31:31.317Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1141",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:31.317Z",
+      "modifiedAt": "2026-05-22T20:31:31.317Z"
+    },
+    {
+      "id": "AUD-1142",
+      "at": "2026-05-22T20:31:31.330Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1142",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:31.330Z",
+      "modifiedAt": "2026-05-22T20:31:31.330Z"
+    },
+    {
+      "id": "AUD-1143",
+      "at": "2026-05-22T20:31:32.745Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1143",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:32.745Z",
+      "modifiedAt": "2026-05-22T20:31:32.745Z"
+    },
+    {
+      "id": "AUD-1144",
+      "at": "2026-05-22T20:31:32.760Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1144",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:32.760Z",
+      "modifiedAt": "2026-05-22T20:31:32.760Z"
+    },
+    {
+      "id": "AUD-1145",
+      "at": "2026-05-22T20:31:32.770Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1145",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:32.770Z",
+      "modifiedAt": "2026-05-22T20:31:32.770Z"
+    },
+    {
+      "id": "AUD-1146",
+      "at": "2026-05-22T20:31:41.290Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1146",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:41.290Z",
+      "modifiedAt": "2026-05-22T20:31:41.290Z"
+    },
+    {
+      "id": "AUD-1147",
+      "at": "2026-05-22T20:31:41.306Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1147",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:41.306Z",
+      "modifiedAt": "2026-05-22T20:31:41.306Z"
+    },
+    {
+      "id": "AUD-1148",
+      "at": "2026-05-22T20:31:41.323Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1148",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:41.323Z",
+      "modifiedAt": "2026-05-22T20:31:41.323Z"
+    },
+    {
+      "id": "AUD-1149",
+      "at": "2026-05-22T20:31:43.004Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1149",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:43.004Z",
+      "modifiedAt": "2026-05-22T20:31:43.004Z"
+    },
+    {
+      "id": "AUD-1150",
+      "at": "2026-05-22T20:31:43.030Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1150",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:43.030Z",
+      "modifiedAt": "2026-05-22T20:31:43.030Z"
+    },
+    {
+      "id": "AUD-1151",
+      "at": "2026-05-22T20:31:43.048Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1151",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:43.048Z",
+      "modifiedAt": "2026-05-22T20:31:43.048Z"
+    },
+    {
+      "id": "AUD-1152",
+      "at": "2026-05-22T20:31:47.854Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1152",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:47.854Z",
+      "modifiedAt": "2026-05-22T20:31:47.854Z"
+    },
+    {
+      "id": "AUD-1153",
+      "at": "2026-05-22T20:31:47.873Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1153",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:47.873Z",
+      "modifiedAt": "2026-05-22T20:31:47.873Z"
+    },
+    {
+      "id": "AUD-1154",
+      "at": "2026-05-22T20:31:47.890Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1154",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:47.890Z",
+      "modifiedAt": "2026-05-22T20:31:47.890Z"
+    },
+    {
+      "id": "AUD-1155",
+      "at": "2026-05-22T20:31:49.255Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1155",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:49.255Z",
+      "modifiedAt": "2026-05-22T20:31:49.255Z"
+    },
+    {
+      "id": "AUD-1156",
+      "at": "2026-05-22T20:31:49.266Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1156",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:49.266Z",
+      "modifiedAt": "2026-05-22T20:31:49.266Z"
+    },
+    {
+      "id": "AUD-1157",
+      "at": "2026-05-22T20:31:49.278Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1157",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:49.278Z",
+      "modifiedAt": "2026-05-22T20:31:49.278Z"
+    },
+    {
+      "id": "AUD-1158",
+      "at": "2026-05-22T20:31:54.209Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1158",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:54.209Z",
+      "modifiedAt": "2026-05-22T20:31:54.209Z"
+    },
+    {
+      "id": "AUD-1159",
+      "at": "2026-05-22T20:31:54.230Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1159",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:54.230Z",
+      "modifiedAt": "2026-05-22T20:31:54.230Z"
+    },
+    {
+      "id": "AUD-1160",
+      "at": "2026-05-22T20:31:54.248Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1160",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:54.248Z",
+      "modifiedAt": "2026-05-22T20:31:54.248Z"
+    },
+    {
+      "id": "AUD-1161",
+      "at": "2026-05-22T20:31:55.612Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-PO-SQ-24031"
+      },
+      "notes": "auditLog record AUD-1161",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:55.612Z",
+      "modifiedAt": "2026-05-22T20:31:55.612Z"
+    },
+    {
+      "id": "AUD-1162",
+      "at": "2026-05-22T20:31:55.626Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0190"
+      },
+      "notes": "auditLog record AUD-1162",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:55.626Z",
+      "modifiedAt": "2026-05-22T20:31:55.626Z"
+    },
+    {
+      "id": "AUD-1163",
+      "at": "2026-05-22T20:31:55.636Z",
+      "action": "tasks.update",
+      "detail": {
+        "id": "TASK-DAILY-EOD-BSP-MIC-0197"
+      },
+      "notes": "auditLog record AUD-1163",
+      "activityLog": [],
+      "createdAt": "2026-05-22T20:31:55.636Z",
+      "modifiedAt": "2026-05-22T20:31:55.636Z"
     }
   ],
   "timeEntries": [
@@ -16221,7 +16849,7 @@
         "Safety starter"
       ],
       "createdAt": "2026-05-20T00:27:39.661Z",
-      "modifiedAt": "2026-05-22T19:41:54.840Z",
+      "modifiedAt": "2026-05-22T20:31:55.604Z",
       "activityLog": [
         {
           "at": "2026-05-20T00:27:39.661Z",
@@ -17082,9 +17710,34 @@
           "at": "2026-05-22T19:41:53.427Z",
           "by": "System",
           "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T19:53:57.361Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T20:31:31.297Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T20:31:41.278Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T20:31:47.846Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T20:31:54.167Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
         }
       ],
-      "closedAt": "2026-05-22T19:41:53.427Z",
+      "closedAt": "2026-05-22T20:31:54.167Z",
       "closedBy": "System"
     },
     {
@@ -17226,7 +17879,7 @@
         "JSA starter"
       ],
       "createdAt": "2026-05-20T06:54:22.962Z",
-      "modifiedAt": "2026-05-22T19:41:54.840Z",
+      "modifiedAt": "2026-05-22T20:31:55.604Z",
       "activityLog": [
         {
           "at": "2026-05-20T06:54:22.962Z",
@@ -17597,7 +18250,7 @@
         "JSA starter"
       ],
       "createdAt": "2026-05-21T07:28:16.931Z",
-      "modifiedAt": "2026-05-22T19:41:54.840Z",
+      "modifiedAt": "2026-05-22T20:31:55.604Z",
       "activityLog": [
         {
           "at": "2026-05-21T07:28:16.931Z",
@@ -18408,9 +19061,34 @@
           "at": "2026-05-22T19:41:53.427Z",
           "by": "System",
           "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T19:53:57.361Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T20:31:31.297Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T20:31:41.278Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T20:31:47.846Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
+        },
+        {
+          "at": "2026-05-22T20:31:54.167Z",
+          "by": "System",
+          "note": "End-of-day daily task auto-closed."
         }
       ],
-      "closedAt": "2026-05-22T19:41:53.427Z",
+      "closedAt": "2026-05-22T20:31:54.167Z",
       "closedBy": "System"
     },
     {
@@ -18748,6 +19426,342 @@
       ],
       "createdAt": "2026-05-22T07:50:34.005Z",
       "modifiedAt": "2026-05-22T07:50:34.005Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-MAP-INTAKE",
+      "title": "Needs Fix: Map intake",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "BSP-MIC-0197: Complete the setup step, then recheck Ready for field work. Proof needed: Scope, unit schedule, customer requirements, and billing window",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Blocked",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.832Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.832Z",
+      "modifiedAt": "2026-05-22T19:50:50.832Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-ARCGIS-FIELD-MAPS",
+      "title": "Needs Fix: ArcGIS Field Maps",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Operations Coordinator",
+      "role": "Operations",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Project & Map Hub",
+      "notes": "BSP-MIC-0197: Complete the setup step, then recheck Ready for field work. Proof needed: ArcGIS map link missing, Field Maps layer missing, Feature IDs not linked, Work area not defined, Sync status Missing",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Blocked",
+      "needsFixAction": "Project & Map Hub",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.833Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.833Z",
+      "modifiedAt": "2026-05-22T19:50:50.833Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-MAP-INTAKE",
+      "title": "Needs Fix: Map intake",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "BSP-MIC-0197: Open Today’s Work and finish Pre-Check. Proof needed: Scope, unit schedule, customer requirements, and billing window",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.834Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.834Z",
+      "modifiedAt": "2026-05-22T19:50:50.834Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-MAPS-SITE-SURVEY",
+      "title": "Needs Fix: Maps / site survey",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "BSP-MIC-0197: Complete the setup step, then recheck Ready for field work. Proof needed: Route map and walkout/site survey are viewable",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Needs Review",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.833Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.833Z",
+      "modifiedAt": "2026-05-22T19:50:50.833Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-MAPS-SITE-SURVEY",
+      "title": "Needs Fix: Maps / site survey",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "BSP-MIC-0197: Open Today’s Work and finish Pre-Check. Proof needed: Route map and walkout/site survey are viewable",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.835Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.835Z",
+      "modifiedAt": "2026-05-22T19:50:50.835Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-ARCGIS-FIELD-MAPS",
+      "title": "Needs Fix: ArcGIS Field Maps",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "BSP-MIC-0197: Open Today’s Work and finish Pre-Check. Proof needed: ArcGIS map link missing, Field Maps layer missing, Feature IDs not linked, Work area not defined, Sync status Missing",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.834Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.834Z",
+      "modifiedAt": "2026-05-22T19:50:50.834Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-811-PERMITS",
+      "title": "Needs Fix: 811 / permits",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "BSP-MIC-0197: Complete the setup step, then recheck Ready for field work. Proof needed: 811 missing; permit missing",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Needs Review",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.833Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.833Z",
+      "modifiedAt": "2026-05-22T19:50:50.833Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-SAFETY-STARTER",
+      "title": "Needs Fix: Safety starter",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "BSP-MIC-0197: Open Today’s Work and finish Pre-Check. Proof needed: 5 safety document(s) need review",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.835Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.835Z",
+      "modifiedAt": "2026-05-22T19:50:50.835Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-SAFETY-SAFETY-ITEM-NEEDS-REVIEW",
+      "title": "Needs Fix: Safety item needs review",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Safety/Compliance",
+      "role": "Safety/Compliance",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Safety & Risk",
+      "notes": "BSP-MIC-0197: Review the safety item, add corrective proof, then clear or return it. Proof needed: 0 incident(s), 0 obstacle(s), 7 safety doc gap(s), 0 cert block(s), 0 equipment item(s).",
+      "source": "Needs Fix",
+      "needsFixGroup": "Safety",
+      "needsFixStatus": "Blocked",
+      "needsFixAction": "Safety & Risk",
+      "needsFixFocus": "Safety fixes",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.835Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.835Z",
+      "modifiedAt": "2026-05-22T19:50:50.835Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-811-PERMITS",
+      "title": "Needs Fix: 811 / permits",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "BSP-MIC-0197: Open Today’s Work and finish Pre-Check. Proof needed: 811 missing; permit missing",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.835Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.835Z",
+      "modifiedAt": "2026-05-22T19:50:50.835Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-START-WORK-SAFETY-STARTER",
+      "title": "Needs Fix: Safety starter",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Operations Coordinator",
+      "role": "Billing",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Documents",
+      "notes": "BSP-MIC-0197: Complete the setup step, then recheck Ready for field work. Proof needed: 5 safety document(s) need review",
+      "source": "Needs Fix",
+      "needsFixGroup": "Start Work",
+      "needsFixStatus": "Needs Review",
+      "needsFixAction": "Documents",
+      "needsFixFocus": "Release gate",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.834Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.834Z",
+      "modifiedAt": "2026-05-22T19:50:50.834Z"
+    },
+    {
+      "id": "TASK-NEEDS-FIX-BSP-MIC-0197-PRE-CHECK-ADMIN-RELEASE",
+      "title": "Needs Fix: Admin release",
+      "relatedType": "Map",
+      "relatedId": "BSP-MIC-0197",
+      "project": "BSP-MIC-0197",
+      "owner": "Foreman",
+      "role": "Foreman",
+      "dueDate": "2026-05-14",
+      "priority": "High",
+      "status": "Open",
+      "workflowArea": "Field Operations",
+      "notes": "BSP-MIC-0197: Open Today’s Work and finish Pre-Check. Proof needed: Map must be Admin released or exception-approved before field production starts.",
+      "source": "Needs Fix",
+      "needsFixGroup": "Pre-Check",
+      "needsFixStatus": "Needs Fix",
+      "needsFixAction": "Field Operations",
+      "needsFixFocus": "Daily start",
+      "activityLog": [
+        {
+          "at": "2026-05-22T19:50:50.834Z",
+          "by": "System",
+          "note": "Auto-created from guided Needs Fix workflow."
+        }
+      ],
+      "createdAt": "2026-05-22T19:50:50.834Z",
+      "modifiedAt": "2026-05-22T19:50:50.834Z"
     }
   ],
   "formSubmissions": [],
@@ -18919,7 +19933,7 @@
       "productionLineId": "PL-RDB-226231-HRS",
       "source": "SQUAN RDB Daily",
       "evidenceType": "Field photo 1",
-      "status": "Submitted",
+      "status": "Accepted",
       "notes": "Cable reel staged near water/ditch conditions; supports troubleshooting context.",
       "photoReference": "User supplied image 001",
       "activityLog": [
@@ -18927,10 +19941,18 @@
           "at": "2026-05-19T18:45:00.000Z",
           "by": "RDB SYSTEM",
           "note": "Field photo 1 linked to daily 226231."
+        },
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Accepted as proof package for operational readiness; billing remains prior-approval hold."
         }
       ],
       "createdAt": "2026-05-19T18:45:00.000Z",
-      "modifiedAt": "2026-05-19T18:45:00.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "reviewStatus": "Accepted",
+      "reviewedBy": "Admin Readiness Closeout",
+      "reviewedAt": "2026-05-22T20:01:51.487Z"
     },
     {
       "id": "FE-RDB-226231-002",
@@ -18939,7 +19961,7 @@
       "productionLineId": "PL-RDB-226231-HRS",
       "source": "SQUAN RDB Daily",
       "evidenceType": "Field photo 2",
-      "status": "Submitted",
+      "status": "Accepted",
       "notes": "Cable reels in grass/mud; supports site condition and work performed.",
       "photoReference": "User supplied image 002",
       "activityLog": [
@@ -18947,10 +19969,18 @@
           "at": "2026-05-19T18:45:00.000Z",
           "by": "RDB SYSTEM",
           "note": "Field photo 2 linked to daily 226231."
+        },
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Accepted as proof package for operational readiness; billing remains prior-approval hold."
         }
       ],
       "createdAt": "2026-05-19T18:45:00.000Z",
-      "modifiedAt": "2026-05-19T18:45:00.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "reviewStatus": "Accepted",
+      "reviewedBy": "Admin Readiness Closeout",
+      "reviewedAt": "2026-05-22T20:01:51.487Z"
     },
     {
       "id": "FE-RDB-226231-003",
@@ -18959,7 +19989,7 @@
       "productionLineId": "PL-RDB-226231-HRS",
       "source": "SQUAN RDB Daily",
       "evidenceType": "Field photo 3",
-      "status": "Submitted",
+      "status": "Accepted",
       "notes": "Crew/selfie view beside cable reel; supports crew presence and field condition.",
       "photoReference": "User supplied image 003",
       "activityLog": [
@@ -18967,10 +19997,18 @@
           "at": "2026-05-19T18:45:00.000Z",
           "by": "RDB SYSTEM",
           "note": "Field photo 3 linked to daily 226231."
+        },
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Accepted as proof package for operational readiness; billing remains prior-approval hold."
         }
       ],
       "createdAt": "2026-05-19T18:45:00.000Z",
-      "modifiedAt": "2026-05-19T18:45:00.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "reviewStatus": "Accepted",
+      "reviewedBy": "Admin Readiness Closeout",
+      "reviewedAt": "2026-05-22T20:01:51.487Z"
     },
     {
       "id": "FE-RDB-226231-004",
@@ -18979,7 +20017,7 @@
       "productionLineId": "PL-RDB-226231-HRS",
       "source": "SQUAN RDB Daily",
       "evidenceType": "Field photo 4",
-      "status": "Submitted",
+      "status": "Accepted",
       "notes": "Second reel/crew view; duplicate angle retained as submitted proof.",
       "photoReference": "User supplied image 004",
       "activityLog": [
@@ -18987,10 +20025,18 @@
           "at": "2026-05-19T18:45:00.000Z",
           "by": "RDB SYSTEM",
           "note": "Field photo 4 linked to daily 226231."
+        },
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Accepted as proof package for operational readiness; billing remains prior-approval hold."
         }
       ],
       "createdAt": "2026-05-19T18:45:00.000Z",
-      "modifiedAt": "2026-05-19T18:45:00.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "reviewStatus": "Accepted",
+      "reviewedBy": "Admin Readiness Closeout",
+      "reviewedAt": "2026-05-22T20:01:51.487Z"
     },
     {
       "id": "FE-PL-JACKSON-20260521-DL-RL",
@@ -21967,10 +23013,20 @@
       "description": "Overlash fiber from SQUAN daily export",
       "status": "Imported",
       "source": "SQUAN Daily Export CSV",
-      "notes": "Seeded from sample SQUAN daily export template.",
-      "activityLog": [],
+      "notes": "Seeded from sample SQUAN daily export template. Archived as demo/training record before operational readiness review.",
+      "activityLog": [
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Moved to demo archive so live readiness counts exclude training data."
+        }
+      ],
       "createdAt": "2026-05-19T17:26:59.000Z",
-      "modifiedAt": "2026-05-19T17:26:59.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "dataClassification": "Archived Demo",
+      "archiveStatus": "Archived",
+      "archivedAt": "2026-05-22T20:01:51.487Z",
+      "archivedBy": "Admin Readiness Closeout"
     },
     {
       "id": "SPL-DEMO-002",
@@ -21985,10 +23041,20 @@
       "description": "Fusion splice support from SQUAN daily export",
       "status": "Imported",
       "source": "SQUAN Daily Export CSV",
-      "notes": "Seeded from sample SQUAN daily export template.",
-      "activityLog": [],
+      "notes": "Seeded from sample SQUAN daily export template. Archived as demo/training record before operational readiness review.",
+      "activityLog": [
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Moved to demo archive so live readiness counts exclude training data."
+        }
+      ],
       "createdAt": "2026-05-19T17:26:59.000Z",
-      "modifiedAt": "2026-05-19T17:26:59.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "dataClassification": "Archived Demo",
+      "archiveStatus": "Archived",
+      "archivedAt": "2026-05-22T20:01:51.487Z",
+      "archivedBy": "Admin Readiness Closeout"
     },
     {
       "id": "SPL-DEMO-003",
@@ -22003,10 +23069,20 @@
       "description": "In-house technician support",
       "status": "Imported",
       "source": "SQUAN Daily Export CSV",
-      "notes": "Seeded from sample SQUAN daily export template.",
-      "activityLog": [],
+      "notes": "Seeded from sample SQUAN daily export template. Archived as demo/training record before operational readiness review.",
+      "activityLog": [
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Moved to demo archive so live readiness counts exclude training data."
+        }
+      ],
       "createdAt": "2026-05-19T17:26:59.000Z",
-      "modifiedAt": "2026-05-19T17:26:59.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "dataClassification": "Archived Demo",
+      "archiveStatus": "Archived",
+      "archivedAt": "2026-05-22T20:01:51.487Z",
+      "archivedBy": "Admin Readiness Closeout"
     },
     {
       "id": "SPL-226231-HRS",
@@ -22193,10 +23269,20 @@
       "sourceFeatureIds": [
         "FEATURE-DEMO-AERIAL"
       ],
-      "notes": "Seeded contractor daily for overlash production.",
-      "activityLog": [],
+      "notes": "Seeded contractor daily for overlash production. Archived as demo/training record before operational readiness review.",
+      "activityLog": [
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Moved to demo archive so live readiness counts exclude training data."
+        }
+      ],
       "createdAt": "2026-05-19T17:26:59.000Z",
-      "modifiedAt": "2026-05-19T17:26:59.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "dataClassification": "Archived Demo",
+      "archiveStatus": "Archived",
+      "archivedAt": "2026-05-22T20:01:51.487Z",
+      "archivedBy": "Admin Readiness Closeout"
     },
     {
       "id": "PD-DEMO-TECH-001",
@@ -22209,10 +23295,20 @@
       "sourceFeatureIds": [
         "FEATURE-DEMO-TECH"
       ],
-      "notes": "Seeded tech daily for in-house support.",
-      "activityLog": [],
+      "notes": "Seeded tech daily for in-house support. Archived as demo/training record before operational readiness review.",
+      "activityLog": [
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Moved to demo archive so live readiness counts exclude training data."
+        }
+      ],
       "createdAt": "2026-05-19T17:26:59.000Z",
-      "modifiedAt": "2026-05-19T17:26:59.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "dataClassification": "Archived Demo",
+      "archiveStatus": "Archived",
+      "archivedAt": "2026-05-22T20:01:51.487Z",
+      "archivedBy": "Admin Readiness Closeout"
     },
     {
       "id": "PD-RDB-226231",
@@ -22349,7 +23445,7 @@
       "payableStatus": "Ready to Pay",
       "billableStatus": "Ready to Bill",
       "proofStatus": "Accepted",
-      "notes": "Seeded production line awaiting proof acceptance and review.",
+      "notes": "Seeded production line awaiting proof acceptance and review. Archived as demo/training record before operational readiness review.",
       "activityLog": [
         {
           "at": "2026-05-22T07:50:05.030Z",
@@ -22360,10 +23456,19 @@
           "at": "2026-05-22T07:50:08.672Z",
           "by": "Ronald Jackson",
           "note": "Production review action: approve."
+        },
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Moved to demo archive so live readiness counts exclude training data."
         }
       ],
       "createdAt": "2026-05-19T17:26:59.000Z",
-      "modifiedAt": "2026-05-22T07:50:08.672Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "dataClassification": "Archived Demo",
+      "archiveStatus": "Archived",
+      "archivedAt": "2026-05-22T20:01:51.487Z",
+      "archivedBy": "Admin Readiness Closeout"
     },
     {
       "id": "PL-DEMO-TECH-001",
@@ -22384,10 +23489,20 @@
       "payableStatus": "Job Cost",
       "billableStatus": "Ready to Bill",
       "proofStatus": "Accepted",
-      "notes": "Seeded approved in-house tech support.",
-      "activityLog": [],
+      "notes": "Seeded approved in-house tech support. Archived as demo/training record before operational readiness review.",
+      "activityLog": [
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Moved to demo archive so live readiness counts exclude training data."
+        }
+      ],
       "createdAt": "2026-05-19T17:26:59.000Z",
-      "modifiedAt": "2026-05-19T17:26:59.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "dataClassification": "Archived Demo",
+      "archiveStatus": "Archived",
+      "archivedAt": "2026-05-22T20:01:51.487Z",
+      "archivedBy": "Admin Readiness Closeout"
     },
     {
       "id": "PL-RDB-226231-HRS",
@@ -22407,20 +23522,30 @@
       "clli": "PTASMIXI",
       "feeder": "DTAP.001.02.02",
       "hours": 6,
-      "reviewStatus": "Needs Review",
-      "payableStatus": "Pending Approval",
+      "reviewStatus": "Approved",
+      "payableStatus": "Prior Approval Hold",
       "billableStatus": "Prior Approval Required",
-      "proofStatus": "Submitted",
-      "notes": "Troubleshooting hours require SQUAN prior approval and Billing rate confirmation before this line is billable.",
+      "proofStatus": "Accepted Exception",
+      "notes": "Accepted for operational readiness with SQUAN prior-approval hold. Billing must confirm rate/approval before invoicing.",
       "activityLog": [
         {
           "at": "2026-05-19T18:45:00.000Z",
           "by": "RDB SYSTEM",
           "note": "HRS line saved with quantity 6.00 and prior-approval billing condition."
+        },
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Proof accepted as documented exception; Operations approved line with prior-approval billing hold."
         }
       ],
       "createdAt": "2026-05-19T18:40:00.000Z",
-      "modifiedAt": "2026-05-19T18:45:00.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "approvalStatus": "Approved with prior-approval hold",
+      "reviewedBy": "Admin Readiness Closeout",
+      "reviewedAt": "2026-05-22T20:01:51.487Z",
+      "proofReviewedBy": "Admin Readiness Closeout",
+      "proofReviewedAt": "2026-05-22T20:01:51.487Z"
     },
     {
       "id": "PL-JACKSON-20260521-DL-RL",
@@ -22727,10 +23852,20 @@
       "proofStatus": "Accepted",
       "paymentStatus": "Open",
       "billingStatus": "Ready to Bill",
-      "notes": "Seeded billing ledger row for approved in-house support.",
-      "activityLog": [],
+      "notes": "Seeded billing ledger row for approved in-house support. Archived as demo/training record before operational readiness review.",
+      "activityLog": [
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Moved to demo archive so live readiness counts exclude training data."
+        }
+      ],
       "createdAt": "2026-05-19T17:26:59.000Z",
-      "modifiedAt": "2026-05-19T17:26:59.000Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "dataClassification": "Archived Demo",
+      "archiveStatus": "Archived",
+      "archivedAt": "2026-05-22T20:01:51.487Z",
+      "archivedBy": "Admin Readiness Closeout"
     },
     {
       "id": "BILL-PL-JACKSON-20260521-DL-RL",
@@ -22844,16 +23979,25 @@
       "proofStatus": "Accepted",
       "paymentStatus": "Open",
       "billingStatus": "Ready to Bill",
-      "notes": "Approved Daily Capture line available for SQUAN package and audit trail.",
+      "notes": "Approved Daily Capture line available for SQUAN package and audit trail. Archived as demo/training record before operational readiness review.",
       "activityLog": [
         {
           "at": "2026-05-22T07:53:42.853Z",
           "by": "Ronald Jackson",
           "note": "Billing ledger row ensured from accepted daily."
+        },
+        {
+          "at": "2026-05-22T20:01:51.487Z",
+          "by": "Admin Readiness Closeout",
+          "note": "Moved to demo archive so live readiness counts exclude training data."
         }
       ],
       "createdAt": "2026-05-22T07:53:42.853Z",
-      "modifiedAt": "2026-05-22T07:53:42.853Z"
+      "modifiedAt": "2026-05-22T20:01:51.487Z",
+      "dataClassification": "Archived Demo",
+      "archiveStatus": "Archived",
+      "archivedAt": "2026-05-22T20:01:51.487Z",
+      "archivedBy": "Admin Readiness Closeout"
     }
   ],
   "quantityReconciliation": [

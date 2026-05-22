@@ -3164,6 +3164,14 @@ function operationalReadinessCsvRowsServer(db) {
   ]);
   const count = type => cleanup.filter(item => item.type === type).length;
   const ready = cleanup.length === 0;
+  const deployment = db.company?.deploymentReadiness || {};
+  const deploymentReady = Boolean(
+    deployment.hostingTarget &&
+    deployment.persistenceMode &&
+    deployment.backupOwner &&
+    deployment.restoreDrillStatus &&
+    deployment.mysqlDatabase
+  );
   return [
     { area: "Foreman Daily Capture", owner: "Foreman", status: "Ready for Review", detail: "Daily Capture form, code/quantity entry, proof note, draft, submit, and correction loop are wired.", blockers: count("Missing proof") },
     { area: "Admin/Ops Review", owner: "Operations", status: count("Unapproved production") ? "Needs Cleanup" : "Ready for Review", detail: "Production approval and proof review drive billing readiness.", blockers: count("Unapproved production") },
@@ -3176,23 +3184,37 @@ function operationalReadinessCsvRowsServer(db) {
     { area: "Real Data Readiness", owner: "Admin", status: ready ? "Operational Ready" : "Needs Cleanup", detail: source.sourceSummary, blockers: cleanup.length },
     { area: "Operational Cleanup Queue", owner: "Admin", status: "Ready for Review", detail: "Cleanup blockers export with owner, source, route, and status.", blockers: cleanup.length },
     { area: "Button / Workflow QA", owner: "Admin", status: "Ready for Review", detail: "Workflow confidence and browser QA are wired through npm run check.", blockers: 0 },
-    { area: "Deployment / Backup", owner: "Admin", status: "Needs Decision", detail: "Hosting, database persistence, backup, restore, and admin recovery need final go-live decision.", blockers: 1 }
+    {
+      area: "Deployment / Backup",
+      owner: "Admin",
+      status: deploymentReady ? deployment.status || "Ready for Review" : "Needs Decision",
+      detail: deploymentReady
+        ? `${deployment.persistenceMode}; backup owner ${deployment.backupOwner}; restore drill ${deployment.restoreDrillStatus}.`
+        : "Hosting, database persistence, backup, restore, and admin recovery need final go-live decision.",
+      blockers: deploymentReady ? 0 : 1
+    }
   ];
 }
 
 function operationalCloseoutCsvRowsServer(db) {
   const realImports = (db.squanProductionLines || []).filter(line => dataSourceClassificationServer(line) === "Real Imported").length;
+  const deployment = db.company?.deploymentReadiness || {};
+  const realUsers = db.company?.realUserReadiness || {};
+  const tracker = db.company?.squanTrackerConfirmation || {};
+  const persistenceReady = Boolean(deployment.mysqlDatabase && deployment.persistenceMode);
+  const userReady = Boolean(realUsers.userCount && realUsers.roleCount);
+  const trackerReady = /ready|confirmed/i.test(tracker.status || "");
   return [
     { item: "Real workflow validation", owner: "Admin/Ops", status: realImports ? "Ready for Review" : "Needs Data", detail: "Walk real imports through linked Jackson resubmission, approval, billing, SQUAN response, and settlement." },
-    { item: "Persistence/database prep", owner: "Admin", status: "Needs Decision", detail: "Node remains runtime; MAMP MySQL is the next durable persistence target after schema approval." },
+    { item: "Persistence/database prep", owner: "Admin", status: persistenceReady ? deployment.status || "Ready for Pilot" : "Needs Decision", detail: persistenceReady ? deployment.persistenceMode : "Node remains runtime; MAMP MySQL is the next durable persistence target after schema approval." },
     { item: "Role permission QA", owner: "Admin", status: "Ready for Review", detail: "Verify Foreman, Admin, Operations, Billing, and Safety only see permitted screens/actions." },
     { item: "Final UX polish", owner: "Admin", status: "Ready for Review", detail: "Keep role home focused on next actions; move dense tables into reports/tools drawers." },
-    { item: "Backup/restore/go-live procedure", owner: "Admin", status: "Ready for Review", detail: "Use Admin backup/restore controls until MySQL migration; test restore before go-live." },
-    { item: "Real users/roles", owner: "Admin", status: "Needs Setup", detail: "Seed actual Jackson users and assign least-privilege roles before live use." },
+    { item: "Backup/restore/go-live procedure", owner: "Admin", status: deployment.restoreDrillStatus ? "Ready for Pilot" : "Ready for Review", detail: deployment.restoreDrillStatus || "Use Admin backup/restore controls until MySQL migration; test restore before go-live." },
+    { item: "Real users/roles", owner: "Admin", status: userReady ? realUsers.status || "Pilot Seeded" : "Needs Setup", detail: userReady ? realUsers.notes : "Seed actual Jackson users and assign least-privilege roles before live use." },
     { item: "Record locking rules", owner: "Admin", status: "Defined", detail: "Submitted, approved, packaged, submitted-to-SQUAN, paid, and closed records require revision/correction instead of silent edits." },
     { item: "Correction/revision SOP", owner: "Admin/Ops", status: "Defined", detail: "Corrections never overwrite originals; they create linked revisions with reason, owner, and audit history." },
     { item: "Required field matrix", owner: "Admin", status: "Defined", detail: "Foreman, Admin review, Billing package, SQUAN Tracker, payment, and settlement fields are defined in app guidance." },
-    { item: "Confirm SQUAN Tracker field format", owner: "Billing", status: "Needs Real-World Confirmation", detail: "Manual Tracker entry uses package CSV for recordkeeping; Billing must confirm exact external fields." },
+    { item: "Confirm SQUAN Tracker field format", owner: "Billing", status: trackerReady ? tracker.status || "Pilot CSV Ready" : "Needs Real-World Confirmation", detail: tracker.notes || "Manual Tracker entry uses package CSV for recordkeeping; Billing must confirm exact external fields." },
     { item: "Exception handling", owner: "Operations/Billing", status: "Defined", detail: "Missing proof, wrong code/quantity/map/date, SQUAN rejection/short-pay, and contractor disputes have owner/action paths." },
     { item: "Audit trail review", owner: "Admin", status: "Ready for Review", detail: "Critical submit/review/package/payment/settlement events append audit entries." },
     { item: "Operational dashboard finalization", owner: "Admin", status: "Ready for Review", detail: "Home is role-command first: Foreman submit/correct, Ops review, Billing submit/pay/settle, Admin exceptions/readiness." },
