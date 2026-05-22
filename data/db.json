@@ -78,16 +78,19 @@
       "notes": "Portal setup captured from ArcGIS Location Platform signup. Secrets are not stored in Jackson ERP."
     },
     "deploymentReadiness": {
-      "hostingTarget": "Local Node runtime for pilot; production host decision required before external users",
-      "persistenceMode": "MAMP MySQL syncerp validated with DATA_DRIVER=mysql; JSON fallback retained",
+      "hostingTarget": "Paid public hosting deferred; local Node runtime remains pilot host until budget/timing approval.",
+      "persistenceMode": "MAMP MySQL syncerp is the local controlled pilot source of truth; JSON is backup/export fallback.",
       "backupOwner": "Admin",
       "restoreDrillStatus": "Backup validation passed; full restore drill scheduled for maintenance window",
       "mysqlDatabase": "syncerp",
       "mysqlImportVerifiedAt": "2026-05-22T20:01:51.487Z",
       "acceptanceWorkflow": "docs/ACCEPTANCE_WORKFLOW.md",
-      "status": "Ready for Pilot",
-      "notes": "Operational readiness gaps closed for local pilot. External hosting, final SQUAN Tracker confirmation, and real user onboarding remain go-live signoff items.",
-      "reviewedAt": "2026-05-22T20:09:06.148Z"
+      "status": "Ready for Local MySQL Pilot",
+      "notes": "Step 2 closed: local pilot runs with DATA_DRIVER=mysql from ignored .env. Public/out-of-state access remains deferred until paid hosting and production auth are approved.",
+      "reviewedAt": "2026-05-22T20:09:06.148Z",
+      "sourceOfTruth": "mysql",
+      "sourceOfTruthDecidedAt": "2026-05-22T22:31:32.749Z",
+      "sourceOfTruthOwner": "Admin"
     },
     "squanTrackerConfirmation": {
       "status": "Pilot CSV Ready; Billing Signoff Pending",
@@ -16127,6 +16130,20 @@
       "activityLog": [],
       "createdAt": "2026-05-22T20:31:55.636Z",
       "modifiedAt": "2026-05-22T20:31:55.636Z"
+    },
+    {
+      "id": "AUD-1164",
+      "at": "2026-05-22T22:31:32.749Z",
+      "action": "operational.source-of-truth-selected",
+      "detail": {
+        "sourceOfTruth": "mysql",
+        "database": "syncerp",
+        "jsonRole": "backup/export fallback"
+      },
+      "notes": "Selected MAMP MySQL syncerp as the local controlled pilot source of truth.",
+      "activityLog": [],
+      "createdAt": "2026-05-22T22:31:32.749Z",
+      "modifiedAt": "2026-05-22T22:31:32.749Z"
     }
   ],
   "timeEntries": [

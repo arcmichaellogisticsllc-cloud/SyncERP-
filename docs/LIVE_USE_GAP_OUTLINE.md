@@ -9,8 +9,8 @@ SyncERP is ready for a controlled local pilot. The gaps below must be closed bef
 | Area | Current State | Live-Use Requirement | Status |
 | --- | --- | --- | --- |
 | Operational cleanup | Cleanup queue is clear. | Keep cleanup queue at zero before signoff. | Ready |
-| Local pilot runtime | Node app runs locally; JSON default; MySQL mode verified. | Decide final production host and runtime owner. | Gap |
-| Database persistence | MAMP MySQL `syncerp` import/runtime path works. | Decide whether MAMP MySQL is production persistence or only staging. | Gap |
+| Local pilot runtime | Node app runs locally; paid public hosting deferred. | Decide final production host before out-of-state employee access. | Gap |
+| Database persistence | MAMP MySQL `syncerp` is the local pilot source of truth; JSON is backup/export fallback. | Move to hosted database when public hosting is approved. | Ready for local pilot |
 | Backup / restore | Backup validation passes. | Run a full restore drill during a maintenance window and record owner/location. | Gap |
 | Real users | Pilot/demo users are seeded. | Replace demo emails with real users and least-privilege roles. | Gap |
 | SQUAN Tracker | CSV recordkeeping is ready. | Billing confirms exact external Tracker fields with first real submission. | Gap |
@@ -40,20 +40,20 @@ Exit criteria:
 
 ### 2. Persistence Decision
 
-The app can run from JSON or MySQL mode. Live use needs one declared source of truth.
+The app can run from JSON or MySQL mode. The local controlled pilot source of truth is now MySQL.
 
 Options:
 
-- `DATA_DRIVER=json`: simplest, but only acceptable for controlled pilot/training.
-- `DATA_DRIVER=mysql`: preferred next step for durable local operation.
+- `DATA_DRIVER=mysql`: current local controlled pilot source of truth.
+- `DATA_DRIVER=json`: backup/export fallback only.
 - Future hosted database: required if access expands beyond the local machine.
 
 Exit criteria:
 
-- Source of truth is declared.
+- Source of truth is declared: MAMP MySQL `syncerp`.
 - `.env` is configured locally and not committed.
 - MySQL row counts are verified after import.
-- App reads expected records in chosen mode.
+- App reads expected records in MySQL mode.
 
 ### 3. Backup And Restore Drill
 
@@ -157,12 +157,13 @@ These should not block a controlled pilot, but they should happen before multipl
 - MAMP MySQL `syncerp` import is verified.
 - Backup validation passes.
 - MySQL mode reports `dataDriver: mysql` when enabled.
-- JSON mode remains the default local runtime.
+- MySQL mode is the local controlled pilot runtime through ignored `.env`.
+- JSON remains the backup/export fallback.
 
 ## Final Live Signoff Checklist
 
 - Production host selected.
-- Source of truth selected.
+- Source of truth selected for local pilot.
 - `.env` configured outside git.
 - Full restore drill completed.
 - Real user roster approved.

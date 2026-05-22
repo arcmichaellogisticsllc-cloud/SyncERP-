@@ -11,8 +11,9 @@ The readiness cleanup queue is clear:
 - Demo/training production rows are archived and excluded from live readiness blockers.
 - RDB daily `226231` / `PL-RDB-226231-HRS` is approved as an accepted proof exception with a prior-approval billing hold.
 - MAMP MySQL `syncerp` is imported and verified.
+- Local controlled pilot source of truth is MAMP MySQL `syncerp` through `DATA_DRIVER=mysql`.
 - Backup export validation passes.
-- JSON remains the default runtime; MySQL mode is available with `DATA_DRIVER=mysql`.
+- JSON remains the backup/export fallback.
 
 ## Remaining Live Signoffs
 
@@ -23,7 +24,8 @@ These are external/business signoffs, not code blockers:
 | SQUAN Tracker field format | Pilot CSV ready; Billing signoff pending | Billing | Confirm exact external Tracker columns with the first real submission. |
 | Real users/roles | Pilot seeded | Admin | Replace demo emails with real users and least-privilege roles. |
 | Full restore drill | Validation passed; full restore pending maintenance window | Admin | Execute one restore rehearsal before production data entry. |
-| Hosting target | Local Node pilot | Admin / Technical owner | Choose production host before external access. |
+| Hosting target | Deferred paid hosting | Admin / Technical owner | Choose production host before out-of-state/public access. |
+| Source of truth | Local MySQL pilot | Admin / Technical owner | Keep `.env` local and uncommitted; refresh backups before/after production sessions. |
 
 See [LIVE_USE_GAP_OUTLINE.md](LIVE_USE_GAP_OUTLINE.md) for the full live-use checklist.
 

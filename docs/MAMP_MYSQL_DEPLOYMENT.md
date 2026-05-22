@@ -76,13 +76,13 @@ Enter the local MAMP MySQL password when prompted. If using phpMyAdmin instead, 
 
 ## Runtime Mode
 
-JSON remains the default runtime:
+For the local controlled pilot, MySQL is the runtime source of truth through the ignored local `.env` file:
 
 ```bash
-DATA_DRIVER=json npm start
+npm start
 ```
 
-After importing into `syncerp`, run against MySQL:
+Equivalent explicit command:
 
 ```bash
 DATA_DRIVER=mysql \
@@ -92,6 +92,12 @@ MYSQL_DATABASE=syncerp \
 MYSQL_USER=root \
 MYSQL_PASSWORD='your-local-password' \
 npm start
+```
+
+Use JSON only as a fallback/export mode:
+
+```bash
+DATA_DRIVER=json npm start
 ```
 
 The `/api/health` endpoint reports the active data driver. Keep `.env` local and uncommitted.
