@@ -3868,7 +3868,7 @@ function normalizeDataShape(data) {
     "packageSnapshots", "contractRules", "costBlockers", "squanScores", "costCodes", "unitPrices", "priceSheetItems",
     "squanImports", "squanProductionLines", "squanMapFeatures", "productionDailies", "productionLines", "contractorPayables",
     "contractorAgreements", "contractorSettlements", "contractorSettlementDeductions", "contractorSettlementPayments",
-    "techWorkEntries", "billingLedger", "quantityReconciliation", "projectUnits"
+    "techWorkEntries", "billingLedger", "quantityReconciliation", "projectUnits", "workflowTransitions"
   ];
   arrayCollections.forEach(key => {
     if (!Array.isArray(data[key])) data[key] = [];
@@ -4140,6 +4140,34 @@ async function submitDailyWorkflow(payload) {
   if (!response.ok) throw new Error("Daily submit failed");
   await syncFromApi();
   syncFieldDailyToProductionControl(payload.daily, payload);
+}
+
+async function runBillingPackageWorkflowApi(row, action, details = {}) {
+  if (!state.apiOnline) return false;
+  try {
+    const response = await fetch("/api/workflows/billing-package", {
+      method: "POST",
+      headers: apiHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        packageKey: row.key,
+        action,
+        details
+      })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const blockers = body.blockers?.length ? `\n\n${body.blockers.join("\n")}` : "";
+      alert(`${body.error || "Billing workflow failed"}${blockers}`);
+      return true;
+    }
+    await syncFromApi();
+    persist(`Billing workflow ${action} completed on server`);
+    return true;
+  } catch (error) {
+    state.apiOnline = false;
+    state.saveMessage = "Billing workflow saved locally; server sync failed";
+    return false;
+  }
 }
 
 function currency(value) {
@@ -50818,6 +50846,10 @@ function submitDailyBillingPackage(row, details = null) {
     appendAuditLocal("billing.package.duplicate-submit-blocked", { packageKey: row.key, existingSubmission: duplicate.id, project: row.projectId });
     return null;
   }
+  if (state.apiOnline) {
+    void runBillingPackageWorkflowApi(row, "submit", details);
+    return null;
+  }
   const snapshot = row.snapshot || createDailyBillingPackageSnapshot(row);
   const invoice = (state.data.invoices || []).find(item => item.id === snapshot.invoice);
   const now = new Date().toISOString();
@@ -50950,6 +50982,10 @@ function updateDailyBillingPackageResponse(row, action, details = null) {
   const variance = submittedValue - approvedAmount;
   const note = details?.note || "";
   if (!note.trim()) return;
+  if (state.apiOnline) {
+    void runBillingPackageWorkflowApi(row, isReject ? "reject" : "response", details);
+    return;
+  }
   submission.status = isReject ? "Rejected by SQUAN" : status;
   submission.supportPackageStatus = isReject ? "Needs Correction" : "Approved";
   submission.approvedAmount = isReject ? 0 : approvedAmount;
@@ -51071,6 +51107,12 @@ function handleDailyBillingPackageAction(button, action) {
   if (!row) return false;
   if (!guardRoleAction(billingPackageActionPermission(action), { packageKey: row.key, project: row.projectId, billingAction: action })) return true;
   if (action === "prepare-squan-package") {
+    if (state.apiOnline) {
+      void runBillingPackageWorkflowApi(row, "prepare").then(ok => {
+        if (!ok) createDailyBillingPackageSnapshot(row);
+      });
+      return true;
+    }
     createDailyBillingPackageSnapshot(row);
     return true;
   }
@@ -51246,6 +51288,16 @@ function recordBillingPackagePayment(row, action, details = null) {
     openBillingPackagePaymentDrawer(row, action);
     return;
   }
+  const incomingAmount = Number(details.actualAmount || 0);
+  if (!Number.isFinite(incomingAmount) || incomingAmount < 0) {
+    alert("Enter a valid payment amount.");
+    return;
+  }
+  if (state.apiOnline) {
+    const workflowAction = action === "record-contractor-package-payment" ? "contractor-payment" : action === "record-squan-holdback" ? "holdback" : "payment";
+    void runBillingPackageWorkflowApi(row, workflowAction, details);
+    return;
+  }
   state.data.cashReceipts = state.data.cashReceipts || [];
   const project = row.project || (state.data.projects || []).find(item => item.id === row.projectId) || { id: row.projectId, map: row.projectId };
   const snapshot = row.snapshot || createDailyBillingPackageSnapshot(row);
@@ -51256,11 +51308,7 @@ function recordBillingPackagePayment(row, action, details = null) {
   const isHoldback = action === "record-squan-holdback";
   const type = billingPackagePaymentType(action);
   const expected = billingPackagePaymentExpected(row, action, summary);
-  const actualAmount = Number(details.actualAmount || 0);
-  if (!Number.isFinite(actualAmount) || actualAmount < 0) {
-    alert("Enter a valid payment amount.");
-    return;
-  }
+  const actualAmount = incomingAmount;
   const actualDate = details.actualDate || isoDate(today);
   const reference = details.reference || `${type.toUpperCase().replace(/[^A-Z0-9]+/g, "-")}-${billingPackageRecordId("", row.key).replace(/^-/, "")}`;
   const note = details.note || (isHoldback ? "SQUAN/customer held back part of this package." : "Payment recorded from package ledger.");
