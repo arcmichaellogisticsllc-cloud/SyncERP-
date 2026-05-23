@@ -6234,9 +6234,6 @@ function renderAdminHome() {
   const items = operationalRoleWorkItems("Admin");
   const stats = operationalRoleStats(items);
   const blockers = actionableBlockerItems(items);
-  const readiness = operationalDataReadiness();
-  const checklist = operationalCompletionChecklist(readiness);
-  const completion = operationalCompletionStatus(checklist);
   const packageRows = billingPackageWorkflowRows(scopedRows("projects"));
   const productionRows = productionLedgerRows();
   const todayKey = isoDate(today);
@@ -6246,7 +6243,6 @@ function renderAdminHome() {
       ${renderAdminOverviewHero(stats, blockers, todayDailies, packageRows)}
       <div class="admin-overview-grid">
         ${renderAdminMapsQuickView()}
-        ${renderAdminOperationalReadinessOverview(checklist, completion)}
         ${renderAdminCrewOverview(todayDailies, productionRows)}
         ${renderAdminBillingPulse(packageRows)}
         ${renderAdminNotificationFeed(blockers)}
