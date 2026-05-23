@@ -2,12 +2,16 @@ const http = require("http");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const crypto = require("crypto");
 const { spawnSync } = require("child_process");
+const { canServePublicPath, publicContentType } = require("./server/static-policy");
+const { validateBackupData } = require("./server/backup-validation");
+const { validateUploadMetadata } = require("./server/upload-policy");
 
 loadEnvFile();
 const PORT = Number(process.env.PORT || 8080);
 const ROOT = __dirname;
-const DB_PATH = path.join(ROOT, "data", "db.json");
+const DB_PATH = process.env.DB_PATH || path.join(ROOT, "data", "db.json");
 const DATA_DRIVER = process.env.DATA_DRIVER || "json";
 const MYSQL_DATABASE = process.env.MYSQL_DATABASE || "syncerp";
 const MYSQL_SOCKET = process.env.MYSQL_SOCKET || "/Applications/MAMP/tmp/mysql/mysql.sock";
@@ -16,15 +20,22 @@ const MYSQL_PORT = process.env.MYSQL_PORT || "3306";
 const MYSQL_USER = process.env.MYSQL_USER || "root";
 const MYSQL_PASSWORD = process.env.MYSQL_PASSWORD || "";
 const MYSQL_BIN = process.env.MYSQL_BIN || "/Applications/MAMP/Library/bin/mysql80/bin/mysql";
-const PUBLIC_TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".md": "text/markdown; charset=utf-8"
-};
+const AUTH_SECRET = process.env.AUTH_SECRET || "syncerp-local-dev-secret-change-me";
+const DEMO_AUTH_ENABLED = process.env.DEMO_AUTH === "true";
+const PRODUCTION_MODE = process.env.NODE_ENV === "production" || process.env.PRODUCTION_MODE === "true";
+const DEFAULT_AUTH_SECRET = "syncerp-local-dev-secret-change-me";
+const DEBUG_ERRORS = process.env.DEBUG_ERRORS === "true";
+const ALLOW_INSECURE_HTTP = process.env.ALLOW_INSECURE_HTTP === "true";
+const ALLOW_JSON_PRODUCTION = process.env.ALLOW_JSON_PRODUCTION === "true";
+const ALLOW_ADMIN_RESTORE = process.env.ALLOW_ADMIN_RESTORE === "true";
+const TRUST_PROXY = process.env.TRUST_PROXY === "true";
+const LOG_LEVEL = process.env.LOG_LEVEL || (PRODUCTION_MODE ? "info" : "warn");
+const LOGIN_RATE_LIMIT_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+const LOGIN_RATE_LIMIT_MAX = Number(process.env.LOGIN_RATE_LIMIT_MAX || 8);
+const loginAttempts = new Map();
 
 const collections = new Set([
+  "auditLog",
   "projects",
   "tasks",
   "dailies",
@@ -79,7 +90,9 @@ const collections = new Set([
   "packageSnapshots",
   "offlineSyncQueue",
   "fieldUploadQueue",
-  "customerContactLog"
+  "customerContactLog",
+  "passwordResetTokens",
+  "uploadIntake"
 ]);
 
 function loadEnvFile() {
@@ -239,19 +252,6 @@ function writeMysqlDb(db) {
   }
 }
 
-function validateBackupData(data) {
-  const requiredArrays = ["projects", "tasks", "productionDailies", "productionLines", "priceSheetItems", "billingLedger", "roles", "users", "auditLog"];
-  if (!data || typeof data !== "object" || Array.isArray(data)) return ["Backup must be a JSON object."];
-  const source = data.data && typeof data.data === "object" ? data.data : data;
-  const failures = [];
-  requiredArrays.forEach(key => {
-    if (!Array.isArray(source[key])) failures.push(`Missing required collection: ${key}`);
-  });
-  if (!source.company || typeof source.company !== "object") failures.push("Missing company profile.");
-  if (!source.meta || typeof source.meta !== "object") failures.push("Missing metadata.");
-  return failures;
-}
-
 function backupPayload(db, by = "Admin") {
   return {
     exportedAt: new Date().toISOString(),
@@ -277,9 +277,239 @@ function protectedDeleteReason(collection, record = {}) {
 function send(res, status, body, type = "application/json; charset=utf-8") {
   res.writeHead(status, {
     "Content-Type": type,
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'",
+    ...(PRODUCTION_MODE ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {})
   });
   res.end(type.startsWith("application/json") ? JSON.stringify(body) : body);
+}
+
+function logEvent(level, event, detail = {}) {
+  const order = { debug: 10, info: 20, warn: 30, error: 40 };
+  if ((order[level] || 99) < (order[LOG_LEVEL] || 20)) return;
+  const payload = {
+    at: new Date().toISOString(),
+    level,
+    event,
+    ...detail
+  };
+  const line = JSON.stringify(payload);
+  if (level === "error") console.error(line);
+  else console.log(line);
+}
+
+function requestId(req) {
+  const incoming = req.headers["x-request-id"];
+  return incoming && /^[a-zA-Z0-9._:-]{8,120}$/.test(String(incoming))
+    ? String(incoming)
+    : crypto.randomUUID();
+}
+
+function clientIp(req) {
+  if (TRUST_PROXY && req.headers["x-forwarded-for"]) return String(req.headers["x-forwarded-for"]).split(",")[0].trim();
+  return req.socket.remoteAddress || "";
+}
+
+function userAgent(req) {
+  return String(req.headers["user-agent"] || "").slice(0, 300);
+}
+
+function auditContext(req) {
+  return {
+    requestId: req.requestId || "",
+    ip: clientIp(req),
+    userAgent: userAgent(req)
+  };
+}
+
+function rateLimitKey(req, body = {}) {
+  return `${clientIp(req)}:${String(body.email || "").toLowerCase()}`;
+}
+
+function checkLoginRateLimit(req, body = {}) {
+  const key = rateLimitKey(req, body);
+  const now = Date.now();
+  const attempts = (loginAttempts.get(key) || []).filter(at => now - at < LOGIN_RATE_LIMIT_WINDOW_MS);
+  if (attempts.length >= LOGIN_RATE_LIMIT_MAX) {
+    loginAttempts.set(key, attempts);
+    return false;
+  }
+  attempts.push(now);
+  loginAttempts.set(key, attempts);
+  return true;
+}
+
+function clearLoginRateLimit(req, body = {}) {
+  loginAttempts.delete(rateLimitKey(req, body));
+}
+
+function productionConfigFailures() {
+  const failures = [];
+  if (!PRODUCTION_MODE) return failures;
+  if (DEMO_AUTH_ENABLED) failures.push("DEMO_AUTH must be false in production.");
+  if (!AUTH_SECRET || AUTH_SECRET === DEFAULT_AUTH_SECRET || AUTH_SECRET.length < 32) failures.push("AUTH_SECRET must be a strong production secret.");
+  if (DATA_DRIVER === "json" && !ALLOW_JSON_PRODUCTION) failures.push("DATA_DRIVER=json is blocked in production unless ALLOW_JSON_PRODUCTION=true.");
+  if (!ALLOW_INSECURE_HTTP) failures.push("Production deployments must terminate HTTPS before this Node server or set ALLOW_INSECURE_HTTP=true for a controlled private pilot.");
+  return failures;
+}
+
+function enforceProductionConfig() {
+  const failures = productionConfigFailures();
+  if (failures.length) {
+    throw new Error(`Production configuration blocked:\n- ${failures.join("\n- ")}`);
+  }
+}
+
+function passwordHash(password, salt = crypto.randomBytes(16).toString("base64url")) {
+  const key = crypto.scryptSync(String(password), salt, 64, { N: 16384, r: 8, p: 1 });
+  return `scrypt$16384$8$1$${salt}$${key.toString("base64url")}`;
+}
+
+function verifyPasswordHash(password, stored = "") {
+  const parts = String(stored).split("$");
+  if (parts.length !== 6 || parts[0] !== "scrypt") return false;
+  const [, n, r, p, salt, expected] = parts;
+  const actual = crypto.scryptSync(String(password), salt, 64, { N: Number(n), r: Number(r), p: Number(p) }).toString("base64url");
+  if (actual.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
+}
+
+function tokenDigest(token) {
+  return crypto.createHmac("sha256", AUTH_SECRET).update(String(token)).digest("base64url");
+}
+
+function issuePasswordResetToken(db, user, req) {
+  db.passwordResetTokens = db.passwordResetTokens || [];
+  const token = crypto.randomBytes(32).toString("base64url");
+  const now = new Date();
+  const record = {
+    id: `RESET-${crypto.randomUUID()}`,
+    userId: user.id,
+    email: user.email,
+    tokenHash: tokenDigest(token),
+    status: "Open",
+    requestedAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
+    usedAt: "",
+    notes: "Password reset token created server-side. Delivery provider integration is external.",
+    activityLog: [],
+    createdAt: now.toISOString(),
+    modifiedAt: now.toISOString(),
+    requestContext: auditContext(req)
+  };
+  db.passwordResetTokens.push(record);
+  appendAudit(db, "auth.password-reset-requested", { user: user.email, resetId: record.id, ...auditContext(req) });
+  return { token, record };
+}
+
+function consumePasswordResetToken(db, token, newPassword, req) {
+  db.passwordResetTokens = db.passwordResetTokens || [];
+  const digest = tokenDigest(token);
+  const now = new Date().toISOString();
+  const record = db.passwordResetTokens.find(item => item.tokenHash === digest && item.status === "Open");
+  if (!record) return { ok: false, status: 400, error: "Invalid or expired reset token" };
+  if (new Date(record.expiresAt).getTime() < Date.now()) {
+    record.status = "Expired";
+    record.modifiedAt = now;
+    return { ok: false, status: 400, error: "Invalid or expired reset token" };
+  }
+  if (!newPassword || String(newPassword).length < 12) return { ok: false, status: 400, error: "Password must be at least 12 characters" };
+  const user = (db.users || []).find(item => item.id === record.userId && item.email === record.email);
+  if (!user) return { ok: false, status: 404, error: "User not found" };
+  user.passwordHash = passwordHash(newPassword);
+  user.modifiedAt = now;
+  record.status = "Used";
+  record.usedAt = now;
+  record.modifiedAt = now;
+  appendAudit(db, "auth.password-reset-completed", { user: user.email, resetId: record.id, ...auditContext(req) });
+  return { ok: true, user };
+}
+
+function base64Url(input) {
+  return Buffer.from(input).toString("base64url");
+}
+
+function signPayload(payload) {
+  return crypto.createHmac("sha256", AUTH_SECRET).update(payload).digest("base64url");
+}
+
+function issueAuthToken(user) {
+  const payload = base64Url(JSON.stringify({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    name: user.name,
+    exp: Date.now() + 12 * 60 * 60 * 1000
+  }));
+  return `${payload}.${signPayload(payload)}`;
+}
+
+function verifyAuthToken(token, db) {
+  if (!token || !token.includes(".")) return null;
+  const [payload, signature] = token.split(".");
+  const expected = signPayload(payload);
+  if (signature.length !== expected.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  let claims;
+  try {
+    claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch (error) {
+    return null;
+  }
+  if (!claims.exp || claims.exp < Date.now()) return null;
+  const user = (db.users || []).find(item => item.id === claims.id && item.email === claims.email);
+  if (!user || (user.status || "Active") === "Inactive") return null;
+  return user;
+}
+
+function authenticateRequest(req, db) {
+  const header = req.headers.authorization || "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? verifyAuthToken(match[1], db) : null;
+}
+
+function requestActor(req, fallback = "System") {
+  return req.user?.name || req.user?.email || fallback;
+}
+
+function canAccessCollection(user, collection, method) {
+  if (collection === "auditLog" && method !== "GET") return false;
+  if (user.role === "Admin") return true;
+  if (method === "GET") return true;
+  const role = user.role || "";
+  const writeCollections = {
+    Foreman: new Set(["documents", "dailies", "dailyProduction", "dailyLabor", "dailyEquipment", "dailyMaterials", "timeEntries", "fieldUploadQueue", "photoEvidence", "fieldEvidence", "tasks"]),
+    Operations: new Set(["documents", "fieldUploadQueue", "tasks", "projects", "offlineSyncQueue", "obstacles", "siteSurveys"]),
+    Billing: new Set(["documents", "customerContactLog", "invoices", "invoiceSubmissions", "billingLedger", "billingReadiness", "cashReceipts", "cashDepositBatches", "collectionSubmissions", "packageSnapshots", "tasks", "contractorSettlements", "contractorSettlementDeductions", "contractorSettlementPayments", "contractorAgreements"]),
+    "Safety/Compliance": new Set(["documents", "safety", "fieldUploadQueue", "fieldEvidence", "photoEvidence", "formSubmissions", "tasks"]),
+    "Crew Member": new Set(["fieldUploadQueue", "safety", "timeEntries", "documents", "photoEvidence"])
+  };
+  return writeCollections[role]?.has(collection) || false;
+}
+
+function canAccessRoute(user, req, url) {
+  if (user.role === "Admin") return true;
+  if (url.pathname.startsWith("/api/admin/")) return false;
+  if (req.method === "GET") return true;
+  if (url.pathname.startsWith("/api/company/")) return ["Billing", "Operations"].includes(user.role);
+  if (url.pathname.startsWith("/api/workflows/submit-daily")) return ["Foreman", "Operations"].includes(user.role);
+  if (url.pathname.startsWith("/api/workflows/daily-package-intake")) return ["Billing", "Operations"].includes(user.role);
+  if (url.pathname.startsWith("/api/records/")) return true;
+  return true;
+}
+
+function beforeSnapshot(collection, record) {
+  if (!record || !["users", "roles", "company", "invoices", "invoiceSubmissions", "cashReceipts", "contractorSettlements", "contractorSettlementPayments", "packetLocks"].includes(collection)) return undefined;
+  return JSON.parse(JSON.stringify(record));
+}
+
+function liveModeBlocker(db) {
+  if (!DEMO_AUTH_ENABLED) return "";
+  if ((db.company?.goLiveMode || "") !== "Live Mode") return "";
+  return "Live Mode is blocked while DEMO_AUTH=true.";
 }
 
 function parseBody(req) {
@@ -4097,11 +4327,90 @@ function upsertById(rows, record) {
 }
 
 async function handleApi(req, res, url) {
-  const db = readDb();
   const parts = url.pathname.split("/").filter(Boolean);
 
   if (req.method === "GET" && url.pathname === "/api/health") {
-    return send(res, 200, { ok: true, app: "Jackson Telcom ERP", dataDriver: DATA_DRIVER, database: DATA_DRIVER === "mysql" ? MYSQL_DATABASE : "data/db.json" });
+    return send(res, 200, {
+      ok: true,
+      app: "Jackson Telcom ERP",
+      dataDriver: DATA_DRIVER,
+      database: DATA_DRIVER === "mysql" ? MYSQL_DATABASE : "data/db.json",
+      demoAuth: DEMO_AUTH_ENABLED,
+      productionMode: PRODUCTION_MODE,
+      configReady: productionConfigFailures().length === 0
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/health/db") {
+    try {
+      const db = readDb();
+      return send(res, 200, { ok: true, dataDriver: DATA_DRIVER, collections: Object.keys(db).length });
+    } catch (error) {
+      return send(res, 503, { ok: false, dataDriver: DATA_DRIVER, error: DEBUG_ERRORS ? error.message : "Database readiness check failed" });
+    }
+  }
+
+  const db = readDb();
+
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
+    const body = await parseBody(req);
+    if (!checkLoginRateLimit(req, body)) {
+      logEvent("warn", "auth.rate_limited", { requestId: req.requestId, email: body.email || "", ip: clientIp(req) });
+      return send(res, 429, { error: "Too many login attempts. Try again later." });
+    }
+    const user = db.users.find(item => item.email === body.email);
+    if (!user || (user.status || "Active") === "Inactive") {
+      logEvent("warn", "auth.failed", { requestId: req.requestId, email: body.email || "", ip: clientIp(req) });
+      return send(res, 401, { error: "Invalid email or password" });
+    }
+    const passwordOk = DEMO_AUTH_ENABLED
+      ? body.password === "demo"
+      : verifyPasswordHash(body.password || "", user.passwordHash || "");
+    if (!passwordOk) {
+      logEvent("warn", "auth.failed", { requestId: req.requestId, email: user.email, ip: clientIp(req), reason: "bad_password" });
+      return send(res, 401, { error: "Invalid email or password" });
+    }
+    if (!DEMO_AUTH_ENABLED && !user.passwordHash) return send(res, 403, { error: "Production password is not configured for this user" });
+    clearLoginRateLimit(req, body);
+    appendAudit(db, "auth.login", { user: user.email, by: user.name || user.email, ...auditContext(req) });
+    writeDb(db);
+    logEvent("info", "auth.login", { requestId: req.requestId, userId: user.id, role: user.role, ip: clientIp(req) });
+    return send(res, 200, { user, token: issueAuthToken(user) });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/password-reset/request") {
+    const body = await parseBody(req);
+    const user = (db.users || []).find(item => item.email === body.email && (item.status || "Active") !== "Inactive");
+    if (user) {
+      const issued = issuePasswordResetToken(db, user, req);
+      writeDb(db);
+      logEvent("info", "auth.password_reset_requested", { requestId: req.requestId, userId: user.id, ip: clientIp(req), deliveryConfigured: false });
+      return send(res, 200, {
+        ok: true,
+        deliveryConfigured: false,
+        resetId: issued.record.id,
+        ...(PRODUCTION_MODE ? {} : { token: issued.token })
+      });
+    }
+    logEvent("warn", "auth.password_reset_unknown_user", { requestId: req.requestId, email: body.email || "", ip: clientIp(req) });
+    return send(res, 200, { ok: true, deliveryConfigured: false });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/password-reset/confirm") {
+    const body = await parseBody(req);
+    const result = consumePasswordResetToken(db, body.token || "", body.password || "", req);
+    if (!result.ok) return send(res, result.status, { error: result.error });
+    writeDb(db);
+    return send(res, 200, { ok: true });
+  }
+
+  const user = authenticateRequest(req, db);
+  if (!user) return send(res, 401, { error: "Authentication required" });
+  req.user = user;
+  if (!canAccessRoute(user, req, url)) return send(res, 403, { error: "Forbidden" });
+  const liveBlocker = liveModeBlocker(db);
+  if (liveBlocker && req.method !== "GET" && url.pathname !== "/api/admin/go-live-mode") {
+    return send(res, 409, { error: liveBlocker });
   }
 
   if (req.method === "GET" && url.pathname === "/api/bootstrap") {
@@ -4109,7 +4418,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/admin/backup") {
-    return send(res, 200, backupPayload(db, url.searchParams.get("by") || "Admin"));
+    return send(res, 200, backupPayload(db, requestActor(req, "Admin")));
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/restore/validate") {
@@ -4119,6 +4428,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/restore") {
+    if (!DEMO_AUTH_ENABLED && !ALLOW_ADMIN_RESTORE) return send(res, 403, { error: "Backup restore is disabled. Set ALLOW_ADMIN_RESTORE=true for a controlled restore window." });
     const body = await parseBody(req);
     if (body.confirm !== "RESTORE") return send(res, 400, { error: "Restore requires confirm: RESTORE" });
     const source = body.backup?.data && typeof body.backup.data === "object" ? body.backup.data : body.backup;
@@ -4129,7 +4439,7 @@ async function handleApi(req, res, url) {
       auditLog: Array.isArray(source.auditLog) ? source.auditLog : []
     };
     appendAudit(nextDb, "admin.restore-backup", {
-      by: body.by || "Admin",
+      by: requestActor(req, "Admin"),
       restoredAt: new Date().toISOString(),
       source: body.backup?.source || "Uploaded backup"
     });
@@ -4141,6 +4451,9 @@ async function handleApi(req, res, url) {
     const body = await parseBody(req);
     const allowedModes = ["Demo Mode", "Review Mode", "Live Mode"];
     const mode = allowedModes.includes(body.mode) ? body.mode : "Review Mode";
+    if (mode === "Live Mode" && DEMO_AUTH_ENABLED) {
+      return send(res, 409, { error: "Live Mode requires DEMO_AUTH=false and production authentication." });
+    }
     const readiness = operationalReadinessCsvRowsServer(db);
     const liveBlockers = readiness.filter(row => !["Operational Ready", "Ready for Review"].includes(row.status));
     if (mode === "Live Mode" && liveBlockers.length) {
@@ -4150,11 +4463,11 @@ async function handleApi(req, res, url) {
       ...(db.company || {}),
       goLiveMode: mode,
       goLiveModeUpdatedAt: new Date().toISOString(),
-      goLiveModeUpdatedBy: body.by || "Admin",
+      goLiveModeUpdatedBy: requestActor(req, "Admin"),
       persistencePlan: body.persistencePlan || db.company?.persistencePlan || "Node server with JSON backup now; MAMP MySQL migration next"
     };
     appendAudit(db, "admin.go-live-mode", {
-      by: body.by || "Admin",
+      by: requestActor(req, "Admin"),
       mode,
       persistencePlan: db.company.persistencePlan
     });
@@ -4162,22 +4475,13 @@ async function handleApi(req, res, url) {
     return send(res, 200, { company: db.company });
   }
 
-  if (req.method === "POST" && url.pathname === "/api/auth/login") {
-    const body = await parseBody(req);
-    const user = db.users.find(item => item.email === body.email);
-    if (!user || body.password !== "demo") {
-      return send(res, 401, { error: "Invalid email or password" });
-    }
-    appendAudit(db, "auth.login", { user: user.email });
-    writeDb(db);
-    return send(res, 200, { user, token: `demo-${user.id}` });
-  }
-
   if (req.method === "POST" && url.pathname === "/api/records/update") {
     const body = await parseBody(req);
+    if (!canAccessCollection(req.user, body.collection, "PUT")) return send(res, 403, { error: "Forbidden" });
+    const before = beforeSnapshot(body.collection, findRecord(db, body.collection, body.id).record);
     const next = updateRecord(db, body.collection, body.id, body.patch || {});
     if (!next) return send(res, 404, { error: "Record not found" });
-    appendAudit(db, `${body.collection}.update`, { id: body.id });
+    appendAudit(db, `${body.collection}.update`, { id: body.id, by: requestActor(req), before, after: before ? beforeSnapshot(body.collection, next) : undefined, ...auditContext(req) });
     if (next.project) recomputeProject(db, next.project);
     writeDb(db);
     return send(res, 200, next);
@@ -4185,7 +4489,8 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/records/note") {
     const body = await parseBody(req);
-    const next = addNote(db, body.collection, body.id, body.note, body.by);
+    if (!canAccessCollection(req.user, body.collection, "PUT")) return send(res, 403, { error: "Forbidden" });
+    const next = addNote(db, body.collection, body.id, body.note, requestActor(req, "User"));
     if (!next) return send(res, 404, { error: "Record not found" });
     writeDb(db);
     return send(res, 200, next);
@@ -4193,7 +4498,8 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/records/status") {
     const body = await parseBody(req);
-    const next = changeStatus(db, body.collection, body.id, body.status, body.by);
+    if (!canAccessCollection(req.user, body.collection, "PUT")) return send(res, 403, { error: "Forbidden" });
+    const next = changeStatus(db, body.collection, body.id, body.status, requestActor(req, "System"));
     if (!next) return send(res, 404, { error: "Record not found" });
     if (next.project) recomputeProject(db, next.project);
     writeDb(db);
@@ -4202,6 +4508,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "PUT" && url.pathname === "/api/company/cash-controls") {
     const body = await parseBody(req);
+    body.by = requestActor(req, "Admin");
     const company = updateCashControls(db, body);
     writeDb(db);
     return send(res, 200, {
@@ -4212,6 +4519,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "PUT" && url.pathname === "/api/company/closeout-readiness-sla") {
     const body = await parseBody(req);
+    body.by = requestActor(req, "Admin");
     const company = updateCloseoutReadinessSlaControls(db, body);
     writeDb(db);
     return send(res, 200, { company });
@@ -4219,6 +4527,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "PUT" && url.pathname === "/api/company/daily-package-sla") {
     const body = await parseBody(req);
+    body.by = requestActor(req, "Admin");
     const company = updateDailyPackageSlaControls(db, body);
     writeDb(db);
     return send(res, 200, { company });
@@ -4245,7 +4554,7 @@ async function handleApi(req, res, url) {
       ...(db.company.cashReceiptHistory || []),
       {
         at: now,
-        by: body.by || receipt.receivedBy || "Billing",
+        by: requestActor(req, receipt.receivedBy || "Billing"),
         project: receipt.project,
         invoice: receipt.invoice,
         type: receipt.type,
@@ -4279,6 +4588,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/workflows/daily-package-intake") {
     const body = await parseBody(req);
+    body.by = requestActor(req, "Billing");
     const projectId = body.project || body.snapshot?.project || body.task?.project;
     if (!projectId) return send(res, 400, { error: "project is required" });
     const project = (db.projects || []).find(item => item.id === projectId);
@@ -4354,6 +4664,32 @@ async function handleApi(req, res, url) {
       dailyPackageExceptions: dailyPackageExceptionRows(db, project.id),
       readiness: (db.billingReadiness || []).find(item => item.project === project.id)
     });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/uploads/validate") {
+    const body = await parseBody(req);
+    const validation = validateUploadMetadata(body.file || body);
+    if (!validation.ok) return send(res, 400, validation);
+    db.uploadIntake = db.uploadIntake || [];
+    const now = new Date().toISOString();
+    const record = {
+      id: `UPLOAD-${Date.now()}`,
+      project: body.project || "",
+      linkedRecord: body.linkedRecord || "",
+      status: "Validated Metadata",
+      file: validation.normalized,
+      storageStatus: "Pending external private storage",
+      requestedBy: requestActor(req),
+      requestContext: auditContext(req),
+      notes: "Upload metadata validated. Actual file storage/scanning must be handled by the configured external storage service.",
+      activityLog: [],
+      createdAt: now,
+      modifiedAt: now
+    };
+    db.uploadIntake.push(record);
+    appendAudit(db, "upload.metadata-validated", { id: record.id, by: requestActor(req), file: validation.normalized.name, ...auditContext(req) });
+    writeDb(db);
+    return send(res, 200, { ok: true, upload: record });
   }
 
   if (req.method === "POST" && url.pathname === "/api/workflows/submit-daily") {
@@ -4859,6 +5195,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && parts[0] === "api" && parts[1] === "exports" && collections.has(parts[2])) {
+    if (req.user.role !== "Admin") return send(res, 403, { error: "Forbidden" });
     return send(res, 200, csv(db[parts[2]]), "text/csv; charset=utf-8");
   }
 
@@ -4866,6 +5203,7 @@ async function handleApi(req, res, url) {
     const collection = parts[1];
     const id = decodeURIComponent(parts[2] || "");
     db[collection] = db[collection] || [];
+    if (!canAccessCollection(req.user, collection, req.method)) return send(res, 403, { error: "Forbidden" });
 
     if (req.method === "GET") {
       if (!id) return send(res, 200, db[collection]);
@@ -4876,8 +5214,11 @@ async function handleApi(req, res, url) {
     if (req.method === "POST") {
       const body = await parseBody(req);
       if (!body.id) body.id = `${collection.toUpperCase()}-${Date.now()}`;
+      if (db[collection].some(item => item.id === body.id)) return send(res, 409, { error: "Duplicate record id" });
+      body.createdAt = body.createdAt || new Date().toISOString();
+      body.modifiedAt = new Date().toISOString();
       db[collection].push(body);
-      appendAudit(db, `${collection}.create`, { id: body.id });
+      appendAudit(db, `${collection}.create`, { id: body.id, by: requestActor(req), ...auditContext(req) });
       writeDb(db);
       return send(res, 201, body);
     }
@@ -4886,8 +5227,9 @@ async function handleApi(req, res, url) {
       const body = await parseBody(req);
       const index = db[collection].findIndex(item => item.id === id);
       if (index === -1) return send(res, 404, { error: "Record not found" });
-      db[collection][index] = { ...body, id };
-      appendAudit(db, `${collection}.update`, { id });
+      const before = beforeSnapshot(collection, db[collection][index]);
+      db[collection][index] = { ...body, id, modifiedAt: new Date().toISOString() };
+      appendAudit(db, `${collection}.update`, { id, by: requestActor(req), before, after: before ? beforeSnapshot(collection, db[collection][index]) : undefined, ...auditContext(req) });
       writeDb(db);
       return send(res, 200, db[collection][index]);
     }
@@ -4898,7 +5240,7 @@ async function handleApi(req, res, url) {
       const reason = protectedDeleteReason(collection, db[collection][index]);
       if (reason) return send(res, 409, { error: reason });
       const [deleted] = db[collection].splice(index, 1);
-      appendAudit(db, `${collection}.delete`, { id });
+      appendAudit(db, `${collection}.delete`, { id, by: requestActor(req), before: beforeSnapshot(collection, deleted), ...auditContext(req) });
       writeDb(db);
       return send(res, 200, deleted);
     }
@@ -4909,25 +5251,45 @@ async function handleApi(req, res, url) {
 
 function serveFile(req, res, url) {
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
+  if (!canServePublicPath(requested)) return send(res, 404, "Not found", "text/plain; charset=utf-8");
   const filePath = path.normalize(path.join(ROOT, requested));
   if (!filePath.startsWith(ROOT)) return send(res, 403, "Forbidden", "text/plain; charset=utf-8");
   fs.readFile(filePath, (error, content) => {
     if (error) return send(res, 404, "Not found", "text/plain; charset=utf-8");
-    const type = PUBLIC_TYPES[path.extname(filePath)] || "application/octet-stream";
-    send(res, 200, content, type);
+    send(res, 200, content, publicContentType(filePath));
   });
 }
 
 const server = http.createServer(async (req, res) => {
+  const startedAt = Date.now();
+  req.requestId = requestId(req);
+  res.setHeader("X-Request-ID", req.requestId);
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
+    if (PRODUCTION_MODE && !ALLOW_INSECURE_HTTP && req.headers["x-forwarded-proto"] !== "https") {
+      return send(res, 426, { error: "HTTPS is required" });
+    }
     if (url.pathname.startsWith("/api/")) {
       await handleApi(req, res, url);
     } else {
       serveFile(req, res, url);
     }
   } catch (error) {
-    send(res, 500, { error: error.message });
+    logEvent("error", "request.error", { requestId: req.requestId, method: req.method, path: url.pathname, error: error.message, stack: DEBUG_ERRORS ? error.stack : undefined });
+    send(res, 500, { error: DEBUG_ERRORS ? error.message : "Internal server error" });
+  } finally {
+    res.once("finish", () => {
+      logEvent(res.statusCode >= 500 ? "error" : "info", "request.complete", {
+        requestId: req.requestId,
+        method: req.method,
+        path: url.pathname,
+        status: res.statusCode,
+        durationMs: Date.now() - startedAt,
+        userId: req.user?.id || "",
+        role: req.user?.role || "",
+        ip: clientIp(req)
+      });
+    });
   }
 });
 
@@ -4941,6 +5303,30 @@ server.on("error", error => {
   throw error;
 });
 
-server.listen(PORT, () => {
-  console.log(`Jackson Telcom ERP running at http://127.0.0.1:${PORT}`);
-});
+try {
+  enforceProductionConfig();
+  server.listen(PORT, () => {
+    console.log(`Jackson Telcom ERP running at http://127.0.0.1:${PORT}`);
+  });
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
+
+function shutdown(signal) {
+  logEvent("info", "server.shutdown", { signal });
+  server.close(error => {
+    if (error) {
+      logEvent("error", "server.shutdown_error", { error: error.message });
+      process.exit(1);
+    }
+    process.exit(0);
+  });
+  setTimeout(() => {
+    logEvent("error", "server.shutdown_timeout", { signal });
+    process.exit(1);
+  }, 10000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

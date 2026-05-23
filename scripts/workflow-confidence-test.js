@@ -1,5 +1,6 @@
 const http = require("http");
 const net = require("net");
+const os = require("os");
 const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
@@ -24,9 +25,10 @@ function findOpenPort(port) {
   });
 }
 
-function getText(baseUrl, pathname) {
+function getText(baseUrl, pathname, token = "") {
   return new Promise((resolve, reject) => {
-    const req = http.get(`${baseUrl}${pathname}`, res => {
+    const options = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    const req = http.get(`${baseUrl}${pathname}`, options, res => {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", chunk => {
@@ -44,6 +46,38 @@ function getText(baseUrl, pathname) {
       req.destroy(new Error(`${pathname} timed out`));
     });
     req.on("error", reject);
+  });
+}
+
+function postJson(baseUrl, pathname, body, token = "") {
+  return new Promise((resolve, reject) => {
+    const text = JSON.stringify(body);
+    const req = http.request(`${baseUrl}${pathname}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(text),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    }, res => {
+      let responseBody = "";
+      res.setEncoding("utf8");
+      res.on("data", chunk => {
+        responseBody += chunk;
+      });
+      res.on("end", () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`${pathname} returned HTTP ${res.statusCode}: ${responseBody}`));
+          return;
+        }
+        resolve(JSON.parse(responseBody || "{}"));
+      });
+    });
+    req.setTimeout(5000, () => {
+      req.destroy(new Error(`${pathname} timed out`));
+    });
+    req.on("error", reject);
+    req.end(text);
   });
 }
 
@@ -115,9 +149,12 @@ async function run() {
 
   const port = await findOpenPort(startPort);
   const baseUrl = `http://127.0.0.1:${port}`;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "syncerp-workflow-qa-"));
+  const tempDbPath = path.join(tempDir, "db.json");
+  fs.copyFileSync(path.join(root, "data", "db.json"), tempDbPath);
   const server = spawn(process.execPath, ["server.js"], {
     cwd: root,
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, PORT: String(port), DATA_DRIVER: "json", DEMO_AUTH: "true", DB_PATH: tempDbPath },
     stdio: ["ignore", "pipe", "pipe"]
   });
 
@@ -127,6 +164,11 @@ async function run() {
 
   try {
     await waitForServer(baseUrl);
+    const login = await postJson(baseUrl, "/api/auth/login", {
+      email: "ronald@jacksontelcom.example",
+      password: "demo"
+    });
+    const token = login.token;
 
     const [indexHtml, appSource, styles] = await Promise.all([
       getText(baseUrl, "/"),
@@ -415,7 +457,7 @@ async function run() {
     ];
 
     for (const [pathname, headers] of csvExpectations) {
-      const header = firstCsvLine(await getText(baseUrl, pathname));
+      const header = firstCsvLine(await getText(baseUrl, pathname, token));
       for (const expected of headers) {
         assertIncludes(pathname, header, expected);
       }
@@ -430,6 +472,7 @@ async function run() {
     throw error;
   } finally {
     server.kill();
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 

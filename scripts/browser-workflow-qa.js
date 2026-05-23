@@ -47,9 +47,10 @@ function getJson(url) {
   });
 }
 
-function getText(url) {
+function getText(url, token = "") {
   return new Promise((resolve, reject) => {
-    http.get(url, res => {
+    const options = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    http.get(url, options, res => {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", chunk => {
@@ -63,6 +64,34 @@ function getText(url) {
         resolve(body);
       });
     }).on("error", reject);
+  });
+}
+
+function postJson(url, body) {
+  return new Promise((resolve, reject) => {
+    const text = JSON.stringify(body);
+    const req = http.request(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(text)
+      }
+    }, res => {
+      let responseBody = "";
+      res.setEncoding("utf8");
+      res.on("data", chunk => {
+        responseBody += chunk;
+      });
+      res.on("end", () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`${url} returned HTTP ${res.statusCode}`));
+          return;
+        }
+        resolve(JSON.parse(responseBody || "{}"));
+      });
+    });
+    req.on("error", reject);
+    req.end(text);
   });
 }
 
@@ -394,11 +423,12 @@ async function assertForemanFormOrder(cdp) {
 }
 
 async function setSession(cdp, baseUrl, user) {
+  const login = await postJson(`${baseUrl}/api/auth/login`, { email: user.email, password: "demo" });
   await cdp.send("Page.navigate", { url: "about:blank" });
   await new Promise(resolve => setTimeout(resolve, 200));
   await cdp.send("Page.navigate", { url: baseUrl });
   await waitFor(cdp, "document.readyState === 'complete'", "initial app load", appLoadTimeoutMs);
-  await evaluate(cdp, `localStorage.clear(); localStorage.setItem("jackson-syncerp-session", ${JSON.stringify(JSON.stringify(user))}); true`);
+  await evaluate(cdp, `localStorage.clear(); localStorage.setItem("jackson-syncerp-session", ${JSON.stringify(JSON.stringify(login.user || user))}); localStorage.setItem("jackson-syncerp-auth-token", ${JSON.stringify(login.token)}); true`);
   await cdp.send("Page.navigate", { url: baseUrl });
   await waitFor(cdp, "document.readyState === 'complete' && Boolean(document.querySelector('#app'))", `${user.role} app shell`, appLoadTimeoutMs);
   await waitFor(cdp, `document.body.innerText.includes(${JSON.stringify(user.name)}) || document.body.innerText.includes(${JSON.stringify(user.role)})`, `${user.role} session`, appLoadTimeoutMs);
@@ -418,6 +448,7 @@ async function runBrowserQa(cdp, baseUrl) {
   await assertText(cdp, "Daily Capture", "Foreman Daily Capture");
   await click(cdp, '[data-production-mode="Submit Daily"]', "Submit Daily mode");
   await assertSelector(cdp, '[data-production-mode-panel="Submit Daily"]', "Submit Daily panel");
+  await waitFor(cdp, `document.querySelectorAll("#productionCode option").length >= 128`, "server price catalog sync", appLoadTimeoutMs);
   const foremanCodeCatalog = await evaluate(cdp, `(() => {
     const options = [...document.querySelectorAll("#productionCode option")].map(option => ({
       value: option.value,
@@ -577,6 +608,7 @@ async function runResponsiveVisualQa(cdp, baseUrl) {
     await click(cdp, '[data-view="production"]', `${name} Foreman Daily Capture nav`);
     await click(cdp, '[data-production-mode="Submit Daily"]', `${name} Submit Daily mode`);
     await assertSelector(cdp, '[data-production-mode-panel="Submit Daily"]', `${name} Submit Daily panel`);
+    await waitFor(cdp, `document.querySelectorAll("#productionCode option").length >= 128`, `${name} server price catalog sync`, appLoadTimeoutMs);
     await assertForemanFormOrder(cdp);
     await assertTapTargets(cdp, [
       "#productionProject",
@@ -616,9 +648,12 @@ async function run() {
   }
   const [appPort, chromePort] = await Promise.all([findOpenPort(appStartPort), findOpenPort(chromeStartPort)]);
   const baseUrl = `http://127.0.0.1:${appPort}`;
+  const tempDbDir = fs.mkdtempSync(path.join(os.tmpdir(), "syncerp-browser-db-"));
+  const tempDbPath = path.join(tempDbDir, "db.json");
+  fs.copyFileSync(path.join(root, "data", "db.json"), tempDbPath);
   const app = spawn(process.execPath, ["server.js"], {
     cwd: root,
-    env: { ...process.env, PORT: String(appPort) },
+    env: { ...process.env, PORT: String(appPort), DATA_DRIVER: "json", DEMO_AUTH: "true", DB_PATH: tempDbPath },
     stdio: ["ignore", "pipe", "pipe"]
   });
   const chromeProfile = fs.mkdtempSync(path.join(os.tmpdir(), "syncerp-browser-qa-"));
@@ -658,8 +693,9 @@ async function run() {
       "/api/reports/billing-package-payments.csv",
       "/api/reports/price-sheet-catalog.csv"
     ];
+    const adminLogin = await postJson(`${baseUrl}/api/auth/login`, { email: "ronald@jacksontelcom.example", password: "demo" });
     for (const pathname of csvExpectations) {
-      const body = await getText(`${baseUrl}${pathname}`);
+      const body = await getText(`${baseUrl}${pathname}`, adminLogin.token);
       if (!body.includes(",")) throw new Error(`${pathname} did not return CSV content`);
     }
     console.log(`Browser workflow QA passed on ${baseUrl}`);
@@ -674,6 +710,7 @@ async function run() {
     await Promise.all([waitForExit(app), waitForExit(chrome)]);
     try {
       fs.rmSync(chromeProfile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      fs.rmSync(tempDbDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
     } catch (error) {
       if (process.env.BROWSER_QA_STRICT_CLEANUP === "1") throw error;
     }

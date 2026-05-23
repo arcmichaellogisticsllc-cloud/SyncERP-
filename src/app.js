@@ -3747,6 +3747,7 @@ const state = {
   search: "",
   role: "Admin",
   user: loadSession(),
+  authToken: localStorage.getItem("jackson-syncerp-auth-token") || "",
   selectedProjectId: "PO-SQ-24018",
   selectedSquanFeatureId: "",
   selectedSquanFeatureIds: [],
@@ -3819,9 +3820,13 @@ function loadSession() {
   return saved ? JSON.parse(saved) : null;
 }
 
-function saveSession(user) {
+function saveSession(user, token = "") {
   state.user = user;
   state.role = user.role;
+  if (token) {
+    state.authToken = token;
+    localStorage.setItem("jackson-syncerp-auth-token", token);
+  }
   state.view = "dashboard";
   if (!canView(state.view)) state.view = roleConfig[user.role]?.defaultView || "dashboard";
   applyMapOwnerView(ownerViewForRole(user.role));
@@ -3830,7 +3835,16 @@ function saveSession(user) {
 
 function clearSession() {
   state.user = null;
+  state.authToken = "";
   localStorage.removeItem("jackson-syncerp-session");
+  localStorage.removeItem("jackson-syncerp-auth-token");
+}
+
+function apiHeaders(extra = {}) {
+  return {
+    ...extra,
+    ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {})
+  };
 }
 
 function loadData() {
@@ -3882,8 +3896,9 @@ function persist(message = "") {
 }
 
 async function syncFromApi() {
+  if (!state.authToken) return;
   try {
-    const response = await fetch("/api/bootstrap", { cache: "no-store" });
+    const response = await fetch("/api/bootstrap", { cache: "no-store", headers: apiHeaders() });
     if (!response.ok) throw new Error("API bootstrap failed");
     const data = await response.json();
     state.data = normalizeDataShape(data);
@@ -3919,7 +3934,7 @@ async function saveToApi(collectionKey, record, isNew) {
   try {
     const response = await fetch(url, {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(record)
     });
     if (!response.ok) throw new Error("API save failed");
@@ -3933,7 +3948,7 @@ async function updateRecordApi(collection, id, patch) {
   try {
     const response = await fetch("/api/records/update", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ collection, id, patch })
     });
     if (!response.ok) throw new Error("API update failed");
@@ -3947,7 +3962,7 @@ async function addNoteApi(collection, id, note) {
   try {
     const response = await fetch("/api/records/note", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ collection, id, note, by: state.user?.name || "User" })
     });
     if (!response.ok) throw new Error("API note failed");
@@ -3961,7 +3976,7 @@ async function changeStatusApi(collection, id, status) {
   try {
     const response = await fetch("/api/records/status", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ collection, id, status, by: state.user?.name || "User" })
     });
     if (!response.ok) throw new Error("API status failed");
@@ -3975,7 +3990,7 @@ async function saveDailyPackageIntakeApi(payload) {
   try {
     const response = await fetch("/api/workflows/daily-package-intake", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         ...payload,
         by: state.user?.name || "Billing"
@@ -4016,7 +4031,7 @@ async function saveCashControlsApi(company, before) {
   try {
     const response = await fetch("/api/company/cash-controls", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         cashOnHand: company.cashOnHand,
         weeklyOverhead: company.weeklyOverhead,
@@ -4045,7 +4060,7 @@ async function saveCloseoutReadinessSlaApi(company, before) {
   try {
     const response = await fetch("/api/company/closeout-readiness-sla", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         closeoutReadinessSla: company.closeoutReadinessSla,
         previous: before,
@@ -4070,7 +4085,7 @@ async function saveDailyPackageSlaApi(company, before) {
   try {
     const response = await fetch("/api/company/daily-package-sla", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         dailyPackageSla: company.dailyPackageSla,
         previous: before,
@@ -4095,7 +4110,7 @@ async function saveCashReceiptApi(payload) {
   try {
     const response = await fetch("/api/company/cash-receipts", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         ...payload,
         by: state.user?.name || "Billing",
@@ -4119,7 +4134,7 @@ async function submitDailyWorkflow(payload) {
   if (!state.apiOnline) return;
   const response = await fetch("/api/workflows/submit-daily", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: apiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload)
   });
   if (!response.ok) throw new Error("Daily submit failed");
@@ -32263,9 +32278,12 @@ function renderGuidedWorkflow(title, steps, embedded = false) {
 
 function ensureProductionDefaults(data) {
   const now = "2026-05-19T17:26:59.000Z";
-  if (!data.priceSheetItems.length) {
-    data.priceSheetItems.push(
-      {
+  const ensurePriceSheetItem = item => {
+    if ((data.priceSheetItems || []).some(row => row.id === item.id || row.code === item.code)) return;
+    data.priceSheetItems.push(item);
+  };
+  [
+    {
         id: "PRICE-BSMI-003",
         code: "BSMI-003",
         unitName: "Overlash Fiber",
@@ -32330,8 +32348,7 @@ function ensureProductionDefaults(data) {
         createdAt: now,
         modifiedAt: now
       }
-    );
-  }
+  ].forEach(ensurePriceSheetItem);
   if (!data.squanImports.length) {
     data.squanImports.push({
       id: "SQUAN-IMPORT-20260519",
@@ -45600,7 +45617,7 @@ async function downloadServerBackup() {
     return;
   }
   try {
-    const response = await fetch(`/api/admin/backup?by=${encodeURIComponent(state.user?.name || "Admin")}`, { cache: "no-store" });
+    const response = await fetch(`/api/admin/backup?by=${encodeURIComponent(state.user?.name || "Admin")}`, { cache: "no-store", headers: apiHeaders() });
     if (!response.ok) throw new Error("Server backup failed");
     const payload = await response.json();
     state.data.company = {
@@ -45647,7 +45664,7 @@ async function saveGoLiveMode() {
     try {
       const response = await fetch("/api/admin/go-live-mode", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           mode,
           by: state.user?.name || "Admin",
@@ -45697,7 +45714,7 @@ async function restoreBackupFromFile() {
     try {
       const response = await fetch("/api/admin/restore", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ backup, confirm: "RESTORE", by: state.user?.name || "Admin" })
       });
       if (!response.ok) {
@@ -53390,18 +53407,20 @@ async function loginByEmail(email) {
     return;
   }
   try {
-    if (state.apiOnline) {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
-      });
-      if (response.ok) {
-        const payload = await response.json();
-        saveSession(payload.user);
-        render();
-        return;
-      }
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      state.apiOnline = true;
+      saveSession(payload.user, payload.token);
+      await syncFromApi();
+      render();
+      return;
+    }
+    if (response.status === 401 || response.status === 403) {
       alert("Invalid email or password.");
       return;
     }
