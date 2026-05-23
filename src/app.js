@@ -6231,7 +6231,6 @@ function renderRoleHome() {
 }
 
 function renderAdminHome() {
-  const project = selectedMapContext();
   const items = operationalRoleWorkItems("Admin");
   const stats = operationalRoleStats(items);
   const blockers = actionableBlockerItems(items);
@@ -6244,20 +6243,24 @@ function renderAdminHome() {
   const todayDailies = scopedRows("productionDailies").filter(daily => daily.workedDate === todayKey || daily.submittedAt?.slice(0, 10) === todayKey);
   return `
     <section class="admin-overview-home" data-admin-overview-home>
-      ${renderAdminOverviewHero(project, stats, blockers, todayDailies, packageRows)}
+      ${renderAdminOverviewHero(stats, blockers, todayDailies, packageRows)}
       <div class="admin-overview-grid">
+        ${renderAdminMapsQuickView()}
         ${renderAdminOperationalReadinessOverview(checklist, completion)}
         ${renderAdminCrewOverview(todayDailies, productionRows)}
         ${renderAdminBillingPulse(packageRows)}
         ${renderAdminNotificationFeed(blockers)}
       </div>
-      ${renderAdminNextBestActions(blockers, packageRows, project)}
+      ${renderAdminNextBestActions(blockers, packageRows)}
     </section>
   `;
 }
 
-function renderAdminOverviewHero(project, stats, blockers, todayDailies, packageRows) {
+function renderAdminOverviewHero(stats, blockers, todayDailies, packageRows) {
   const readyPackages = packageRows.filter(row => ["Ready for Package Prep", "Ready to Submit"].includes(row.status));
+  const maps = scopedRows("projects");
+  const activeMaps = maps.filter(project => !["Closed", "Archived", "Cancelled"].includes(project.status || "")).length;
+  const mapsNeedingReview = maps.filter(project => ["Blocked", "Needs Review", "At Risk", "Pending"].includes(project.status || "")).length;
   return `
     <section class="panel admin-overview-hero">
       <div>
@@ -6273,7 +6276,45 @@ function renderAdminOverviewHero(project, stats, blockers, todayDailies, package
         ${metric("Needs action", stats.action, `${blockers.length} blocker${blockers.length === 1 ? "" : "s"} flagged`)}
         ${metric("Submitted today", todayDailies.length, "Daily production")}
         ${metric("Ready packages", readyPackages.length, `${currency(sum(readyPackages, "billableAmount"))} ready`)}
-        ${metric("Selected map", project?.id || "None", project ? project.map || "Active context" : "Choose a map")}
+        ${metric("Maps", activeMaps, `${mapsNeedingReview} need review`)}
+      </div>
+    </section>
+  `;
+}
+
+function renderAdminMapsQuickView() {
+  const projects = scopedRows("projects");
+  const productionRows = productionLedgerRows();
+  const packageRows = billingPackageWorkflowRows(projects);
+  const active = projects.filter(project => !["Closed", "Archived", "Cancelled"].includes(project.status || ""));
+  const blocked = active.filter(project => ["Blocked", "Needs Review", "At Risk", "Pending"].includes(project.status || ""));
+  const visible = [...blocked, ...active.filter(project => !blocked.some(item => item.id === project.id))].slice(0, 4);
+  return `
+    <section class="panel admin-overview-panel">
+      <div class="panel-header compact">
+        <div>
+          <span class="eyebrow">Maps quick view</span>
+          <h3>${active.length} active map${active.length === 1 ? "" : "s"}</h3>
+          <p>${blocked.length ? `${blocked.length} map${blocked.length === 1 ? "" : "s"} need review.` : "No map release blockers flagged."}</p>
+        </div>
+        <button class="secondary-btn mini-btn" data-workflow-action="Project & Map Hub" data-workflow-focus="Maps quick view">Maps</button>
+      </div>
+      <div class="admin-billing-pulse">
+        ${metric("Active", active.length, "Map lanes")}
+        ${metric("Review", blocked.length, "Status blockers")}
+        ${metric("Billing", packageRows.length, "Package groups")}
+      </div>
+      <div class="admin-feed-list compact">
+        ${visible.map(project => {
+          const productionCount = productionRows.filter(row => row.project === project.id || row.ntp === project.id).length;
+          const packageCount = packageRows.filter(row => row.projectId === project.id).length;
+          return `
+            <button data-workflow-action="Project & Map Hub" data-workflow-id="${escapeAttr(project.id)}" data-workflow-focus="Map detail">
+              <strong>${escapeAttr(project.id)}</strong>
+              <small>${escapeAttr(project.map || project.scope || "Map")} · ${plainStatus(project.status || "Open")} · ${productionCount} line${productionCount === 1 ? "" : "s"} · ${packageCount} package${packageCount === 1 ? "" : "s"}</small>
+            </button>
+          `;
+        }).join("") || `<p class="empty-state">No maps are available yet.</p>`}
       </div>
     </section>
   `;
@@ -6399,8 +6440,9 @@ function renderAdminNotificationFeed(blockers = []) {
   `;
 }
 
-function renderAdminNextBestActions(blockers = [], packageRows = [], project = selectedMapContext()) {
+function renderAdminNextBestActions(blockers = [], packageRows = []) {
   const readyPackage = packageRows.find(row => ["Ready for Package Prep", "Ready to Submit"].includes(row.status));
+  const reviewMap = scopedRows("projects").find(project => ["Blocked", "Needs Review", "At Risk", "Pending"].includes(project.status || "")) || scopedRows("projects")[0];
   const actions = [
     blockers[0] ? {
       label: "Open highest blocker",
@@ -6419,20 +6461,20 @@ function renderAdminNextBestActions(blockers = [], packageRows = [], project = s
       project: readyPackage.projectId,
       focus: "Daily packages"
     } : null,
-    project ? {
-      label: "Open selected map",
-      title: project.id,
-      detail: project.map || "Selected operating context.",
+    reviewMap ? {
+      label: "Review maps",
+      title: `${scopedRows("projects").length} map lanes`,
+      detail: reviewMap ? `${reviewMap.id} · ${plainStatus(reviewMap.status || "Open")}` : "Open map queue.",
       action: "Project & Map Hub",
-      project: project.id,
-      focus: "Map detail"
+      project: "",
+      focus: "Maps quick view"
     } : null,
     {
       label: "Review reports",
       title: "Operational reporting",
       detail: "Readiness, production, billing, and audit exports.",
       action: "Reports",
-      project: project?.id || state.selectedProjectId || "",
+      project: "",
       focus: "Executive Report",
       reportScope: "Executive Report"
     }
