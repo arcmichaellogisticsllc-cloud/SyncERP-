@@ -92,7 +92,8 @@ const collections = new Set([
   "fieldUploadQueue",
   "customerContactLog",
   "passwordResetTokens",
-  "uploadIntake"
+  "uploadIntake",
+  "workflowTransitions"
 ]);
 
 function loadEnvFile() {
@@ -496,6 +497,7 @@ function canAccessRoute(user, req, url) {
   if (req.method === "GET") return true;
   if (url.pathname.startsWith("/api/company/")) return ["Billing", "Operations"].includes(user.role);
   if (url.pathname.startsWith("/api/workflows/submit-daily")) return ["Foreman", "Operations"].includes(user.role);
+  if (url.pathname.startsWith("/api/workflows/billing-package")) return ["Billing", "Operations"].includes(user.role);
   if (url.pathname.startsWith("/api/workflows/daily-package-intake")) return ["Billing", "Operations"].includes(user.role);
   if (url.pathname.startsWith("/api/records/")) return true;
   return true;
@@ -4065,6 +4067,473 @@ function billingPackageMoneySummaryServer(db, pack) {
   };
 }
 
+function workflowRecordKeyServer(key = "") {
+  return String(key || "PACKAGE").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toUpperCase() || "PACKAGE";
+}
+
+function billingPackageRecordIdServer(prefix, key) {
+  const slug = workflowRecordKeyServer(key);
+  return prefix ? `${prefix}-${slug}` : slug;
+}
+
+function upsertRecordServer(db, collection, record) {
+  db[collection] = db[collection] || [];
+  const index = db[collection].findIndex(item => item.id === record.id);
+  if (index === -1) {
+    db[collection].push(record);
+    return record;
+  }
+  db[collection][index] = { ...db[collection][index], ...record };
+  return db[collection][index];
+}
+
+function appendInlineNoteServer(existing, note) {
+  const clean = String(note || "").trim();
+  if (!clean) return existing || "";
+  return existing ? `${existing} | ${clean}` : clean;
+}
+
+function packageSubmissionAttachmentListServer(pack) {
+  return [
+    `billing-package:${pack.key}`,
+    ...pack.lines.map(item => `productionLines:${item.line.id}`),
+    ...pack.lines.map(item => item.ledger?.id ? `billingLedger:${item.ledger.id}` : "").filter(Boolean),
+    ...pack.dailyIds.map(id => `daily:${id}`)
+  ];
+}
+
+function billingPackageMoneySnapshotServer(pack) {
+  const submittedValue = Math.round(Number(pack.billableAmount || 0) * 100) / 100;
+  const contractorPayable = Math.round(Number(pack.payableAmount || 0) * 100) / 100;
+  const inHouseCost = Math.round(Number(pack.jobCostAmount || 0) * 100) / 100;
+  return {
+    squanSubmittedValue: submittedValue,
+    squanPaidAmount: 0,
+    squanPaymentVariance: submittedValue,
+    squanHoldbackAmount: 0,
+    squanHoldbackPolicy: "Not automatic. Record actual SQUAN holdback, retainage, short-pay, or variance when payment is received.",
+    contractorPayableSnapshot: contractorPayable,
+    contractorPaidAmount: 0,
+    contractorPaymentStatus: contractorPayable ? "Unpaid" : "No contractor payable",
+    inHouseCostSnapshot: inHouseCost,
+    contractorTermsSnapshot: "Calculated from the current rate sheet/payable rules at package preparation; terms may change for future packages."
+  };
+}
+
+function logWorkflowTransitionServer(db, transition, detail = {}) {
+  db.workflowTransitions = db.workflowTransitions || [];
+  const now = new Date().toISOString();
+  const record = {
+    id: `WF-${String(db.workflowTransitions.length + 1).padStart(5, "0")}`,
+    transition,
+    packageKey: detail.packageKey || "",
+    project: detail.project || detail.projectId || "",
+    fromStatus: detail.fromStatus || "",
+    toStatus: detail.toStatus || "",
+    owner: detail.owner || "Billing",
+    blockedReasons: detail.blockedReasons || [],
+    relatedRecords: detail.relatedRecords || [],
+    auditAction: detail.auditAction || transition,
+    notes: detail.notes || "",
+    createdAt: now,
+    modifiedAt: now
+  };
+  db.workflowTransitions.push(record);
+  appendAudit(db, detail.auditAction || transition, detail);
+  return record;
+}
+
+function requireBillingPackageServer(db, packageKey) {
+  const pack = billingPackageWorkflowRowsServer(db).find(item => item.key === packageKey);
+  if (!pack) {
+    const error = new Error(`No billing package found for ${packageKey}`);
+    error.statusCode = 404;
+    throw error;
+  }
+  return pack;
+}
+
+function createBillingPackageSnapshotServer(db, pack, actor = "Billing") {
+  const blockers = pack.blockers || [];
+  if (blockers.length) {
+    const error = new Error(`Package has blockers: ${blockers.join("; ")}`);
+    error.statusCode = 409;
+    error.blockers = blockers;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const priorSnapshots = (db.packageSnapshots || []).filter(item => item.scope === "SQUAN Billing Package" && item.packageKey === pack.key);
+  const activeSnapshot = priorSnapshots.find(item => item.status !== "Superseded");
+  const shouldCreateNewVersion = activeSnapshot?.status === "Rejected by SQUAN" || activeSnapshot?.correctionRequested === "Yes";
+  const nextVersion = shouldCreateNewVersion ? Math.max(1, ...priorSnapshots.map(item => Number(item.version || 1))) + 1 : Number(activeSnapshot?.version || 1);
+  const baseSnapshotId = billingPackageRecordIdServer("PKG", pack.key);
+  const snapshotId = nextVersion > 1 ? `${baseSnapshotId}-V${nextVersion}` : baseSnapshotId;
+  if (shouldCreateNewVersion && activeSnapshot) {
+    activeSnapshot.status = "Superseded";
+    activeSnapshot.supersededBy = snapshotId;
+    activeSnapshot.modifiedAt = now;
+    activeSnapshot.activityLog = [...(activeSnapshot.activityLog || []), { at: now, by: actor, note: `Superseded by correction package v${nextVersion}.` }];
+  }
+  const existingSnapshot = (db.packageSnapshots || []).find(item => item.id === snapshotId);
+  const invoiceId = billingPackageRecordIdServer("INV", pack.key);
+  const existingInvoice = (db.invoices || []).find(item => item.id === invoiceId);
+  const money = billingPackageMoneySnapshotServer(pack);
+  const rateAuditRows = pack.lines.map(row => ({
+    productionLineId: row.line.id || "",
+    billingLedgerId: row.ledger.id || "",
+    code: row.line.code || pack.code,
+    description: row.line.unitName || row.line.mapLayer || "",
+    uom: row.line.uom || "",
+    ...rateAuditForPackageLineServer(db, pack, row)
+  }));
+  const rateBlockers = rateAuditRows.flatMap(item => item.rateAuditIssues ? item.rateAuditIssues.split("; ").map(issue => `${item.code}: ${issue}`) : []);
+  const invoice = upsertRecordServer(db, "invoices", {
+    ...(existingInvoice || {}),
+    id: invoiceId,
+    project: pack.projectId,
+    packageKey: pack.key,
+    submitted: existingInvoice?.submitted || "",
+    paid90: Number(existingInvoice?.paid90 || 0),
+    retainageRelease: existingInvoice?.retainageRelease || "",
+    gross: pack.billableAmount,
+    ...money,
+    retainage10: Number(existingInvoice?.retainage10 || 0),
+    status: "Ready to Submit",
+    support: "Prepared from approved Daily Capture billing package.",
+    rateAuditStatus: rateBlockers.length ? "Needs Review" : "Matched",
+    rateAuditBlockers: rateBlockers,
+    notes: appendInlineNoteServer(existingInvoice?.notes, `Prepared package ${snapshotId} for ${pack.code} on ${pack.workedDate}.`),
+    activityLog: existingInvoice?.activityLog || [],
+    createdAt: existingInvoice?.createdAt || now,
+    modifiedAt: now
+  });
+  const snapshot = upsertRecordServer(db, "packageSnapshots", {
+    ...(existingSnapshot || {}),
+    id: snapshotId,
+    scope: "SQUAN Billing Package",
+    packageKey: pack.key,
+    project: pack.projectId,
+    map: pack.project?.map || pack.projectId,
+    code: pack.code,
+    workedDate: pack.workedDate,
+    invoice: invoice.id,
+    version: existingSnapshot?.version || nextVersion,
+    status: "Ready to Submit",
+    locked: existingSnapshot?.locked || "No",
+    correctionOf: shouldCreateNewVersion ? activeSnapshot?.id || "" : existingSnapshot?.correctionOf || "",
+    preparedBy: actor,
+    preparedAt: existingSnapshot?.preparedAt || now,
+    gross: pack.billableAmount,
+    netDue: money.squanSubmittedValue,
+    retainageAmount: Number(existingSnapshot?.retainageAmount || 0),
+    ...money,
+    quantity: pack.quantity,
+    uom: pack.lines[0]?.line?.uom || "",
+    lineCount: pack.lineCount,
+    proofAccepted: pack.proofAccepted,
+    owners: pack.owners,
+    dailyIds: pack.dailyIds,
+    productionLineIds: pack.lines.map(item => item.line.id).filter(Boolean),
+    billingLedgerIds: pack.lines.map(item => item.ledger.id).filter(Boolean),
+    submittedLineSnapshots: pack.lines.map(item => ({
+      productionLineId: item.line.id || "",
+      billingLedgerId: item.ledger.id || "",
+      dailyId: item.daily.externalDailyId || item.daily.id || item.line.dailyId || "",
+      foreman: item.daily.submittedBy || item.line.submittedBy || "",
+      mapNtp: pack.projectId,
+      workedDate: pack.workedDate,
+      code: item.line.code || pack.code,
+      description: item.line.unitName || "",
+      quantity: Number(item.line.quantity || item.ledger.quantity || 0),
+      uom: item.line.uom || "",
+      rate: Number(item.line.unitRate || 0),
+      extendedAmount: Number(item.ledger.squanBillableAmount || item.line.submittedAmount || 0),
+      contractorPayableAmount: Number(item.ledger.contractorPayableAmount || 0),
+      proofStatus: item.proofState,
+      reviewStatus: item.line.reviewStatus || "",
+      billingStatus: item.ledger.billingStatus || item.line.billableStatus || ""
+    })),
+    squanTrackerRecordRows: squanTrackerRecordCsvRows([{ ...pack, snapshot: existingSnapshot || { id: snapshotId, version: nextVersion } }], db),
+    exportPurpose: "Recordkeeping CSV for manual outside SQUAN Tracker entry; not a direct SQUAN integration.",
+    rateAuditRows,
+    rateAuditStatus: rateBlockers.length ? "Needs Review" : "Matched",
+    rateAuditBlockers: rateBlockers,
+    rateLockedAt: existingSnapshot?.rateLockedAt || now,
+    rateLockedBy: existingSnapshot?.rateLockedBy || actor,
+    attachments: packageSubmissionAttachmentListServer(pack),
+    blockers: [...new Set([...(pack.blockers || []), ...rateBlockers])],
+    notes: `Ready-to-submit SQUAN billing package for ${pack.projectId}, ${pack.workedDate}, ${pack.code}.`,
+    activityLog: [
+      ...(existingSnapshot?.activityLog || []),
+      { at: now, by: actor, note: "Package prepared for SQUAN submission." }
+    ],
+    createdAt: existingSnapshot?.createdAt || now,
+    modifiedAt: now
+  });
+  logWorkflowTransitionServer(db, "billing.package.prepare", {
+    packageKey: pack.key,
+    project: pack.projectId,
+    fromStatus: pack.status,
+    toStatus: snapshot.status,
+    owner: actor,
+    relatedRecords: [snapshot.id, invoice.id, ...snapshot.productionLineIds, ...snapshot.billingLedgerIds],
+    auditAction: "billing.package.prepare.server"
+  });
+  return { snapshot, invoice };
+}
+
+function submitBillingPackageWorkflowServer(db, packageKey, details = {}, actor = "Billing") {
+  let pack = requireBillingPackageServer(db, packageKey);
+  const snapshot = pack.snapshot || createBillingPackageSnapshotServer(db, pack, actor).snapshot;
+  pack = requireBillingPackageServer(db, packageKey);
+  const invoice = (db.invoices || []).find(item => item.id === snapshot.invoice);
+  const now = new Date().toISOString();
+  const submittedValue = Number(details.packageValue ?? snapshot.squanSubmittedValue ?? pack.billableAmount ?? 0);
+  const submissionId = billingPackageRecordIdServer("SUB", pack.key);
+  const existing = (db.invoiceSubmissions || []).find(item => item.id === submissionId);
+  const submissionDate = details.submissionDate || todayIso();
+  const submission = upsertRecordServer(db, "invoiceSubmissions", {
+    ...(existing || {}),
+    id: submissionId,
+    project: pack.projectId,
+    packageKey: pack.key,
+    packageSnapshot: snapshot.id,
+    invoice: invoice?.id || snapshot.invoice,
+    invoiceNumber: invoice?.id || snapshot.invoice,
+    submittedTo: "SQUAN",
+    submissionMode: "Manual SQUAN Tracker entry",
+    directIntegration: "No",
+    submissionDate,
+    submittedBy: actor,
+    squanBillingContact: details.contact || "SQUAN PM / AP",
+    gross: submittedValue,
+    squanSubmittedValue: submittedValue,
+    squanPaidAmount: Number(existing?.squanPaidAmount || 0),
+    squanPaymentVariance: submittedValue - Number(existing?.squanPaidAmount || 0),
+    squanHoldbackAmount: Number(existing?.squanHoldbackAmount || 0),
+    squanHoldbackPolicy: snapshot.squanHoldbackPolicy,
+    contractorPayableSnapshot: snapshot.contractorPayableSnapshot,
+    contractorPaidAmount: Number(existing?.contractorPaidAmount || 0),
+    contractorPaymentStatus: existing?.contractorPaymentStatus || snapshot.contractorPaymentStatus,
+    expectedPaymentAmount: submittedValue,
+    retainage10: Number(existing?.retainage10 || 0),
+    supportPackageStatus: "Submitted",
+    status: "Submitted to SQUAN",
+    deliveryMethod: details.method || "Manual entry into outside SQUAN Tracker",
+    confirmationNumber: details.confirmationNumber || "",
+    followUpDate: details.followUpDate || addDays(submissionDate, 14),
+    followUpStatus: details.confirmationNumber ? "Receipt recorded" : "Receipt pending",
+    attachmentsSent: snapshot.attachments || packageSubmissionAttachmentListServer(pack),
+    receipt: {
+      confirmationNumber: details.confirmationNumber || "",
+      submittedBy: actor,
+      receivedBy: details.contact || "SQUAN PM / AP",
+      method: details.method || "Manual entry into outside SQUAN Tracker",
+      receivedAt: details.confirmationNumber ? now : "",
+      packageValue: submittedValue,
+      followUpDate: details.followUpDate || addDays(submissionDate, 14),
+      followUpStatus: details.confirmationNumber ? "Receipt recorded" : "Receipt pending",
+      notes: details.note || "Jackson billing package data prepared for manual entry into the outside SQUAN Tracker. CSV retained for recordkeeping."
+    },
+    notes: appendInlineNoteServer(existing?.notes, details.note || "Manual SQUAN Tracker submission recorded."),
+    activityLog: [
+      ...(existing?.activityLog || []),
+      { at: now, by: actor, note: "Manual SQUAN Tracker submission recorded." }
+    ],
+    createdAt: existing?.createdAt || now,
+    modifiedAt: now
+  });
+  if (invoice) {
+    invoice.status = "Submitted to SQUAN";
+    invoice.submitted = submission.submissionDate;
+    invoice.gross = submittedValue;
+    invoice.squanSubmittedValue = submittedValue;
+    invoice.modifiedAt = now;
+  }
+  Object.assign(snapshot, {
+    status: "Submitted to SQUAN",
+    locked: "Yes",
+    lockedAt: snapshot.lockedAt || now,
+    lockedBy: snapshot.lockedBy || actor,
+    submission: submission.id,
+    submittedAt: now,
+    modifiedAt: now,
+    activityLog: [...(snapshot.activityLog || []), { at: now, by: actor, note: "Package submitted to SQUAN." }]
+  });
+  pack.lines.forEach(item => {
+    const lock = { packageKey: pack.key, snapshot: snapshot.id, submission: submission.id, lockedAt: now, lockedBy: actor };
+    if (item.line) Object.assign(item.line, { billingPackageLock: lock, modifiedAt: now });
+    if (item.ledger) Object.assign(item.ledger, { billingPackageLock: lock, modifiedAt: now });
+  });
+  logWorkflowTransitionServer(db, "billing.package.submit", {
+    packageKey: pack.key,
+    project: pack.projectId,
+    fromStatus: pack.status,
+    toStatus: submission.status,
+    owner: actor,
+    relatedRecords: [snapshot.id, submission.id, invoice?.id || ""].filter(Boolean),
+    auditAction: "billing.package.manual-tracker-submission.server"
+  });
+  return { snapshot, invoice, submission };
+}
+
+function recordBillingPackageResponseServer(db, packageKey, details = {}, actor = "Billing") {
+  const pack = requireBillingPackageServer(db, packageKey);
+  const submission = pack.submission;
+  if (!submission) {
+    const error = new Error("Package must be submitted before recording a SQUAN response.");
+    error.statusCode = 409;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const snapshot = pack.snapshot || (db.packageSnapshots || []).find(item => item.id === submission.packageSnapshot);
+  const invoice = pack.invoice || (db.invoices || []).find(item => item.id === submission.invoice);
+  const status = details.status || "Approved by SQUAN";
+  const isReject = status === "Rejected by SQUAN" || details.action === "reject-squan";
+  const submittedValue = Number(submission.squanSubmittedValue || pack.billableAmount || 0);
+  const approvedAmount = isReject ? 0 : Number(details.approvedAmount ?? submittedValue);
+  const variance = submittedValue - approvedAmount;
+  const note = String(details.note || (isReject ? "Correction required before resubmission." : "Approved by SQUAN")).trim();
+  Object.assign(submission, {
+    status: isReject ? "Rejected by SQUAN" : status,
+    supportPackageStatus: isReject ? "Needs Correction" : "Approved",
+    approvedAmount,
+    responseVariance: isReject ? submittedValue : variance,
+    rejectionReason: isReject ? note : "",
+    followUpDate: details.followUpDate || submission.followUpDate,
+    followUpStatus: isReject ? "Correction required" : Math.abs(variance) > 0.01 ? "Variance review" : status,
+    notes: appendInlineNoteServer(submission.notes, note),
+    activityLog: [...(submission.activityLog || []), { at: now, by: actor, note }],
+    modifiedAt: now
+  });
+  [invoice, snapshot].filter(Boolean).forEach(record => {
+    record.status = submission.status;
+    record.approvedAmount = approvedAmount;
+    record.responseVariance = submission.responseVariance;
+    record.responseNote = note;
+    if (snapshot && record.id === snapshot.id) record.correctionRequested = isReject || Math.abs(variance) > 0.01 || status === "Partially approved by SQUAN" ? "Yes" : record.correctionRequested || "No";
+    record.notes = appendInlineNoteServer(record.notes, note);
+    record.activityLog = [...(record.activityLog || []), { at: now, by: actor, note: `SQUAN response: ${note}` }];
+    record.modifiedAt = now;
+  });
+  if (isReject || Math.abs(variance) > 0.01 || status === "Partially approved by SQUAN") {
+    upsertRecordServer(db, "tasks", {
+      id: billingPackageRecordIdServer(isReject ? "TASK-SQUAN-REJECT" : "TASK-SQUAN-VARIANCE", pack.key),
+      project: pack.projectId,
+      title: isReject ? "Correct rejected SQUAN billing package" : "Review partial SQUAN approval variance",
+      owner: "Office Billing",
+      role: "Billing",
+      status: "Open",
+      source: isReject ? "SQUAN rejection" : "SQUAN partial approval",
+      notes: `${pack.projectId} ${pack.code} ${pack.workedDate}: ${note}`,
+      relatedType: "Invoice Submission",
+      relatedId: submission.id,
+      packageKey: pack.key,
+      activityLog: [{ at: now, by: actor, note: "Workflow task created from SQUAN response." }],
+      createdAt: now,
+      modifiedAt: now
+    });
+  }
+  logWorkflowTransitionServer(db, isReject ? "billing.package.reject" : "billing.package.response", {
+    packageKey: pack.key,
+    project: pack.projectId,
+    fromStatus: pack.status,
+    toStatus: submission.status,
+    owner: actor,
+    relatedRecords: [submission.id, snapshot?.id || "", invoice?.id || ""].filter(Boolean),
+    auditAction: isReject ? "billing.package.reject-squan.server" : "billing.package.response.server"
+  });
+  return { snapshot, invoice, submission };
+}
+
+function recordBillingPackagePaymentServer(db, packageKey, details = {}, actor = "Billing") {
+  const pack = requireBillingPackageServer(db, packageKey);
+  const snapshot = pack.snapshot || createBillingPackageSnapshotServer(db, pack, actor).snapshot;
+  const invoice = pack.invoice || (db.invoices || []).find(item => item.id === snapshot.invoice);
+  const submission = pack.submission || (db.invoiceSubmissions || []).find(item => item.packageKey === pack.key || (invoice?.id && item.invoice === invoice.id));
+  const now = new Date().toISOString();
+  const type = details.type || "SQUAN Package Payment";
+  const isContractor = type === "Contractor Package Payment";
+  const isHoldback = type === "SQUAN Holdback";
+  const summary = billingPackageMoneySummaryServer(db, pack);
+  const expected = isContractor ? Math.max(0, summary.contractorOpen) : isHoldback ? 0 : Math.max(0, summary.submittedValue - summary.squanPaid - summary.holdback);
+  const actualAmount = Number(details.actualAmount || 0);
+  if (!Number.isFinite(actualAmount) || actualAmount < 0) {
+    const error = new Error("Enter a valid payment amount.");
+    error.statusCode = 400;
+    throw error;
+  }
+  const actualDate = details.actualDate || todayIso();
+  const receipt = {
+    id: `${isContractor ? "PAY-CONTRACTOR" : isHoldback ? "HOLD-SQUAN" : "PAY-SQUAN"}-${workflowRecordKeyServer(pack.key)}-${Date.now()}`,
+    project: pack.projectId,
+    packageKey: pack.key,
+    packageSnapshot: snapshot.id,
+    invoice: invoice?.id || snapshot.invoice || "",
+    submission: submission?.id || "",
+    type,
+    expectedDate: submission?.followUpDate || "",
+    actualDate,
+    expectedAmount: expected,
+    actualAmount,
+    variance: isHoldback ? actualAmount : actualAmount - expected,
+    reserveHeld: isHoldback ? (details.reserveHeld ? "Yes" : "No") : "",
+    holdbackReason: isHoldback ? (details.holdbackReason || details.note || "SQUAN/customer held back part of this package.") : "",
+    expectedReleaseDate: isHoldback ? String(details.expectedReleaseDate || "") : "",
+    releaseStatus: isHoldback ? "Manual follow-up required" : "",
+    status: actualAmount <= 0 ? "Open" : actualAmount < expected ? "Partially Paid" : actualAmount > expected && !isHoldback ? "Overpaid" : isHoldback ? "Holdback Recorded" : "Paid",
+    reference: details.reference || `${type.toUpperCase().replace(/[^A-Z0-9]+/g, "-")}-${workflowRecordKeyServer(pack.key)}`,
+    bankProof: String(details.bankProof || ""),
+    depositBatch: isContractor ? "" : `DEP-${actualDate}`,
+    depositStatus: isContractor ? "Contractor payment recorded" : "Pending Bank Proof",
+    receivedBy: actor,
+    receivedAt: now,
+    notes: details.note || `${type} recorded from package ledger.`,
+    activityLog: [{ at: now, by: actor, note: `${type} recorded for ${actualAmount}.` }],
+    createdAt: now,
+    modifiedAt: now
+  };
+  db.cashReceipts = db.cashReceipts || [];
+  db.cashReceipts.push(receipt);
+  const nextSummary = {
+    ...summary,
+    squanPaid: summary.squanPaid + (type === "SQUAN Package Payment" ? actualAmount : 0),
+    holdback: summary.holdback + (type === "SQUAN Holdback" ? actualAmount : 0),
+    contractorPaid: summary.contractorPaid + (type === "Contractor Package Payment" ? actualAmount : 0)
+  };
+  nextSummary.squanVariance = nextSummary.submittedValue - nextSummary.squanPaid - nextSummary.holdback;
+  nextSummary.contractorOpen = nextSummary.contractorPayable - nextSummary.contractorPaid;
+  const squanStatus = nextSummary.squanVariance === 0 && nextSummary.squanPaid > 0 ? "Paid" : nextSummary.squanPaid > 0 || nextSummary.holdback > 0 ? "Partially Paid" : pack.status;
+  const contractorStatus = nextSummary.contractorPayable <= 0 ? "No contractor payable" : nextSummary.contractorOpen <= 0 ? "Paid" : nextSummary.contractorPaid > 0 ? "Partially Paid" : "Unpaid";
+  [snapshot, invoice, submission].filter(Boolean).forEach(record => {
+    record.squanPaidAmount = nextSummary.squanPaid;
+    record.squanHoldbackAmount = nextSummary.holdback;
+    record.squanPaymentVariance = nextSummary.squanVariance;
+    record.contractorPaidAmount = nextSummary.contractorPaid;
+    record.contractorPaymentStatus = contractorStatus;
+    record.paymentStatus = squanStatus;
+    if (isHoldback) {
+      record.reserveHeld = details.reserveHeld ? "Yes" : "No";
+      record.reserveHeldAmount = nextSummary.holdback;
+      record.reserveHeldReason = details.holdbackReason || receipt.notes;
+      record.reserveExpectedReleaseDate = String(details.expectedReleaseDate || "");
+    }
+    record.modifiedAt = now;
+  });
+  if (invoice) invoice.status = squanStatus;
+  if (submission) submission.status = squanStatus === "Paid" ? "Paid by SQUAN" : submission.status || "Submitted to SQUAN";
+  logWorkflowTransitionServer(db, isContractor ? "billing.package.contractor-payment" : isHoldback ? "billing.package.holdback" : "billing.package.squan-payment", {
+    packageKey: pack.key,
+    project: pack.projectId,
+    fromStatus: pack.status,
+    toStatus: squanStatus,
+    owner: actor,
+    relatedRecords: [receipt.id, snapshot?.id || "", invoice?.id || "", submission?.id || ""].filter(Boolean),
+    auditAction: isContractor ? "billing.package.contractor-payment.server" : isHoldback ? "billing.package.holdback.server" : "billing.package.squan-payment.server"
+  });
+  return { snapshot, invoice, submission, receipt };
+}
+
 function billingPackageRateIssuesServer(db, pack) {
   return pack.lines.flatMap(row => {
     const audit = rateAuditForPackageLineServer(db, pack, row);
@@ -4879,6 +5348,42 @@ async function handleApi(req, res, url) {
     appendAudit(db, "workflow.submitDaily", { dailyId: daily.id, project: daily.project, qc: qcRecord.id, by: submittedDaily.foreman || "Foreman" });
     writeDb(db);
     return send(res, 200, { daily: submittedDaily, project, readiness });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/workflows/billing-package") {
+    try {
+      const body = await parseBody(req);
+      const packageKey = body.packageKey || body.key;
+      const action = body.action || "prepare";
+      if (!packageKey) return send(res, 400, { error: "packageKey is required" });
+      const actor = requestActor(req, "Billing");
+      let result;
+      if (action === "prepare") {
+        result = createBillingPackageSnapshotServer(db, requireBillingPackageServer(db, packageKey), actor);
+      } else if (action === "submit") {
+        result = submitBillingPackageWorkflowServer(db, packageKey, body.details || {}, actor);
+      } else if (action === "response" || action === "reject") {
+        result = recordBillingPackageResponseServer(db, packageKey, { ...(body.details || {}), action }, actor);
+      } else if (action === "payment" || action === "holdback" || action === "contractor-payment") {
+        const type = action === "contractor-payment" ? "Contractor Package Payment" : action === "holdback" ? "SQUAN Holdback" : "SQUAN Package Payment";
+        result = recordBillingPackagePaymentServer(db, packageKey, { type, ...(body.details || {}) }, actor);
+      } else {
+        return send(res, 400, { error: `Unsupported billing package workflow action: ${action}` });
+      }
+      writeDb(db);
+      return send(res, 200, {
+        ok: true,
+        action,
+        packageKey,
+        workflowTransitions: (db.workflowTransitions || []).filter(item => item.packageKey === packageKey),
+        ...result
+      });
+    } catch (error) {
+      return send(res, error.statusCode || 500, {
+        error: error.message || "Billing package workflow failed",
+        blockers: error.blockers || []
+      });
+    }
   }
 
   if (req.method === "GET" && url.pathname === "/api/reports/executive") {
