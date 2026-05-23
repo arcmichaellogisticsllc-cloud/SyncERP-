@@ -20,6 +20,8 @@
 
 ## External / Needs Owner
 
+- Local pilot: copy `.env.local-pilot.example` to `.env` and fill local MAMP password.
+- Local pilot: import current seed into MAMP MySQL using `docs/LOCAL_PILOT_RUNBOOK.md`.
 - Choose hosting platform and production domain.
 - Provision HTTPS/reverse proxy and DNS.
 - Provision production MySQL or hosted DB.
