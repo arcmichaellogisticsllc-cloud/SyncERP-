@@ -6235,7 +6235,6 @@ function renderAdminHome() {
   const stats = operationalRoleStats(items);
   const blockers = actionableBlockerItems(items);
   const packageRows = billingPackageWorkflowRows(scopedRows("projects"));
-  const productionRows = productionLedgerRows();
   const todayKey = isoDate(today);
   const todayDailies = scopedRows("productionDailies").filter(daily => daily.workedDate === todayKey || daily.submittedAt?.slice(0, 10) === todayKey);
   return `
@@ -6243,7 +6242,7 @@ function renderAdminHome() {
       ${renderAdminOverviewHero(stats, blockers, todayDailies, packageRows)}
       <div class="admin-overview-grid">
         ${renderAdminMapsQuickView()}
-        ${renderAdminCrewOverview(todayDailies, productionRows)}
+        ${renderAdminWorkforceOverview(todayDailies)}
         ${renderAdminBillingPulse(packageRows)}
         ${renderAdminNotificationFeed(blockers)}
       </div>
@@ -6343,39 +6342,48 @@ function renderAdminOperationalReadinessOverview(checklist = [], completion = { 
   `;
 }
 
-function renderAdminCrewOverview(todayDailies = [], productionRows = []) {
+function renderAdminWorkforceOverview(todayDailies = []) {
   const people = scopedRows("people");
-  const foremen = people.filter(person => /foreman/i.test(person.role || ""));
+  const users = scopedRows("users");
+  const activeUsers = users.filter(user => (user.status || "Active") !== "Inactive");
   const submittedBy = new Set(todayDailies.map(daily => daily.submittedBy || daily.foreman).filter(Boolean));
-  const crewIssues = people.filter(person => ["Blocked", "Expiring", "Needs Review"].includes(person.status || person.compliance || ""));
+  const workforceIssues = people.filter(person => ["Blocked", "Expiring", "Needs Review"].includes(person.status || person.compliance || ""));
   const activeCrews = [...new Set(people.map(person => person.crew).filter(Boolean))].length;
-  const acceptedProof = productionRows.filter(row => productionProofState(row) === "Accepted").length;
-  const proofTotal = productionRows.length;
+  const employers = [...new Set(people.map(person => person.employer || person.company || person.contractor || "Jackson Telcom").filter(Boolean))];
+  const teamsVisible = activeCrews + employers.filter(name => name !== "Jackson Telcom").length;
+  const visibleRows = [
+    ...workforceIssues.slice(0, 3),
+    ...(todayDailies.length ? todayDailies.slice(0, Math.max(0, 3 - workforceIssues.slice(0, 3).length)) : []),
+    ...people.filter(person => !workforceIssues.some(issue => issue.id === person.id)).slice(0, Math.max(0, 3 - workforceIssues.length - todayDailies.length))
+  ].slice(0, 3);
   return `
     <section class="panel admin-overview-panel">
       <div class="panel-header compact">
         <div>
-          <span class="eyebrow">Crew overview</span>
-          <h3>${activeCrews} crew${activeCrews === 1 ? "" : "s"} visible</h3>
-          <p>${submittedBy.size} submitter${submittedBy.size === 1 ? "" : "s"} sent daily production today.</p>
+          <span class="eyebrow">Workforce overview</span>
+          <h3>${teamsVisible || activeCrews} team${(teamsVisible || activeCrews) === 1 ? "" : "s"} visible</h3>
+          <p>In-house techs, foremen, and subcontractor crews.</p>
         </div>
-        <button class="secondary-btn mini-btn" data-workflow-action="People & Compliance" data-workflow-focus="Crew overview">Crew</button>
+        <button class="secondary-btn mini-btn" data-workflow-action="People & Compliance" data-workflow-focus="Workforce overview">Workforce</button>
       </div>
       <div class="admin-crew-strip">
-        ${metric("Foremen", foremen.length, "Can submit dailies")}
-        ${metric("Crew alerts", crewIssues.length, "Certs / blockers")}
-        ${metric("Proof accepted", `${acceptedProof}/${proofTotal}`, "Production support")}
+        ${metric("Active users", activeUsers.length, "Can access app")}
+        ${metric("Crews / employers", `${activeCrews}/${employers.length}`, "Teams and companies")}
+        ${metric("Workforce alerts", workforceIssues.length, `${submittedBy.size} daily submitter${submittedBy.size === 1 ? "" : "s"}`)}
       </div>
       <div class="admin-feed-list compact">
-        ${(todayDailies.length ? todayDailies.slice(0, 3) : foremen.slice(0, 3)).map(row => {
+        ${visibleRows.map(row => {
           const isDaily = Boolean(row.workedDate || row.submittedAt);
+          const isIssue = !isDaily && workforceIssues.some(issue => issue.id === row.id);
           return `
-            <button data-workflow-action="${isDaily ? "Production" : "People & Compliance"}" data-workflow-id="${escapeAttr(row.project || state.selectedProjectId || "")}" data-workflow-focus="${isDaily ? "Admin review" : "Crew overview"}">
+            <button data-workflow-action="${isDaily ? "Production" : "People & Compliance"}" data-workflow-id="${escapeAttr(row.project || state.selectedProjectId || "")}" data-workflow-focus="${isDaily ? "Admin review" : "Workforce overview"}">
               <strong>${escapeAttr(isDaily ? row.submittedBy || row.foreman || "Daily submitter" : row.name)}</strong>
-              <small>${escapeAttr(isDaily ? `${row.project || "No map"} · ${formatDate(row.workedDate || row.submittedAt?.slice(0, 10))}` : `${row.role || "Crew"} · ${row.status || row.compliance || "Active"}`)}</small>
+              <small>${escapeAttr(isDaily
+                ? `${row.project || "No map"} · ${formatDate(row.workedDate || row.submittedAt?.slice(0, 10))}`
+                : `${row.employer || row.company || row.contractor || "Jackson Telcom"} · ${row.role || "Worker"} · ${isIssue ? row.status || row.compliance : row.status || row.compliance || "Active"}`)}</small>
             </button>
           `;
-        }).join("") || `<p class="empty-state">No crew activity to show.</p>`}
+        }).join("") || `<p class="empty-state">No workforce activity to show.</p>`}
       </div>
     </section>
   `;
