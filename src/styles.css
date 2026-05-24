@@ -1250,6 +1250,8 @@ button {
 .admin-overview-hero p,
 .admin-overview-panel h3,
 .admin-overview-panel p,
+.admin-workforce-band h3,
+.admin-workforce-band p,
 .admin-next-actions h3,
 .admin-next-actions p {
   min-width: 0;
@@ -1263,6 +1265,7 @@ button {
 
 .admin-overview-hero p,
 .admin-overview-panel p,
+.admin-workforce-band p,
 .admin-next-actions p {
   margin: 4px 0 0;
   color: var(--muted);
@@ -1301,12 +1304,22 @@ button {
   min-width: 0;
 }
 
+.admin-workforce-band {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.45fr);
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
 .admin-overview-panel .panel-header.compact,
+.admin-workforce-band .panel-header.compact,
 .admin-next-actions .panel-header.compact {
   align-items: start;
 }
 
 .admin-overview-panel h3,
+.admin-workforce-band h3,
 .admin-next-actions h3 {
   margin: 0;
   font-size: 18px;
@@ -17558,6 +17571,10 @@ tbody tr:hover {
   .admin-crew-strip,
   .admin-billing-pulse {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-workforce-band {
+    grid-template-columns: 1fr;
   }
 
   .admin-next-action-grid article {
