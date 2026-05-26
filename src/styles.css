@@ -1306,10 +1306,16 @@ button {
 
 .admin-workforce-band {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.45fr);
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr);
   gap: 12px;
   align-items: start;
   min-width: 0;
+}
+
+.admin-workforce-band .mini-btn {
+  min-width: 118px;
+  white-space: nowrap;
 }
 
 .admin-overview-panel .panel-header.compact,
@@ -1386,10 +1392,15 @@ button {
 }
 
 .admin-crew-strip,
+.admin-workforce-metrics,
 .admin-billing-pulse {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.admin-workforce-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .admin-feed-list.compact {
@@ -17569,6 +17580,7 @@ tbody tr:hover {
 
   .admin-snapshot-grid,
   .admin-crew-strip,
+  .admin-workforce-metrics,
   .admin-billing-pulse {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

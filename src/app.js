@@ -6357,14 +6357,15 @@ function renderAdminWorkforceOverview(todayDailies = []) {
         <div>
           <span class="eyebrow">Workforce overview</span>
           <h3>${teamsVisible || activeCrews} team${(teamsVisible || activeCrews) === 1 ? "" : "s"} visible</h3>
-          <p>In-house techs, foremen, and subcontractor crews.</p>
+          <p>In-house teams, subcontractors, and app users.</p>
         </div>
         <button class="secondary-btn mini-btn" data-workflow-action="People & Compliance" data-workflow-focus="Workforce overview">Workforce</button>
       </div>
-      <div class="admin-crew-strip">
+      <div class="admin-workforce-metrics">
         ${metric("Active users", activeUsers.length, "Can access app")}
-        ${metric("Crews / employers", `${activeCrews}/${employers.length}`, "Teams and companies")}
-        ${metric("Workforce alerts", workforceIssues.length, `${submittedBy.size} daily submitter${submittedBy.size === 1 ? "" : "s"}`)}
+        ${metric("Teams", activeCrews, "Crews visible")}
+        ${metric("Employers", employers.length, "Companies")}
+        ${metric("Alerts", workforceIssues.length, `${submittedBy.size} daily submitter${submittedBy.size === 1 ? "" : "s"}`)}
       </div>
     </section>
   `;
