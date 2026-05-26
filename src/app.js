@@ -3863,7 +3863,7 @@ function normalizeDataShape(data) {
     "users", "roles", "crews", "projects", "tasks", "documents", "fieldEvidence", "photoEvidence", "siteSurveys", "obstacles",
     "dailies", "dailyProduction", "dailyLabor", "dailyEquipment", "dailyMaterials", "timeEntries", "people",
     "equipment", "invoices", "invoiceSubmissions", "billingReadiness", "retainageLedger", "safety", "qcCloseouts",
-    "formSubmissions", "offlineSyncQueue", "fieldUploadQueue", "customerContactLog", "packetLocks", "alertControls",
+    "formSubmissions", "offlineSyncQueue", "fieldUploadQueue", "customerContactLog", "notifications", "packetLocks", "alertControls",
     "cashReceipts", "cashDepositBatches", "collectionSubmissions", "collectionDecisionPackets", "billingTaskCloseouts",
     "packageSnapshots", "contractRules", "costBlockers", "squanScores", "costCodes", "unitPrices", "priceSheetItems",
     "squanImports", "squanProductionLines", "squanMapFeatures", "productionDailies", "productionLines", "contractorPayables",

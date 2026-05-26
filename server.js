@@ -8,6 +8,7 @@ const { canServePublicPath, publicContentType } = require("./server/static-polic
 const { validateBackupData } = require("./server/backup-validation");
 const { validateUploadMetadata } = require("./server/upload-policy");
 const { emitWorkflowEvent } = require("./server/workflow-engine");
+const { dispatchOperationalEvent } = require("./server/event-bus");
 
 loadEnvFile();
 const PORT = Number(process.env.PORT || 8080);
@@ -92,6 +93,7 @@ const collections = new Set([
   "offlineSyncQueue",
   "fieldUploadQueue",
   "customerContactLog",
+  "notifications",
   "passwordResetTokens",
   "uploadIntake",
   "workflowEvents",
@@ -5350,7 +5352,7 @@ async function handleApi(req, res, url) {
 
     const project = recomputeProject(db, daily.project);
     const readiness = db.billingReadiness.find(item => item.project === daily.project);
-    emitWorkflowEvent(db, {
+    dispatchOperationalEvent(db, {
       eventName: "daily.submitted",
       transitionName: "daily.submitted",
       workflowType: "field-daily",
@@ -5375,6 +5377,7 @@ async function handleApi(req, res, url) {
         laborLines: (body.labor || []).length,
         equipmentLines: (body.equipment || []).length,
         materialLines: (body.materials || []).length,
+        qcOwner: "Operations",
         readinessStatus: readiness?.status || ""
       }
     }, { appendAudit });

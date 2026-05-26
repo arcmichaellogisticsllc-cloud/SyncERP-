@@ -72,6 +72,7 @@ function seedWorkflowRow(db) {
   db.workflowEvents = [];
   db.workflowInstances = [];
   db.workflowTransitions = [];
+  db.notifications = [];
   db.projects = db.projects || [];
   db.productionDailies = db.productionDailies || [];
   db.productionLines = db.productionLines || [];
@@ -267,6 +268,13 @@ async function run() {
     assert(dailyInstance, "daily submission should create a workflow instance");
     assert.strictEqual(dailyInstance.workflowType, "field-daily");
     assert.strictEqual(dailyInstance.status, "Submitted");
+    const dailyTransition = finalDb.workflowTransitions.find(item => item.workflowEventId === dailyEvent.id);
+    assert(dailyTransition, "daily submission should create a workflow transition");
+    const dailyNotification = finalDb.notifications.find(item => item.eventId === dailyEvent.id && item.workflowArea === "Review");
+    assert(dailyNotification, "daily submission should create a review notification");
+    assert.strictEqual(dailyNotification.status, "Open");
+    assert.strictEqual(dailyNotification.relatedId, "DLY-WF-EVENT");
+    assert(finalDb.auditLog.some(item => item.detail?.eventId === dailyEvent.id), "daily submission should link audit to workflow event");
 
     const events = finalDb.workflowEvents.filter(item => item.packageKey === "WF-PROJ-1|2026-05-20|WF-A100");
     const transitions = finalDb.workflowTransitions.filter(item => item.packageKey === "WF-PROJ-1|2026-05-20|WF-A100");
