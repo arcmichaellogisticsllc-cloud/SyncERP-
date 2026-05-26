@@ -3868,7 +3868,7 @@ function normalizeDataShape(data) {
     "packageSnapshots", "contractRules", "costBlockers", "squanScores", "costCodes", "unitPrices", "priceSheetItems",
     "squanImports", "squanProductionLines", "squanMapFeatures", "productionDailies", "productionLines", "contractorPayables",
     "contractorAgreements", "contractorSettlements", "contractorSettlementDeductions", "contractorSettlementPayments",
-    "techWorkEntries", "billingLedger", "quantityReconciliation", "projectUnits", "workflowTransitions"
+    "techWorkEntries", "billingLedger", "quantityReconciliation", "projectUnits", "workflowEvents", "workflowInstances", "workflowTransitions"
   ];
   arrayCollections.forEach(key => {
     if (!Array.isArray(data[key])) data[key] = [];

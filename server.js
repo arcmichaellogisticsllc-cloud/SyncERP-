@@ -7,6 +7,7 @@ const { spawnSync } = require("child_process");
 const { canServePublicPath, publicContentType } = require("./server/static-policy");
 const { validateBackupData } = require("./server/backup-validation");
 const { validateUploadMetadata } = require("./server/upload-policy");
+const { emitWorkflowEvent } = require("./server/workflow-engine");
 
 loadEnvFile();
 const PORT = Number(process.env.PORT || 8080);
@@ -93,6 +94,8 @@ const collections = new Set([
   "customerContactLog",
   "passwordResetTokens",
   "uploadIntake",
+  "workflowEvents",
+  "workflowInstances",
   "workflowTransitions"
 ]);
 
@@ -4121,26 +4124,27 @@ function billingPackageMoneySnapshotServer(pack) {
 }
 
 function logWorkflowTransitionServer(db, transition, detail = {}) {
-  db.workflowTransitions = db.workflowTransitions || [];
-  const now = new Date().toISOString();
-  const record = {
-    id: `WF-${String(db.workflowTransitions.length + 1).padStart(5, "0")}`,
-    transition,
+  const result = emitWorkflowEvent(db, {
+    eventName: detail.eventName || transition,
+    transitionName: transition,
+    workflowType: detail.workflowType || "billing-package",
+    aggregateType: detail.aggregateType || "billingPackage",
+    aggregateId: detail.aggregateId || detail.packageKey || detail.project || detail.projectId || transition,
     packageKey: detail.packageKey || "",
     project: detail.project || detail.projectId || "",
     fromStatus: detail.fromStatus || "",
     toStatus: detail.toStatus || "",
     owner: detail.owner || "Billing",
-    blockedReasons: detail.blockedReasons || [],
+    role: detail.role || "Billing",
+    actor: detail.actor || detail.owner || "Billing",
+    blockers: detail.blockedReasons || detail.blockers || [],
     relatedRecords: detail.relatedRecords || [],
     auditAction: detail.auditAction || transition,
+    auditDetail: detail,
     notes: detail.notes || "",
-    createdAt: now,
-    modifiedAt: now
-  };
-  db.workflowTransitions.push(record);
-  appendAudit(db, detail.auditAction || transition, detail);
-  return record;
+    payload: detail.payload || {}
+  }, { appendAudit });
+  return db.workflowTransitions.find(item => item.workflowEventId === result.event.id);
 }
 
 function requireBillingPackageServer(db, packageKey) {
@@ -5167,6 +5171,7 @@ async function handleApi(req, res, url) {
     if (!daily.id || !daily.project) return send(res, 400, { error: "daily.id and daily.project are required" });
 
     const existingDailyIndex = db.dailies.findIndex(item => item.id === daily.id);
+    const previousDailyStatus = existingDailyIndex === -1 ? "" : db.dailies[existingDailyIndex]?.status || "";
     const submittedDaily = {
       ...daily,
       status: "Submitted",
@@ -5345,7 +5350,34 @@ async function handleApi(req, res, url) {
 
     const project = recomputeProject(db, daily.project);
     const readiness = db.billingReadiness.find(item => item.project === daily.project);
-    appendAudit(db, "workflow.submitDaily", { dailyId: daily.id, project: daily.project, qc: qcRecord.id, by: submittedDaily.foreman || "Foreman" });
+    emitWorkflowEvent(db, {
+      eventName: "daily.submitted",
+      transitionName: "daily.submitted",
+      workflowType: "field-daily",
+      aggregateType: "daily",
+      aggregateId: daily.id,
+      project: daily.project,
+      fromStatus: previousDailyStatus,
+      toStatus: submittedDaily.status,
+      owner: submittedDaily.foreman || "Foreman",
+      role: "Foreman",
+      actor: submittedDaily.foreman || "Foreman",
+      relatedRecords: [
+        daily.id,
+        qcRecord.id,
+        ...(body.production || []).map(line => line.id).filter(Boolean),
+        ...(body.labor || []).map((line, index) => `TE-${daily.id}-${String(index + 1).padStart(2, "0")}`)
+      ],
+      auditAction: "workflow.submitDaily",
+      auditDetail: { dailyId: daily.id, project: daily.project, qc: qcRecord.id, by: submittedDaily.foreman || "Foreman" },
+      payload: {
+        productionLines: (body.production || []).length,
+        laborLines: (body.labor || []).length,
+        equipmentLines: (body.equipment || []).length,
+        materialLines: (body.materials || []).length,
+        readinessStatus: readiness?.status || ""
+      }
+    }, { appendAudit });
     writeDb(db);
     return send(res, 200, { daily: submittedDaily, project, readiness });
   }

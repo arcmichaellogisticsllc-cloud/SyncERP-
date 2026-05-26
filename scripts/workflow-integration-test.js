@@ -69,6 +69,8 @@ async function loginAs(baseUrl, email, password = "demo") {
 
 function seedWorkflowRow(db) {
   const now = new Date().toISOString();
+  db.workflowEvents = [];
+  db.workflowInstances = [];
   db.workflowTransitions = [];
   db.projects = db.projects || [];
   db.productionDailies = db.productionDailies || [];
@@ -172,6 +174,32 @@ async function workflowAction(baseUrl, token, action, details = {}) {
   return JSON.parse(response.text);
 }
 
+async function submitDaily(baseUrl, token) {
+  const response = await request(baseUrl, "/api/workflows/submit-daily", {
+    method: "POST",
+    token,
+    body: {
+      daily: {
+        id: "DLY-WF-EVENT",
+        project: "WF-PROJ-1",
+        date: "2026-05-22",
+        foreman: "Marcus Hill",
+        crew: "Crew A",
+        production: "Workflow event daily",
+        laborHours: 8,
+        equipmentHours: 2,
+        materials: "None"
+      },
+      production: [{ id: "DP-WF-EVENT-1", unitCode: "WF-A100", quantity: 1 }],
+      labor: [{ employee: "Marcus Hill", hours: 8, costRate: 42 }],
+      equipment: [{ equipment: "Truck", hours: 2, rate: 35 }],
+      materials: []
+    }
+  });
+  assert.strictEqual(response.status, 200, `daily submit failed: ${response.text}`);
+  return JSON.parse(response.text);
+}
+
 async function run() {
   const port = await findOpenPort(startPort);
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -193,6 +221,10 @@ async function run() {
   try {
     await waitForServer(baseUrl);
     const billingToken = await loginAs(baseUrl, "billing@jacksontelcom.example");
+    const foremanToken = await loginAs(baseUrl, "marcus@jacksontelcom.example");
+
+    const daily = await submitDaily(baseUrl, foremanToken);
+    assert.strictEqual(daily.daily.status, "Submitted");
 
     const prepared = await workflowAction(baseUrl, billingToken, "prepare");
     assert.strictEqual(prepared.snapshot.status, "Ready to Submit");
@@ -229,13 +261,34 @@ async function run() {
     assert.strictEqual(payment.submission.status, "Paid by SQUAN");
 
     const finalDb = JSON.parse(fs.readFileSync(tempDbPath, "utf8"));
+    const dailyEvent = finalDb.workflowEvents.find(item => item.eventName === "daily.submitted" && item.aggregateId === "DLY-WF-EVENT");
+    assert(dailyEvent, "daily submission should create a workflow event");
+    const dailyInstance = finalDb.workflowInstances.find(item => item.id === dailyEvent.workflowInstanceId);
+    assert(dailyInstance, "daily submission should create a workflow instance");
+    assert.strictEqual(dailyInstance.workflowType, "field-daily");
+    assert.strictEqual(dailyInstance.status, "Submitted");
+
+    const events = finalDb.workflowEvents.filter(item => item.packageKey === "WF-PROJ-1|2026-05-20|WF-A100");
     const transitions = finalDb.workflowTransitions.filter(item => item.packageKey === "WF-PROJ-1|2026-05-20|WF-A100");
+    assert.deepStrictEqual(events.map(item => item.eventName), [
+      "billing.package.prepare",
+      "billing.package.submit",
+      "billing.package.response",
+      "billing.package.squan-payment"
+    ]);
     assert.deepStrictEqual(transitions.map(item => item.transition), [
       "billing.package.prepare",
       "billing.package.submit",
       "billing.package.response",
       "billing.package.squan-payment"
     ]);
+    const instance = finalDb.workflowInstances.find(item => item.packageKey === "WF-PROJ-1|2026-05-20|WF-A100");
+    assert(instance, "billing package workflow instance should be recorded");
+    assert.strictEqual(instance.workflowType, "billing-package");
+    assert.strictEqual(instance.status, "Paid");
+    assert.strictEqual(instance.transitionCount, 4);
+    assert.strictEqual(instance.lastEventName, "billing.package.squan-payment");
+    assert(transitions.every(item => item.workflowEventId), "transitions should link to workflow events");
     assert(finalDb.auditLog.some(item => item.action === "billing.package.squan-payment.server"), "payment audit event should be recorded");
 
     console.log("Workflow integration test passed");
